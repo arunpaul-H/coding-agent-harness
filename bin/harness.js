@@ -82,7 +82,7 @@ const dialectOf = (row) => {
    that repo's lock. Only the harness's own work ships; adding one is an edit
    here and in package.json `files`. */
 const SHIPPED_AGENTS = ['explore.md', 'implement.md', 'research.md', 'review.md'];
-const SHIPPED_SKILLS = ['plan', 'research', 'implement'];
+const SHIPPED_SKILLS = ['plan', 'research', 'implement', 'guide'];
 const TRACK_TEMPLATES = ['README.md', 'plan.md', 'traps.md', 'handoff.md'];
 /* The directory the shipped skills are WRITTEN in. A tool whose registry row names this root gets
    them copied; a tool that names another root gets them rendered there (portable frontmatter

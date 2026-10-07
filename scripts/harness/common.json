@@ -42,6 +42,7 @@
     ".claude/skills/plan",
     ".claude/skills/research",
     ".claude/skills/implement",
+    ".claude/skills/guide",
     "scripts/harness",
     "schema",
     "templates",

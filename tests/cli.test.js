@@ -173,6 +173,30 @@ describe('harness init (from the real package)', () => {
     assert.strictEqual(JSON.parse(cfg.stdout).project.name, 'acme-api');
   });
 
+  // A skill in the installer's list and not in the package file list reds nothing in a checkout,
+  // which copies from disk, and stops a packed install dead. Nothing else compares the two.
+  test('every shipped skill is in the package file list, and init installs each one', () => {
+    const { SHIPPED_SKILLS } = require(BIN);
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    assert.ok(SHIPPED_SKILLS.length > 0, 'the installer ships no skill at all');
+    for (const s of SHIPPED_SKILLS) assert.ok(pkg.files.includes('.claude/skills/' + s + '/'), s + ' is shipped by init and absent from package.json files');
+    const dir = tempRepo({ 'package.json': JSON.stringify({ name: 'acme-api' }) });
+    const r = run(['init', '--into', dir]);
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    const files = listing(dir);
+    for (const s of SHIPPED_SKILLS) assert.ok(files.includes('.claude/skills/' + s + '/SKILL.md'), 'expected the ' + s + ' skill to be installed');
+  });
+
+  // The guide holds a conversation. A forked skill runs in the background and cannot ask a question.
+  test('the guide skill runs inline: no context key and no agent key in its frontmatter', () => {
+    const text = fs.readFileSync(path.join(ROOT, '.claude', 'skills', 'guide', 'SKILL.md'), 'utf8');
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+    assert.ok(fm, 'the guide skill has no frontmatter');
+    const keys = fm[1].split(/\r?\n/).map((l) => l.split(':')[0].trim());
+    assert.ok(keys.includes('name') && keys.includes('description'), 'the guide skill lost its name or description');
+    for (const k of ['context', 'agent']) assert.ok(!keys.includes(k), 'the guide skill carries `' + k + ':`, which forks it');
+  });
+
   test('a second run overwrites nothing, and --force --only replaces exactly one file', () => {
     const dir = tempRepo({ 'package.json': JSON.stringify({ name: 'acme-api' }) });
     assert.strictEqual(run(['init', '--into', dir]).code, 0);
