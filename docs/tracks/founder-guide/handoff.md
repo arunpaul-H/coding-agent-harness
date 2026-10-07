@@ -3,7 +3,7 @@ id: founder-guide-handoff
 kind: handoff
 status: open
 read_when: "starting or resuming founder-guide"
-phase_next: 2
+phase_next: 3
 ---
 
 # Non-tech guide: the next phase
@@ -11,52 +11,51 @@ phase_next: 2
 ## ▶ THE NEXT SESSION: paste this into a new chat
 
 ```
-PHASE 2, CLOSE-OUT: the code has landed; phases 1 and 2 still need their receipts
+PHASE 3, CLOSE-OUT: the README section has landed; a person still has to look at it on GitHub
 
 Read, in this order:
-  docs/tracks/founder-guide/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/founder-guide/plan.md     (Phase 1 and Phase 2 "Delivered", then Phase 3)
-  docs/tracks/founder-guide/traps.md    (before touching anything)
-  scripts/harness/close-phase.js        (the header comment only: the six preconditions)
+  docs/tracks/founder-guide/README.md   (State, Invariants, How to work, and the receipt in the frontmatter)
+  docs/tracks/founder-guide/plan.md     (Phase 3, with its "Delivered")
+  docs/tracks/founder-guide/traps.md    (FG-04 and FG-06 above all)
 Nothing else unless a line below cites it.
 
-SCOPE: in — get a gate verdict recorded at HEAD on a clean tree, close phase 1, replace this
-block with the phase 3 block from plan.md, close phase 2. Out — any edit to bin/harness.js,
-package.json, scripts/harness/common.json, tests/, the skill body or the root README. Phase 3
-itself is the session after this one.
+SCOPE: in — get the owner's word that the start-here section of the root README draws correctly
+on GitHub in light and dark mode, record it in plan.md Phase 3 "Delivered", fix only what that
+look finds, close phase 3, and archive the track if the owner says so. Out — the skill body, the
+installer, the tests, and every developer section of the root README.
 
 Do NOT re-derive, re-measure or re-open: what shipping a skill touches is frozen in
 docs/tracks/founder-guide/research/2026-10-07-guide-skill-ship-surface.md — do not repeat that
-sweep. Do not redo the phase 2 edits: they are committed under the subject on the First commit
-line below. The eight locked decisions in README.md stand.
+sweep. Do not rewrite the section, the skill or the phase 2 edits: all three are committed. The
+eight locked decisions in README.md stand.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phase 1 and phase 2 are both landed and committed on main, neither is closed, nothing is pushed.
-  Why not closed: close-phase.js needs a verdict recorded on a clean tree. The gates ran green at
-  the phase 2 commit, but while they ran another session rewrote scripts/harness/gates.baseline.json
-  and left it uncommitted, so the verdict was recorded as dirty and the close refused.
-  That baseline change is NOT this track's. It already counts this track's two new tests. Do not
-  commit, revert, stash or re-accept it: ask the owner whether the multi-tool session will commit
-  it under a subject starting gates:, or whether this track should. Until it is committed or
-  gone, no close can succeed. This track owes no second re-baseline once that one is committed.
+  All three phases are committed on main. The receipt in README.md's frontmatter names the last
+  phase closed; trust it over any sentence, this one included.
+  Phase 3 is NOT closed and must not be until a person has looked at the page: no command can
+  check that a Mermaid diagram draws (FG-06). The look needs main pushed first. Pushing is the
+  owner's call: ask, do not assume.
+  NOT RUN anywhere yet: the suite on the two older supported Node versions (FG-03). This machine
+  has one Node only. The first CI run after the push settles it; read that run before closing.
   The owner approved one skip on this machine: the docs gate's memory-index rule cannot run here.
-  Pass it as --allow-skip docs=1 beside the reproducible-build skip, on the check and on the close.
-  Order: run git status and stop if anything is modified that you did not modify. Run the Exit
-  line. Close phase 1 with close-phase.js founder-guide --phase 1 and both skips. Commit the
-  receipt. Replace this block wholesale with the phase 3 block (phase_next becomes 3), commit,
-  re-run the gates, then close phase 2: the close refuses unless the block changed since the
-  last receipt, and each commit moves HEAD past the last verdict.
-  The full suite takes about ten minutes; run it in the background and edit nothing meanwhile.
-  NOT RUN in phase 2: the suite on the two older supported Node versions (FG-03). This machine
-  has one Node only. The first CI run after a push is where that is settled; read it.
+  It is now in the committed baseline as a declared skip. Pass --allow-skip docs=1 beside the
+  reproducible-build skip, on the check and on the close.
+  A close needs a green verdict recorded at HEAD on a clean tree, and the block above must have
+  changed since the last receipt. The full suite takes five to ten minutes: run it in the
+  background and edit nothing meanwhile, or the verdict goes stale.
+  Left alone on purpose: docs/methods/09-the-phase-lifecycle.md still counts three working
+  skills, which is true of the three that walk a phase.
+  The audience statement the autonomy-modes track reserved in the root README is still unwritten
+  (FG-04). The start-here section does not make it; leave it room.
   A commit here needs an author passed on the command line: git has no identity configured.
-  The multi-tool track may still be live in this working tree (FG-01). Stage by path only.
+  Other tracks may be live in this working tree (FG-01). Stage by path only; never stash or reset.
+  Archiving is close-phase.js with --archive, and only when the owner asks for it.
 
-First commit: `founder-guide: init installs the guide skill`
-Exit: `node scripts/harness/gates.js --check --allow-skip docs=1,reproducible-build=1`
+First commit: `founder-guide: a visual start-here section in the README`
+Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check && node scripts/harness/gates.js --check --allow-skip docs=1,reproducible-build=1`
 
 How to work: follow "How to work" in docs/tracks/founder-guide/README.md. One phase, then stop
 and hand off.

@@ -8,6 +8,11 @@ paths: [".claude/skills/guide/**", "bin/harness.js", "package.json", "scripts/ha
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js founder-guide"
 last_verified: 2026-10-07
 max_age_days: 30
+closed_phase: 1
+closed_at: 2026-10-07
+gates_sha: 8ca35b3f1886779971a2c193522b89af72a2639e4e955d99a30f6401873f7639
+block_sha: 2811807d456ee85ecf11e17ab79aa79054738ef5f5d1fd0ab0677131a9675633
+receipt: ad43d90750beea161eb0d09fe90c1c9b1dbee31f6956e2823164186f473d7696
 ---
 
 # Non-tech guide: a plain-English on-ramp that changes no check
@@ -82,9 +87,9 @@ the research file, and stand until the owner says otherwise.
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed; closed only if this file's frontmatter carries its receipt |
-| 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed only if this file's frontmatter carries its receipt |
-| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed, not yet looked at on GitHub; closed only by a receipt above |
+| 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed and closed |
+| 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed once `closed_phase` above reads 2 or more |
+| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; NOT closed: a person has not yet looked at the page on GitHub (FG-06) |
 
 ## How to work
 
