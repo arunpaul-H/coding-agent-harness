@@ -3,7 +3,7 @@ id: project-reference-plan
 kind: plan
 status: open
 read_when: "project-reference: the phases, each with its exit command and first commit"
-first_commit: "project-reference: warn when a doc's governed paths changed since it was verified"
+first_commit: "project-reference: measure one task with and without a reference doc"
 ---
 
 # Project reference docs: the phases
@@ -96,7 +96,22 @@ warning this phase prints about this repo's own docs: report them instead.
 **First commit:** `project-reference: warn when a doc's governed paths changed since it was verified`
 **Exit:** `node --test && node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
 
-**Delivered.** not started
+**Delivered.** Both warnings, inside rule 9's one application in `docs-lint.cjs`: the pure
+`notADate`, `verifiedUntil`, `driftPlan` and `driftFinding`, and a thin git half. Tests in
+`tests/docs.test.js`; both copies of the doc standard; the header comment. Built by an `implement`
+agent; the lead reviewed the diff. The docs gate total rose, from new self-test decisions only
+(REF-03), so the baseline was re-recorded in its own `gates:` commit. Deviations:
+- The exit command was run with `--allow-skip docs=1,reproducible-build=1` (REF-09).
+- Drift counts a commit only from the start of the local day AFTER `last_verified`, by committer
+  date; a commit on the verification day never warns. The doc's own file is excluded.
+- Only a `status: open` doc outside the exempt directories is checked for drift. The date
+  warning applies to every linted doc.
+- The shallow-clone line prints once, and only when some doc was eligible.
+- A scalar `paths` value is read as one glob.
+- `verify` is still checked by nothing; the standard now calls it advisory instead (REF-01).
+- Two frontmatter comment lines in `templates/reference/README.md` were corrected, because phase 2
+  made them false. That file was out of this phase's scope as first written.
+- Tests beyond the four named: a shallow clone, the doc's own file, exempt and non-open docs.
 
 ## Phase 3: one measurement, then tell the adopter the truth
 

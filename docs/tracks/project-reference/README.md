@@ -73,11 +73,13 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 |---|---|---|
 | 0 | The track opened: research frozen, plan and handoff written | closed |
 | 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | closed |
-| 2 | A paths-against-history drift warning, and a warning for an unreadable date | open |
+| 2 | A paths-against-history drift warning, and a warning for an unreadable date | built |
 | 3 | One measured task with and without a reference doc, and the adopter guidance it supports | open |
 
 Branch `project-reference`, commits only: no push, no PR. `harness reference new` and its template
-are in the tree; nothing reads `paths` yet, so a doc it writes can still drift in silence (phase 2).
+are in the tree, and the doc gate now warns when a commit touches an open doc's `paths` after its
+`last_verified` day, or when that date does not parse. Both warn and exit 0. This repo's own docs
+draw drift warnings and were left as they are: re-verifying them is the owner's call, not a re-date.
 No reference doc was created in this repo.
 
 ## How to work

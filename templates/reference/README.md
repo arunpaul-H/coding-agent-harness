@@ -6,11 +6,11 @@ kind: reference
 status: open
 # <READ_WHEN>: the ONE line the generated index shows. Write the task that should make someone open this, not the topic it covers.
 read_when: "<READ_WHEN>"
-# <PATH_GLOB>: the trees this doc is the contract for, as a list. A reader uses it to tell whether their change is this doc's business.
+# <PATH_GLOB>: the trees this doc is the contract for, as a list. A reader uses it to tell whether their change is this doc's business, and the doc gate warns when a commit touches them after the `last_verified` day.
 paths: ["<PATH_GLOB>"]
 # <VERIFY_COMMAND>: one command, present in this repo, that checks the claims below. Nothing runs it for you. Delete the line when no such command exists.
 verify: "<VERIFY_COMMAND>"
-# <YYYY-MM-DD>: the day somebody last checked the body against the code. A real date: a token left here is never reported stale.
+# <YYYY-MM-DD>: the day somebody last checked the body against the code. A real date: a token left here draws a warning from the doc gate and is never reported stale or drifted.
 last_verified: <YYYY-MM-DD>
 max_age_days: 90
 ---
