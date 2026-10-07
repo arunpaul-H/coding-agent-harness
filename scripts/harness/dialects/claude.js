@@ -110,4 +110,29 @@ const permissions = {
   },
 };
 
-module.exports = { parse, emit, permissions };
+/**
+ * THE SHAPE OF THE HOOK CONFIG FILE, for the one row whose hook config is the file named here.
+ * It is the same rule as `permissions` above: two rows share this wire format, and the shape of
+ * the files the other two keep their hooks in is NOT in the research cells (one is named with no
+ * shape, one lives in the user's home in another format). The installer renders nothing for a row
+ * this does not cover, and says so.
+ *
+ * EVIDENCE: this shape is the registration this repo has run under since phase 3. The matcher is
+ * the union of the names ACTION_OF maps, plus the server-defined tools: a name outside it never
+ * reaches the entry, and a match-all would turn every other call into an ask (trap MT-17).
+ * `entries` takes the row's id and never spells one.
+ */
+const HOOK = (id, ev) => 'node "$CLAUDE_PROJECT_DIR/scripts/harness/hook.js" --tool ' + id + ' --event ' + ev;
+const wiring = {
+  file: '.claude/settings.json',
+  evidence: 'the registration this repo\'s own sessions start under; the registry row says what was and was not observed',
+  gaps: [],
+  entries(row) {
+    const one = (ev) => ({ type: 'command', command: HOOK(row.id, ev), timeout: 30 });
+    const out = [{ at: ['hooks', 'PreToolUse'], event: 'pre-tool', entry: { matcher: Object.keys(ACTION_OF).concat('mcp__.*').join('|'), hooks: [one('pre-tool')] } }];
+    if (row.sessionStart === true) out.push({ at: ['hooks', 'SessionStart'], event: 'session-start', entry: { hooks: [one('session-start')] } });
+    return out;
+  },
+};
+
+module.exports = { parse, emit, permissions, wiring };

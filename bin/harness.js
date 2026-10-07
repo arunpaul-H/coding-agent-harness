@@ -28,7 +28,7 @@
 
    Zero dependencies, Node built-ins only, like everything it installs.
 
-   Run:  harness init [--into <dir>] [--force] [--dry-run] [--only <path-prefix>]
+   Run:  harness init [--into <dir>] [--tools <id>[,<id>]] [--force] [--dry-run] [--only <path-prefix>]
          harness doctor [--root <dir>] [--no-self-tests]
          harness gates [--check] [--print-allow-skip [--with <gate>=<n>]] [...flags for gates.js]
          harness docs [--index] [...flags for the doc scripts]
@@ -55,9 +55,24 @@ const CONFIG_NAME = CONFIG.CONFIG_NAME;
    loads the policy file natively, and then init renders no stub at all. */
 const REGISTRY = (() => { try { return TOOLS.readRegistry(); } catch (e) { return CONFIG.fatal(e.message, e.fix); } })();
 const STUB_FILES = TOOLS.stubFiles(REGISTRY);
-const STUB_FILE = TOOLS.enabledStubFiles(REGISTRY, CONFIG.DEFAULTS.tools.enabled)[0];
-const stubCap = (n) => (STUB_FILE ? { [STUB_FILE]: n } : {});
+const DEFAULT_ENABLED = CONFIG.DEFAULTS.tools.enabled;
+/* Which tools a run is FOR is the config's to say (`tools.enabled`), or `init --tools`; nothing
+   probes the machine. The stub is then the one THOSE tools need, and none when every one of them
+   loads the policy file itself. */
+const stubFileFor = (enabled) => TOOLS.enabledStubFiles(REGISTRY, enabled || DEFAULT_ENABLED)[0];
+const STUB_FILE = stubFileFor();
+const stubCap = (n, stub) => (stub ? { [stub]: n } : {});
 const posix = (p) => String(p).split(path.sep).join('/');
+/* The merges init writes and doctor grades (hook registrations, the policy setting), and the
+   skill renderer. Loaded when first needed: a package that lost a piece must still reach the
+   line that names the missing piece, and a `require` up here would die before it. */
+const WIRE = () => require('../scripts/harness/wire.js');
+const SKILLS = () => require('../scripts/harness/guards/skill-verify.cjs');
+/** A row's dialect module, or null: the row has none, or the module is not in this copy. */
+const dialectOf = (row) => {
+  if (!row || typeof row.dialect !== 'string' || !/^[a-z][a-z0-9-]*$/.test(row.dialect)) return null;
+  try { return require(path.join(PKG_ROOT, 'scripts', 'harness', 'dialects', row.dialect + '.js')); } catch { return null; }
+};
 
 /* ---------- what an installed copy consists of ----------
    Named file by file for the agents and skills, NOT "whatever is in the
@@ -69,6 +84,15 @@ const posix = (p) => String(p).split(path.sep).join('/');
 const SHIPPED_AGENTS = ['explore.md', 'implement.md', 'research.md', 'review.md'];
 const SHIPPED_SKILLS = ['plan', 'research', 'implement'];
 const TRACK_TEMPLATES = ['README.md', 'plan.md', 'traps.md', 'handoff.md'];
+/* The directory the shipped skills are WRITTEN in. A tool whose registry row names this root gets
+   them copied; a tool that names another root gets them rendered there (portable frontmatter
+   only), once per root however many tools read it. */
+const SKILL_SOURCE = '.claude/skills';
+/* The one hook config this package ships whole, comments and all, and the helper directory only
+   that file refers to. Both are installed when an ENABLED row keeps its hooks in that file, and
+   not otherwise: a repo wired for other tools has no use for either. */
+const SHIPPED_HOOK_CONFIG = { file: '.claude/settings.json', helpers: '.claude/helpers' };
+const usesShippedHookConfig = (enabled) => TOOLS.enabledRows(REGISTRY, enabled || DEFAULT_ENABLED).some((r) => r.hookConfig === SHIPPED_HOOK_CONFIG.file);
 // One machine's run output, never part of an install. gates.json carries a
 // timestamp and a dirty flag; a red log is a transcript of someone else's tree.
 const RUN_OUTPUT = [/^gates\.json$/, /^gates\.red\..*\.log$/];
@@ -257,6 +281,15 @@ function buildConfig(d) {
     { name: 'hygiene', command: 'node scripts/harness/guards/commit-hygiene.cjs --report' },
     { name: 'skills', command: 'node scripts/harness/guards/skill-verify.cjs --check' });
   const uniq = (a) => [...new Set(a)];
+  const stub = stubFileFor(d.enabled);
+  // Where the enabled tools keep what init writes for them: a file there is not a stray.
+  const toolPaths = TOOLS.enabledRows(REGISTRY, d.enabled || DEFAULT_ENABLED).flatMap((r) => [
+    r.projectHooks === true && !/[*~]/.test(String(r.hookConfig)) ? r.hookConfig : null,
+    r.policy && r.policy.mode === 'config' ? r.policy.file : null,
+    typeof r.skills === 'string' ? r.skills + '/' : null,
+  ]).filter(Boolean);
+  const toolDirs = toolPaths.filter((p) => p.includes('/')).map((p) => p.split('/')[0]);
+  const toolRootFiles = toolPaths.filter((p) => !p.includes('/'));
   return {
     $schema: './schema/harness.config.schema.json',
     _readme: [
@@ -278,15 +311,18 @@ function buildConfig(d) {
     // the reader can see the list the guard is enforcing.
     env: { guarded: CONFIG.DEFAULTS.env.guarded.slice(), openCarveOuts: [] },
     commitHygiene: {
-      workDirs: uniq(['scripts', 'tests', d.docsRoot, 'templates', 'schema', '.claude', '.github'].concat(d.trackedDirs)),
-      rootAllow: uniq(['README.md', 'LICENSE', 'package.json'].concat(STUB_FILE ? [STUB_FILE] : [], [TOOLS.POLICY_FILE, CONFIG_NAME,
-        'skills-lock.json', '.gitignore', '.gitattributes'], d.trackedRootFiles)),
+      workDirs: uniq(['scripts', 'tests', d.docsRoot, 'templates', 'schema', '.claude', '.github'].concat(d.trackedDirs, toolDirs)),
+      rootAllow: uniq(['README.md', 'LICENSE', 'package.json'].concat(stub ? [stub] : [], [TOOLS.POLICY_FILE, CONFIG_NAME,
+        'skills-lock.json', '.gitignore', '.gitattributes'], d.trackedRootFiles, toolRootFiles)),
     },
     docs: {
-      caps: Object.assign({ [TOOLS.POLICY_FILE]: 80 }, stubCap(5), { subtreeAgentsMd: 50, default: 150 }),
+      caps: Object.assign({ [TOOLS.POLICY_FILE]: 80 }, stubCap(5, stub), { subtreeAgentsMd: 50, default: 150 }),
       exemptDirs: [d.docsRoot + '/archive', d.docsRoot + '/explorations'],
     },
     context: { budgetFile: 'scripts/harness/context-budget.json' },
+    // Written only when the caller NAMED the tools. Left out, the loader's default is in force,
+    // and a default nobody chose is not written down as if somebody had.
+    ...(d.enabled ? { tools: { enabled: d.enabled.slice() } } : {}),
   };
 }
 
@@ -428,15 +464,16 @@ const GENERATED_DEFAULT = { baseBytes: 256, bytesPerRow: 256, maxRows: 6 };
    file and the routing doc are NAMED by the scripts that own those names, never respelled here:
    tools.js holds the one policy file, config.js the routing doc's place under the docs root,
    and the stub is the default tool's, read off its registry row (STUB_FILE, at the top). */
-const instructionFiles = (docsRoot) => {
+const instructionFiles = (docsRoot, enabled) => {
   const routing = CONFIG.routingDoc({ project: { docsRoot: docsRoot } });
+  const stub = stubFileFor(enabled);
   return {
     policy: TOOLS.POLICY_FILE,
-    stub: STUB_FILE,
+    stub: stub,
     routing: routing,
     render: [
       { template: TOOLS.POLICY_FILE, dest: TOOLS.POLICY_FILE },
-    ].concat(STUB_FILE ? [{ template: STUB_FILE, dest: STUB_FILE }] : [], [
+    ].concat(stub ? [{ template: stub, dest: stub }] : [], [
       { template: 'docs/' + CONFIG.ROUTING_DOC, dest: routing },
     ]),
   };
@@ -510,11 +547,61 @@ function buildPlan(pkgRoot, target, d) {
     for (const f of files) items.push({ dest: posix(path.relative(pkgRoot, f)), from: f });
   };
 
-  copy('.claude/settings.json');
+  const enabled = d.enabled || DEFAULT_ENABLED;
+  const rows = TOOLS.enabledRows(REGISTRY, enabled);
+  /* MERGES, keyed by destination so two of them into one file (a tool that keeps its hooks and
+     its policy setting in the same settings file) are one item and one write. Each step takes the
+     file's text, or null when there is none, and answers { text } or { refuse }. */
+  const merges = new Map();
+  const merge = (dest, step, note, seedFrom) => {
+    if (!merges.has(dest)) merges.set(dest, { dest: dest, steps: [], notes: [], seedFrom: seedFrom });
+    const m = merges.get(dest);
+    m.steps.push(step);
+    if (note && !m.notes.includes(note)) m.notes.push(note);
+  };
+
+  // THE HOOK CONFIG of each enabled tool, where the registry row and its dialect say how.
+  for (const row of rows) {
+    const w = WIRE().wiringFor(row, dialectOf(row));
+    if (!w || WIRE().unwiredReason(row, dialectOf(row))) continue;
+    let seedFrom;
+    if (row.hookConfig === SHIPPED_HOOK_CONFIG.file) {
+      // The shipped file is the starting text: it carries the comments, the status line and the
+      // deny list no registry row describes. The merge then finds its registrations already there.
+      seedFrom = path.join(pkgRoot, ...row.hookConfig.split('/'));
+      if (!isFile(seedFrom)) { absent.push(row.hookConfig); continue; }
+    }
+    merge(row.hookConfig, (text) => WIRE().mergeHooks(text, row, w), 'registers the hook entry as `' + row.id + '` (' + w.evidence + ')', seedFrom);
+  }
   // Helpers: the code, never a dotfile or a state file a hook left behind.
-  copyDir('.claude/helpers', (name) => /\.(c|m)?js$/.test(name));
+  if (usesShippedHookConfig(enabled)) copyDir(SHIPPED_HOOK_CONFIG.helpers, (name) => /\.(c|m)?js$/.test(name));
   for (const a of SHIPPED_AGENTS) copy('.claude/agents/' + a);
-  for (const s of SHIPPED_SKILLS) copyDir('.claude/skills/' + s);
+
+  // THE POLICY POINTER of a tool that is pointed at the policy file by a setting. A pointer and
+  // never a second body: the setting gains one file name.
+  for (const row of rows) {
+    const p = row.policy;
+    if (!p || p.mode !== 'config') continue;
+    if (WIRE().isJsonFile(p.file)) merge(p.file, (text) => WIRE().mergePointer(text, row, TOOLS.POLICY_FILE), '`' + p.setting + '` names ' + TOOLS.POLICY_FILE + ' for `' + row.id + '`');
+    // A settings file in a format this cannot merge is written only when there is none.
+    else items.push({ dest: p.file, content: WIRE().pointerLine(row, TOOLS.POLICY_FILE) + '\n', note: 'points `' + row.id + '` at ' + TOOLS.POLICY_FILE + '; if the file exists, add that line yourself' });
+  }
+
+  // THE SKILLS, once per root an enabled tool loads from: copied to the root they are written
+  // for, rendered to any other. A rendered copy is pinned in the lock so the gate can hold it to
+  // its source (scripts/harness/guards/skill-verify.cjs, RENDER-DRIFT).
+  const renderedLock = {};
+  for (const root of TOOLS.skillRoots(REGISTRY, enabled)) {
+    for (const s of SHIPPED_SKILLS) {
+      if (root === SKILL_SOURCE) { copyDir(SKILL_SOURCE + '/' + s); continue; }
+      const map = SKILLS().renderSkillFiles(path.join(pkgRoot, ...SKILL_SOURCE.split('/'), s));
+      if (!map || !Object.keys(map).length) { absent.push(SKILL_SOURCE + '/' + s + '/'); continue; }
+      for (const rel of Object.keys(map).sort()) items.push({ dest: root + '/' + s + '/' + rel, content: map[rel], note: 'rendered from ' + SKILL_SOURCE + '/' + s + ', portable frontmatter only' });
+      // One name, one entry: the lock is keyed by skill name, so a second rendered root would
+      // need a second key. No registry row names one today.
+      if (!renderedLock[s]) renderedLock[s] = SKILLS().renderedLockEntry(SKILL_SOURCE + '/' + s, root + '/' + s, map);
+    }
+  }
   // The three figure files are WRITTEN for the target, never copied (see emptyBaseline,
   // emptyReport, starterBudget): each holds numbers measured on the tree it sits in.
   const FIGURES = ['gates.baseline.json', 'context-budget.json', 'harness-baseline.json'];
@@ -531,12 +618,42 @@ function buildPlan(pkgRoot, target, d) {
 
   const cfg = buildConfig(d);
   items.push({ dest: CONFIG_NAME, content: JSON.stringify(cfg, null, 2) + '\n', note: 'generated from what was detected' });
-  items.push({ dest: 'skills-lock.json', content: JSON.stringify({ version: 2, skills: {} }, null, 2) + '\n', note: 'empty — a lock inherited from another machine pins another machine\'s review' });
+  if (!Object.keys(renderedLock).length) {
+    items.push({ dest: 'skills-lock.json', content: JSON.stringify({ version: 2, skills: {} }, null, 2) + '\n', note: 'empty — a lock inherited from another machine pins another machine\'s review' });
+  } else {
+    // A lock that exists is the user's: an entry is ADDED for a rendered copy that has none, and
+    // no entry already there is touched. A stale one is the gate's to report, after a read.
+    merge('skills-lock.json', (text) => {
+      let lock = { version: 2, skills: {} };
+      if (text !== null) {
+        try { lock = JSON.parse(text); } catch (e) { return { refuse: 'it is not valid JSON (' + e.message + ')' }; }
+        if (!lock || Array.isArray(lock) || typeof lock !== 'object') return { refuse: 'it is not a lock: expected { "version": 2, "skills": { ... } }' };
+        if (lock.skills === undefined) lock.skills = {};
+        if (!lock.skills || Array.isArray(lock.skills) || typeof lock.skills !== 'object') return { refuse: '`skills` is not an object' };
+      }
+      const missing = Object.keys(renderedLock).filter((n) => !(n in lock.skills));
+      if (text !== null && !missing.length) return { text: text, changed: false };
+      for (const n of missing) lock.skills[n] = renderedLock[n];
+      return { text: JSON.stringify(lock, null, 2) + '\n', changed: true };
+    }, 'pins the rendered skill copies to their source; nothing else is inherited');
+  }
   items.push({ dest: '.gitignore', content: gitignoreText(cfg.env.guarded), note: 'the ignore rules the harness depends on' });
+  for (const m of merges.values()) {
+    items.push({ dest: m.dest, seedFrom: m.seedFrom, note: m.notes.join('; '),
+      merge: (text) => {
+        let cur = text;
+        for (const step of m.steps) {
+          const r = step(cur);
+          if (r.refuse) return r;
+          cur = r.text;
+        }
+        return { text: cur };
+      } });
+  }
 
   const unrendered = [];
   const sizes = {};
-  const names = instructionFiles(d.docsRoot);
+  const names = instructionFiles(d.docsRoot, d.enabled);
   for (const { template, dest: name } of names.render) {
     const text = readText(path.join(pkgRoot, 'templates', ...template.split('/')));
     if (text === null) { absent.push('templates/' + template); continue; }
@@ -557,14 +674,51 @@ function buildPlan(pkgRoot, target, d) {
 
 /** Apply (or, dry, only describe) a plan. Returns what happened to every item, so the
  *  caller prints from the RESULT and never from the intention. */
-function applyPlan(plan, opts) {
-  const res = { wrote: [], overwrote: [], skipped: [], kept: [] };
+const inScope = (it, opts) => !opts.only || it.dest === opts.only || it.dest.startsWith(opts.only.replace(/\/?$/, '/'));
+/** What a MERGE item would leave in its file: { body } or { refuse }. The text it starts from
+ *  is the file as it stands; with none there, or under --force on a file the package ships, it
+ *  is the package's own copy (the seed), and otherwise nothing. Reads only. */
+function mergeResult(it, dest, opts) {
+  const seed = () => (it.seedFrom ? readText(it.seedFrom) : null);
+  const there = exists(dest);
+  const start = there && !(opts.force && it.seedFrom) ? readText(dest) : seed();
+  if (there && start === null && !it.seedFrom) return { refuse: 'it could not be read' };
+  const r = it.merge(start);
+  return r.refuse ? r : { body: Buffer.from(r.text, 'utf8') };
+}
+/** Every merge this run would refuse, as { dest, why }. Asked BEFORE anything is written: a
+ *  config file init cannot parse stops the whole run, so a target is never left half wired. */
+function planRefusals(plan, opts) {
+  const out = [];
   for (const it of plan.items) {
-    if (opts.only && !(it.dest === opts.only || it.dest.startsWith(opts.only.replace(/\/?$/, '/')))) continue;
+    if (!it.merge || !inScope(it, opts)) continue;
+    const r = mergeResult(it, path.join(plan.target, ...it.dest.split('/')), opts);
+    if (r.refuse) out.push({ dest: it.dest, why: r.refuse });
+  }
+  return out;
+}
+
+function applyPlan(plan, opts) {
+  const res = { wrote: [], overwrote: [], merged: [], skipped: [], kept: [], refused: [] };
+  for (const it of plan.items) {
+    if (!inScope(it, opts)) continue;
     const dest = path.join(plan.target, ...it.dest.split('/'));
     const there = exists(dest);
+    if (it.merge) {
+      // A merge is not an overwrite, so it runs without --force: it adds what is missing and
+      // leaves every other byte. A file with nothing missing is reported as left alone.
+      const r = mergeResult(it, dest, opts);
+      if (r.refuse) { res.refused.push({ dest: it.dest, why: r.refuse }); continue; }
+      if (there && Buffer.compare(fs.readFileSync(dest), r.body) === 0) { (opts.force ? res.kept : res.skipped).push(it); continue; }
+      if (!opts.dry) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, r.body);
+      }
+      (!there ? res.wrote : opts.force && it.seedFrom ? res.overwrote : res.merged).push(it);
+      continue;
+    }
     if (there && !opts.force) { res.skipped.push(it); continue; }
-    const body = it.content !== undefined ? Buffer.from(it.content, 'utf8') : fs.readFileSync(it.from);
+    const body = it.content !== undefined ? (Buffer.isBuffer(it.content) ? it.content : Buffer.from(it.content, 'utf8')) : fs.readFileSync(it.from);
     // --force on a file that already holds these bytes is not a write. Saying
     // "overwrote" would send the reader to a diff that is empty.
     if (there && Buffer.compare(fs.readFileSync(dest), body) === 0) { res.kept.push(it); continue; }
@@ -612,8 +766,24 @@ const skipArg = (m) => Object.keys(m).sort().map((k) => k + '=' + m[k]).join(','
 
 /** Why `init` will not run with these arguments, or null. Pure, so the self-test
  *  drives it with literals. */
+/** Why this list of tool ids cannot be enabled, or null. Every id is held to the registry: an
+ *  unknown one lists the valid ones, and the registry's own refusals (a model with nothing to
+ *  wire, a tool whose native file is not the policy file) are passed on in its words. */
+function toolsArgError(ids, reg) {
+  const R = reg || REGISTRY;
+  const valid = TOOLS.enabledRows(R, (R.tools || []).map((r) => r && r.id)).map((r) => r.id);
+  if (!ids.length) return '--tools needs at least one tool id (valid: ' + valid.join(', ') + ')';
+  const twice = ids.filter((id, i) => ids.indexOf(id) !== i);
+  if (twice.length) return 'tool id `' + twice[0] + '` is named twice';
+  const unknown = ids.filter((id) => !valid.includes(id));
+  if (unknown.length) return 'unknown tool id ' + unknown.map((u) => '`' + u + '`').join(', ') + ' (valid: ' + valid.join(', ') + ')';
+  const found = TOOLS.enabledFindings(R, ids);
+  return found.length ? found[0] : null;
+}
+const INIT_USAGE = 'harness init [--into <dir>] [--tools <id>[,<id>]] [--force] [--dry-run] [--only <path-prefix>]';
+
 function initArgError(argv) {
-  const VALUED = ['--into', '--only'];
+  const VALUED = ['--into', '--only', '--tools'];
   const BARE = ['--force', '--dry-run'];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -634,7 +804,7 @@ function cmdInit(argv) {
   // with its value missing falls back to the current directory — the one place
   // the caller just said they did not mean.
   const bad = initArgError(argv);
-  if (bad) return stop(bad, 'harness init [--into <dir>] [--force] [--dry-run] [--only <path-prefix>]');
+  if (bad) return stop(bad, INIT_USAGE);
   const target = path.resolve(val('--into') || process.cwd());
   const opts = { force: argv.includes('--force'), dry: argv.includes('--dry-run'), only: val('--only') };
   if (!isDir(target)) return stop('no directory at ' + target, 'mkdir it first, or pass --into <an existing repo>');
@@ -642,12 +812,39 @@ function cmdInit(argv) {
     return stop('the target is the harness package itself', 'run it from the repo you are installing into, or pass --into <dir>');
   }
 
+  /* WHICH TOOLS. `--tools` names them; with no flag, a config already in the target does; with
+     neither, the loader's default is in force and is not written down. The machine is never
+     asked what is installed on it: a repo is wired for the tools its config names. */
   const d = detect(target);
+  const asked = argv.includes('--tools') ? String(val('--tools')).split(',').map((x) => x.trim()).filter(Boolean) : null;
+  const had = readJson(path.join(target, CONFIG_NAME));
+  const stated = had && had.tools && Array.isArray(had.tools.enabled) ? had.tools.enabled.map(String) : null;
+  if (asked) {
+    const why = toolsArgError(asked);
+    if (why) return stop(why, '`node scripts/harness/tools.js --list` prints every id with its tier and evidence');
+    const now = stated || DEFAULT_ENABLED;
+    if (isFile(path.join(target, CONFIG_NAME)) && !opts.force && JSON.stringify(now) !== JSON.stringify(asked)) {
+      return stop(CONFIG_NAME + ' is already there and enables ' + now.join(', ') + ', not ' + asked.join(', '),
+        'init never rewrites your config: set "tools": { "enabled": ' + JSON.stringify(asked) + ' } in ' + CONFIG_NAME + ', then run init again with no --tools');
+    }
+    d.enabled = asked;
+  } else if (stated) {
+    const why = toolsArgError(stated);
+    if (why) return stop('tools.enabled in ' + CONFIG_NAME + ': ' + why, 'node scripts/harness/tools.js --check');
+    d.enabled = stated;
+  }
+
   const plan = buildPlan(PKG_ROOT, target, d);
   if (plan.absent.length) {
     for (const a of plan.absent) console.error('ABSENT FROM PACKAGE  ' + a);
     return stop('this copy of agent-harness is incomplete (' + plan.absent.length + ' piece(s) above), so nothing was written',
       'reinstall the package — a half-installed harness has hooks pointing at helpers that never arrived');
+  }
+  const refused = planRefusals(plan, opts);
+  if (refused.length) {
+    for (const r of refused) console.error('CANNOT MERGE INTO  ' + r.dest + '   — ' + r.why);
+    return stop('init merges into a config file and never overwrites one, and ' + refused.length + ' file(s) above cannot be read as one, so nothing was written',
+      'repair ' + refused.map((r) => r.dest).join(', ') + ' (or move it aside), then run init again');
   }
 
   console.log('harness init -> ' + target + (opts.dry ? '   (DRY RUN: nothing is written)' : ''));
@@ -658,6 +855,11 @@ function cmdInit(argv) {
   console.log('  docs root         ' + d.docsRoot + '   <- ' + d.evidence.docsRoot);
   console.log('  default branch    ' + d.defaultBranch + '   <- ' + d.evidence.defaultBranch);
 
+  // What each enabled tool gets, and what it does not. Evidence is printed as the row states it.
+  const on = d.enabled || DEFAULT_ENABLED;
+  console.log('\nTOOLS   <- ' + (asked ? '--tools' : stated ? 'tools.enabled in ' + CONFIG_NAME : 'the default (no --tools, no config yet)'));
+  for (const line of toolLines(on)) console.log('  ' + line);
+
   const res = applyPlan(plan, opts);
   const show = (label, list) => {
     if (!list.length) return;
@@ -666,9 +868,10 @@ function cmdInit(argv) {
   };
   show(opts.dry ? 'WOULD WRITE' : 'WROTE', res.wrote);
   show(opts.dry ? 'WOULD OVERWRITE (--force)' : 'OVERWROTE (--force)', res.overwrote);
+  show(opts.dry ? 'WOULD MERGE INTO — adds what is missing, every other key is left as it is' : 'MERGED INTO — added what was missing, every other key is as it was', res.merged);
   show('UNCHANGED (already identical)', res.kept);
   show('SKIPPED — exists, not overwritten (pass --force, or --force --only <path> for one)', res.skipped);
-  if (!res.wrote.length && !res.overwrote.length) console.log('\nNothing to write: every file is already there.');
+  if (!res.wrote.length && !res.overwrote.length && !res.merged.length) console.log('\nNothing to write: every file is already there.');
 
   // Only for a file this run actually (or, dry, would have) produced: a skipped
   // AGENTS.md is the human's own, and its contents are not this plan's to describe.
@@ -692,7 +895,7 @@ function cmdInit(argv) {
 
   const me = selfInvocation(target);
   const skips = skipArg(configSkips(plan.config));
-  const names = instructionFiles(d.docsRoot);
+  const names = instructionFiles(d.docsRoot, d.enabled);
   console.log('\nNEXT — four commands, in this order:');
   console.log('  1. ' + me + ' doctor');
   console.log('       every installed piece, OK / MISSING / DRIFTED, each with its fix');
@@ -842,6 +1045,32 @@ function runSelfTest(file, cwd) {
   return { ok: r.status === 0, status: r.status, tail: tail.trim() };
 }
 
+const evidenceText = (row) => (row.evidence === 'ran' ? 'ran (' + row.command + ')' : 'docs (NOT verified: read from vendor pages; the registry row says what, if anything, was run)');
+/** What the harness wires for one row: `{ wiring }` when it renders a hook config for it, or
+ *  `{ why }`, the one sentence saying why it does not. Read off the row and its dialect. */
+function toolWiring(row) {
+  const dialect = dialectOf(row);
+  const why = WIRE().unwiredReason(row, dialect);
+  return why ? { wiring: null, why: why } : { wiring: WIRE().wiringFor(row, dialect), why: null };
+}
+/** The TOOLS block init prints: one line per enabled tool, then what it does not get. */
+function toolLines(enabled) {
+  const out = [];
+  for (const row of TOOLS.enabledRows(REGISTRY, enabled)) {
+    out.push(row.id + '   tier ' + row.tier + ', evidence ' + evidenceText(row));
+    const t = toolWiring(row);
+    if (t.wiring) {
+      out.push('    hooks: ' + row.hookConfig + ' registers the one hook entry as `' + row.id + '`');
+      for (const g of t.wiring.gaps || []) out.push('    ! ' + g);
+    } else {
+      out.push('    ! NO HOOK IS WIRED: ' + t.why + '. Every rule is prose under this tool.');
+    }
+    if (row.sessionStart !== true && typeof row.dialect === 'string') out.push('    ! no session-start event: the session reports never run under it');
+  }
+  out.push('`doctor` repeats this for each tool, with every wire that is missing.');
+  return out;
+}
+
 function doctor(root, opts) {
   const o = opts || {};
   const pkgRoot = o.pkgRoot || PKG_ROOT;
@@ -877,24 +1106,28 @@ function doctor(root, opts) {
     }
   }
 
-  // 3. EVERY HOOK PATH EXISTING. A hook whose script is gone does not fail
-  //    loudly — the guard it was simply stops guarding, which is the worst
-  //    way for a guard to break.
-  const settingsFile = path.join(root, '.claude', 'settings.json');
-  const settings = readJson(settingsFile);
-  if (!isFile(settingsFile)) add('MISSING', '.claude/settings.json', 'no hooks are registered, so no guard runs', me + ' init');
-  else if (!settings) add('DRIFTED', '.claude/settings.json', 'not valid JSON, so the runtime loads no hook from it', me + ' init --force --only .claude/settings.json');
-  else {
+  // 3. EVERY HOOK PATH EXISTING, in the hook config of EVERY ENABLED TOOL the harness wires. A
+  //    hook whose script is gone does not fail loudly — the guard it was simply stops guarding,
+  //    which is the worst way for a guard to break.
+  const enabled = cfg ? cfg.tools.enabled : DEFAULT_ENABLED;
+  const toolRows = TOOLS.enabledRows(REGISTRY, enabled);
+  const hookFiles = [...new Set(toolRows.filter((r) => toolWiring(r).wiring).map((r) => r.hookConfig))];
+  const seen = new Set();
+  for (const hookFile of hookFiles) {
+    const settingsFile = path.join(root, ...hookFile.split('/'));
+    const settings = readJson(settingsFile);
+    const shipped = hookFile === SHIPPED_HOOK_CONFIG.file;
+    if (!isFile(settingsFile)) { add('MISSING', hookFile, 'no hooks are registered, so no guard runs', me + ' init'); continue; }
+    if (!settings) { add('DRIFTED', hookFile, 'not valid JSON, so the runtime loads no hook from it', shipped ? me + ' init --force --only ' + hookFile : 'repair the JSON in ' + hookFile + ', then ' + me + ' init'); continue; }
     const cmds = hookCommands(settings);
-    if (!cmds.length) add('DRIFTED', '.claude/settings.json', 'it registers no hook command at all', me + ' init --force --only .claude/settings.json');
-    const seen = new Set();
+    if (!cmds.length) add('DRIFTED', hookFile, 'it registers no hook command at all', shipped ? me + ' init --force --only ' + hookFile : me + ' init');
     for (const c of cmds) {
       for (const s of hookScripts(c.command, root)) {
         if (seen.has(s)) continue;
         seen.add(s);
         if (isFile(s)) add('OK', 'hook ' + rel(s), c.where);
         else add('MISSING', 'hook ' + rel(s), 'registered at ' + c.where + ' and not on disk',
-          rel(s).startsWith('..') ? 'edit ' + c.where + ' in .claude/settings.json' : me + ' init');
+          rel(s).startsWith('..') ? 'edit ' + c.where + ' in ' + hookFile : me + ' init');
         // A REGISTERED SCRIPT IS A ROOT. One entry may be all a tool registers, and the guards
         // are then the files that entry loads: a guard that is gone is still a hook that is gone.
         // One level, and only a relative path written as a literal, which is how an entry names
@@ -909,12 +1142,79 @@ function doctor(root, opts) {
     }
   }
 
+  // 3b. EACH ENABLED TOOL: its tier, its evidence, and every wire it is missing. A wire init can
+  //     put back is MISSING. A wire the tool cannot have, or that nobody has established how to
+  //     write, is a NOTE: it is said every run and never counted, because no command fixes it
+  //     and a doctor that is red forever is one nobody reads.
+  for (const id of enabled) {
+    if (!toolRows.some((r) => r.id === id)) add('DRIFTED', 'tool ' + id, 'enabled in ' + CONFIG_NAME + ' and has no row in the tool registry', 'node scripts/harness/tools.js --check');
+  }
+  for (const row of toolRows) {
+    const T = 'tool ' + row.id;
+    add('OK', T, 'tier ' + row.tier + ', evidence ' + evidenceText(row));
+
+    const p = row.policy;
+    const abs = (r) => path.join(root, ...r.split('/'));
+    if (p && p.mode === 'native') {
+      if (isFile(abs(p.file))) add('OK', T + ' policy', 'it loads ' + p.file + ' itself');
+      else add('MISSING', T + ' policy', 'no ' + p.file + ', the file it loads', me + ' init');
+    } else if (p && p.mode === 'import') {
+      if (isFile(abs(p.file))) add('OK', T + ' policy', p.file + ' is the pointer to ' + TOOLS.POLICY_FILE);
+      else add('MISSING', T + ' policy', 'no ' + p.file + ', the stub that imports ' + TOOLS.POLICY_FILE + ', so it loads no policy', me + ' init');
+    } else if (p && p.mode === 'config') {
+      const text = readText(abs(p.file));
+      const line = WIRE().pointerLine(row, TOOLS.POLICY_FILE);
+      if (text === null) add('MISSING', T + ' policy', 'no ' + p.file + ', so nothing points it at ' + TOOLS.POLICY_FILE, me + ' init');
+      else if (WIRE().isJsonFile(p.file)) {
+        const st = WIRE().pointerState(text, row, TOOLS.POLICY_FILE);
+        if (st.why) add('DRIFTED', T + ' policy', p.file + ': ' + st.why, 'repair ' + p.file + ', then ' + me + ' init');
+        else if (st.ok) add('OK', T + ' policy', '`' + p.setting + '` in ' + p.file + ' names ' + TOOLS.POLICY_FILE);
+        else add('MISSING', T + ' policy', '`' + p.setting + '` in ' + p.file + ' does not name ' + TOOLS.POLICY_FILE, me + ' init');
+      } else if (lf(text).split('\n').some((l) => l.trim() === line)) add('OK', T + ' policy', p.file + ' holds `' + line + '`');
+      else add('MISSING', T + ' policy', p.file + ' does not hold the line `' + line + '`', 'add that line to ' + p.file + ' — init does not edit a settings file in this format');
+    }
+
+    const t = toolWiring(row);
+    if (!t.wiring) {
+      add('NOTE', T + ' hooks', 'NOT WIRED — ' + t.why + '. Every rule is prose under this tool'
+        + (typeof row.dialect === 'string' ? '; the registration, if you add it by hand: ' + WIRE().byHand(row.id, 'pre-tool') : ''));
+      if (typeof row.notes === 'string') add('NOTE', T + ' registry notes', row.notes);
+    } else {
+      const text = readText(abs(row.hookConfig));
+      const st = text === null ? null : WIRE().hookState(text, row, t.wiring);
+      // A file that is absent or does not parse is already a finding above, under its own name.
+      if (st && !st.why) {
+        for (const w of st.wanted) {
+          if (w.ok) add('OK', T + ' ' + w.where, row.hookConfig + ' registers the hook entry as `' + row.id + '` for ' + w.event + ' (' + t.wiring.evidence + ')');
+          else add('MISSING', T + ' ' + w.where, row.hookConfig + ' does not register the hook entry as `' + row.id + '` for ' + w.event, me + ' init');
+        }
+        const others = toolRows.filter((r) => r.id !== row.id && r.hookConfig === row.hookConfig).map((r) => r.id);
+        for (const f of st.foreign.filter((x) => !others.includes(x))) {
+          add('DRIFTED', T + ' foreign registration', row.hookConfig + ' runs the hook entry as `' + f + '`, so this tool\'s calls would be read in another tool\'s wire format',
+            'edit ' + row.hookConfig + ': the registration must say --tool ' + row.id);
+        }
+      }
+      for (const g of t.wiring.gaps || []) add('NOTE', T + ' gap', g);
+    }
+    if (row.sessionStart !== true && typeof row.dialect === 'string') {
+      add('NOTE', T + ' session-start', 'the tool has no session-start event, so the session reports (skill drift, open carve-outs, the memory index, branch drift) never run under it');
+    }
+
+    if (typeof row.skills === 'string') {
+      const gone = SHIPPED_SKILLS.filter((s) => !isFile(path.join(abs(row.skills), s, 'SKILL.md')));
+      if (!gone.length) add('OK', T + ' skills', SHIPPED_SKILLS.length + ' skill(s) under ' + row.skills + '/');
+      for (const s of gone) add('MISSING', T + ' skill ' + s, 'no ' + row.skills + '/' + s + '/SKILL.md', me + ' init');
+    } else {
+      add('NOTE', T + ' skills', 'where it loads skills from is not established, so none is installed for it');
+    }
+  }
+
   // 4. EVERY PIECE OF THE HARNESS PRESENT, AND STILL THE BYTES THAT SHIPPED.
   //    Compared with line endings normalised: a checkout that converts to CRLF
   //    has not edited anything. Skipped when the tree under inspection IS the
   //    package — a file cannot drift from itself.
   if (!samePkg) {
-    const shipped = walk(path.join(pkgRoot, '.claude', 'helpers')).filter((f) => /\.(c|m)?js$/.test(f))
+    const shipped = (usesShippedHookConfig(enabled) ? walk(path.join(pkgRoot, ...SHIPPED_HOOK_CONFIG.helpers.split('/'))).filter((f) => /\.(c|m)?js$/.test(f)) : [])
       .concat(walk(path.join(pkgRoot, 'scripts', 'harness')).filter((f) => /\.(c|m)?js$/.test(f)));
     for (const src of shipped) {
       const r = posix(path.relative(pkgRoot, src));
@@ -1013,10 +1313,12 @@ function cmdDoctor(argv) {
   console.log('harness doctor -> ' + root + '\n');
   for (const r of rows) {
     console.log(r.status.padEnd(8) + r.item + (r.detail ? '   — ' + r.detail : ''));
-    if (r.status !== 'OK') console.log('         fix: ' + r.fix);
+    // A NOTE is a gap no command closes, so it carries no fix line and moves no count.
+    if (r.status !== 'OK' && r.status !== 'NOTE') console.log('         fix: ' + r.fix);
   }
   const n = (s) => rows.filter((r) => r.status === s).length;
-  console.log('\n' + (n('MISSING') + n('DRIFTED') ? 'NOT HEALTHY' : 'HEALTHY') + ' — ok=' + n('OK') + ' missing=' + n('MISSING') + ' drifted=' + n('DRIFTED'));
+  console.log('\n' + (n('MISSING') + n('DRIFTED') ? 'NOT HEALTHY' : 'HEALTHY') + ' — ok=' + n('OK') + ' missing=' + n('MISSING') + ' drifted=' + n('DRIFTED')
+    + (n('NOTE') ? ' notes=' + n('NOTE') + ' (gaps no command closes; read them above)' : ''));
   // The gate line, last, so a repo can register `harness doctor` as a gate.
   console.log('GATE doctor pass=' + n('OK') + ' fail=' + (n('MISSING') + n('DRIFTED')) + ' skipped=0');
   return n('MISSING') + n('DRIFTED') ? 1 : 0;
@@ -1150,7 +1452,12 @@ function cmdSelftest() {
 const HELP = [
   'harness — install and check the agent harness. Zero dependencies.',
   '',
-  '  harness init [--into <dir>] [--force] [--dry-run] [--only <path-prefix>]',
+  '  ' + INIT_USAGE,
+  '      --tools names the coding agents to wire, by registry id (`node scripts/harness/tools.js --list`).',
+  '      It writes tools.enabled, and per tool: the hook config its registry row and dialect describe,',
+  '      MERGED into a file that exists and never overwriting one; the policy pointer; and the skills,',
+  '      rendered once to each skill root an enabled tool reads. A tool the harness cannot wire is named,',
+  '      with the reason. With no --tools the config already in the repo says which, else the default.',
   '      Copy the harness into a repo: .claude/{settings.json,helpers,agents,skills}, scripts/harness/,',
   '      schema/, templates/track/, a ' + CONFIG_NAME + ' generated from what it detects (package manager,',
   '      test command, docs dir, default branch), AGENTS.md (the policy), its CLAUDE.md stub and the routing doc,',
@@ -1161,7 +1468,9 @@ const HELP = [
   '',
   '  harness doctor [--root <dir>] [--no-self-tests]',
   '      Report every installed piece as OK / MISSING / DRIFTED, each with the one command that fixes it.',
-  '      Exit 0 only when everything is OK. Its last line is a GATE line.',
+  '      Per enabled tool: its tier, its evidence, and each missing wire. A NOTE is a gap no command',
+  '      closes (a tool with no session-start event, a hook file nobody established the shape of).',
+  '      Exit 0 only when nothing is MISSING or DRIFTED. Its last line is a GATE line.',
   '',
   '  harness gates [--check] [--accept] [--only a,b] [--allow-skip g=n]',
   '      Run scripts/harness/gates.js. With --check or --accept and no --allow-skip, the skips the',
@@ -1223,6 +1532,20 @@ function selfTest() {
     eq('init args: --into with no value does not fall back to the cwd', initArgError(['--into']), '--into needs a value');
     eq('init args: nor with a flag where its value should be', initArgError(['--into', '--force']), '--into needs a value');
     eq('init args: a bare word is not a target', initArgError(['somewhere']), 'unexpected argument `somewhere`');
+    eq('init args: --tools takes a value', [initArgError(['--tools', 'tool-a']), initArgError(['--tools'])], [null, '--tools needs a value']);
+    // Which tools: every id is held to the registry, here a literal one.
+    const row = (over) => Object.assign({ id: 'tool-a', policy: { mode: 'native', file: TOOLS.POLICY_FILE }, nested: 'yes', hookConfig: null, dialect: null,
+      sessionStart: null, projectHooks: null, tier: 'backstop', evidence: 'docs', asOf: '2026-01-04', source: ['https://example.com'] }, over);
+    const REG = { dialects: [], tools: [row({}), row({ id: 'tool-b' }), row({ id: 'model-a', policy: null, nested: null, tier: 'inherits' }), row({ id: 'tool-o', policy: { mode: 'native', file: 'OWN.md' } })] };
+    eq('tools: ids the registry has are accepted', toolsArgError(['tool-b', 'tool-a'], REG), null);
+    eq('tools: an unknown id is refused, and the valid ones are listed', toolsArgError(['tool-a', 'tool-z'], REG), 'unknown tool id `tool-z` (valid: tool-a, tool-b, model-a, tool-o)');
+    eq('tools: an id named twice is refused', toolsArgError(['tool-a', 'tool-a'], REG), 'tool id `tool-a` is named twice');
+    ok('tools: an empty list is refused', /needs at least one tool id/.test(toolsArgError([], REG)));
+    ok('tools: a model is refused in the registry\'s own words', /enable the row of the host/.test(toolsArgError(['model-a'], REG)));
+    ok('tools: so is a tool whose own file is not the policy file', /second policy body/.test(toolsArgError(['tool-o'], REG)));
+    ok('tools: the shipped registry accepts its own default', toolsArgError(DEFAULT_ENABLED) === null);
+    eq('config: no tools key unless the caller named them', 'tools' in buildConfig({ evidence: {}, docsRoot: 'docs', trackedDirs: [], trackedRootFiles: [] }), false);
+    eq('config: named tools are written as named', buildConfig({ evidence: {}, docsRoot: 'docs', trackedDirs: [], trackedRootFiles: [], enabled: DEFAULT_ENABLED.slice() }).tools, { enabled: DEFAULT_ENABLED });
     eq('budget: bytes + 10%, rounded up to 256', [ceilingFor(3938), ceilingFor(6994), ceilingFor(0)], [4352, 7936, 256]);
     const ROUTE = 'docs/reference/routing/README.md';
     eq('names: the routing doc follows the docs root', instructionFiles('doc').routing, 'doc/reference/routing/README.md');
@@ -1370,6 +1693,28 @@ function selfTest() {
     const forced = applyPlan(buildPlan(pkg, t, detect(t)), { force: true });
     eq('--force: a file already holding the same bytes is not reported as overwritten', forced.overwrote.length, 0);
 
+    // A MERGE item: it adds to a file that exists without --force, leaves the rest of it, is a
+    // no-op the second time, and a file it cannot read is reported before anything is written.
+    const mt = path.join(tmp, 'merge-target');
+    fs.mkdirSync(mt);
+    const addKey = (text) => {
+      let v = {};
+      if (text !== null) { try { v = JSON.parse(text); } catch { return { refuse: 'it is not valid JSON' }; } }
+      if (v.ours === 1) return { text: text };
+      return { text: JSON.stringify(Object.assign(v, { ours: 1 })) };
+    };
+    const mplan = { target: mt, items: [{ dest: 'a/cfg.json', merge: addKey }, { dest: 'plain.txt', content: 'x' }] };
+    eq('merge: nothing to refuse on a fresh target', planRefusals(mplan, {}), []);
+    eq('merge: a file that is not there is written', applyPlan(mplan, {}).wrote.map((it) => it.dest), ['a/cfg.json', 'plain.txt']);
+    eq('merge: a second run changes nothing', (() => { const r = applyPlan(mplan, {}); return [r.wrote.length, r.merged.length, r.skipped.length]; })(), [0, 0, 2]);
+    put(mt, 'a/cfg.json', '{"theirs":true}');
+    eq('merge: an existing file is merged into WITHOUT --force', applyPlan(mplan, {}).merged.map((it) => it.dest), ['a/cfg.json']);
+    eq('merge: and the key that was there survives', readJson(path.join(mt, 'a', 'cfg.json')), { theirs: true, ours: 1 });
+    put(mt, 'a/cfg.json', '{ not json');
+    eq('merge: a file it cannot read is named before anything is written', planRefusals(mplan, {}), [{ dest: 'a/cfg.json', why: 'it is not valid JSON' }]);
+    eq('merge: --only another path does not ask about it', planRefusals(mplan, { only: 'plain.txt' }), []);
+    eq('merge: applied anyway, it is refused and the file is left as it was', [applyPlan(mplan, {}).refused.length, readText(path.join(mt, 'a', 'cfg.json'))], [1, '{ not json']);
+
     const broken = buildPlan(path.join(tmp, 'no-such-package'), t, detect(t));
     ok('plan: an incomplete package names what is absent', broken.absent.includes('.claude/settings.json') && broken.absent.includes('templates/CLAUDE.md') && broken.absent.includes('templates/AGENTS.md') && broken.absent.includes('templates/docs/reference/routing/README.md'));
 
@@ -1460,7 +1805,7 @@ function selfTest() {
   return fails.length ? 1 : 0;
 }
 
-module.exports = { detect, buildConfig, buildPlan, applyPlan, render, doctor, gateResolvable, hookScripts,
+module.exports = { detect, buildConfig, buildPlan, applyPlan, planRefusals, toolsArgError, render, doctor, gateResolvable, hookScripts,
   hookCommands, declaredSkips, configSkips, hostReport, requiredIgnores, SHIPPED_AGENTS, SHIPPED_SKILLS, TRACK_TEMPLATES };
 
 if (require.main === module) {

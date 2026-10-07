@@ -27,10 +27,10 @@ max_age_days: 30
 
 ## What this is
 
-The harness is wired for Claude Code only: `.claude/settings.json` registers the one hook entry,
-`scripts/harness/hook.js`, and nothing renders another tool's config. Since phase 1 the policy is
-`AGENTS.md` and since phase 3 four dialects exist, so a user on Codex, Gemini CLI, Antigravity,
-Cursor, Kimi Code or a DeepSeek-backed host gets the rules and the scripts, and no enforcement yet.
+`harness init --tools <ids>` wires the tools a repo names: the one hook entry,
+`scripts/harness/hook.js`, registered in each tool's own hook file, the policy pointer, and the
+skills. Since phase 4 two rows get a hook file, Claude Code and Cursor (its shell and read events
+only); Codex, Gemini CLI, Antigravity and Kimi Code get the rules, the skills and a stated gap (MT-20).
 Evidence: `research/2026-10-05-tool-instruction-surfaces.md` (what each tool loads and can deny)
 and `research/2026-10-05-claude-coupling-inventory.md` (where this repo is tied to Claude Code).
 The inventory's finding is that gates, config, lifecycle and every helper's CLI mode already run
@@ -122,11 +122,11 @@ A second session is opening a track for run modes. These are settled, so neither
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 0 | The tool registry, its checker, and a `tools` key in the config. Landed, uncommitted | open |
-| 1 | `AGENTS.md` is the always-on policy; routing is a reference doc. Landed, uncommitted | open |
-| 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, uncommitted | open |
-| 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, uncommitted | open |
-| 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier | open |
+| 0 | The tool registry, its checker, and a `tools` key in the config. Landed, committed, not closed | open |
+| 1 | `AGENTS.md` is the always-on policy; routing is a reference doc. Landed, committed, not closed | open |
+| 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, committed, not closed | open |
+| 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
+| 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, uncommitted | open |
 | 5 | A git-hook backstop and the rule-by-tool enforcement matrix | open |
 | 6 | The method doc and the contributor path for adding a tool | open |
 
