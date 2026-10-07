@@ -27,10 +27,10 @@ compliance framing, and dollar-cost accounting.
 | The four-mode verdict | `scripts/harness/mode.js` | written, self-tested, registered nowhere |
 | Duplicate-effect ledger | `scripts/harness/actions.js` | written, self-tested, not gated |
 | Carve-out ratchet | `scripts/harness/carveouts.js` | written, self-tested, not gated, no baseline recorded |
-| Cross-session claims | `scripts/harness/peers.js` | HALF-EDITED, self-test red — see `plan.md` phase 1 |
+| Cross-session claims | `scripts/harness/peers.js` | written, self-tested, hook NOT wired, not gated |
 | The launcher | `scripts/harness/run.js` | not written |
 | Audience statement | `README.md` | not written |
-| Mode config section | `harness.config.json`, `schema/` | not written, waits on multi-tool |
+| Mode config section | `harness.config.json`, `schema/` | not written |
 
 No gate figure appears in this folder. It comes from `node scripts/harness/gates.js --check` and
 lives only in `scripts/harness/gates.json` and `gates.baseline.json`.
@@ -78,5 +78,5 @@ End the phase by running its exit command in the foreground and pasting the outp
 cannot close and stop. Do not flip a `status:` and do not type a receipt — `close-phase.js` writes
 both. Replace `handoff.md`'s single block wholesale; never append a second.
 
-**Coordination:** another session owns the `multi-tool` track. Its phases 1 and 2 have landed, phase 3
-(`scripts/harness/hook.js`) has not. Do not edit its files; see `traps.md` AM-01 and AM-02.
+**Coordination:** none open. The `multi-tool` track is archived under `docs/archive/multi-tool/`, so
+no other session claims a file this track touches. `traps.md` AM-02 still holds.

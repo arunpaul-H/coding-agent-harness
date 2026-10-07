@@ -40,8 +40,8 @@ The root `README.md` gains the scope statement and the quota-not-cost framing, a
 `docs/methods/00-overview.md` gains one line so the methods set agrees with it. Cheapest phase, and
 it constrains every later decision, which is why it is not last.
 
-Waits on the `multi-tool` session confirming its phase 1, because that session is editing
-`README.md`. See `traps.md` AM-01.
+No longer waits on anything: the `multi-tool` track that was editing `README.md` is archived. See
+`traps.md` AM-01.
 
 **First commit:** `autonomy-modes: README states the subscription-seat audience`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
