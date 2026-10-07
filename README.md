@@ -9,6 +9,13 @@ just a written rule is labelled as one.
 
 Node 20 or newer, built-ins only, zero dependencies. This repo is checked by the harness it ships.
 
+## Who this is for
+
+Engineers and developers who build with agents: agentic developers, not prompt engineers. If your
+answer to an agent breaking a rule is a better-worded prompt, this is not that. Here the answer is
+a gate, a hook or a script that fails the work, so the rule holds whether or not the agent
+remembers it.
+
 ## Not a developer? Start here
 
 You do not need to read code to use this. You tell an AI what to build, and the harness checks
