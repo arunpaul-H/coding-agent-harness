@@ -17,6 +17,11 @@
 | [autonomy-modes-research-mechanisms-and-seat-economics](tracks/autonomy-modes/research/2026-10-06-mechanisms-and-seat-economics.md) | deciding what mechanism to add to this harness next, or why a flat-rate seat changes the answer | frozen |
 | [autonomy-modes-research-tool-enforcement-surfaces](tracks/autonomy-modes/research/2026-10-06-tool-enforcement-surfaces.md) | planning or reviewing how a guard, a session-start reporter or an autonomy mode behaves under a coding agent other than Claude Code | frozen |
 | [autonomy-modes-traps](tracks/autonomy-modes/traps.md) | something behaves oddly while working on autonomy-modes | open |
+| [founder-guide-handoff](tracks/founder-guide/handoff.md) | starting or resuming founder-guide | open |
+| [founder-guide-plan](tracks/founder-guide/plan.md) | founder-guide: the three phases, each with its exit command and first commit | open |
+| [founder-guide](tracks/founder-guide/README.md) | any work on the non-technical on-ramp: the guide skill, its install by init, or the founder section of the root README | open |
+| [founder-guide-research-guide-skill-ship-surface](tracks/founder-guide/research/2026-10-07-guide-skill-ship-surface.md) | planning or reviewing the addition of a first-party skill to .claude/skills/ and to what `harness init` installs, and you need every file that names or counts the shipped skills | frozen |
+| [founder-guide-traps](tracks/founder-guide/traps.md) | something behaves oddly while working on founder-guide, or before editing a file another track claims | open |
 | [multi-tool-handoff](tracks/multi-tool/handoff.md) | starting or resuming multi-tool | open |
 | [multi-tool-plan](tracks/multi-tool/plan.md) | multi-tool: the phases, each with its exit command and first commit | open |
 | [multi-tool](tracks/multi-tool/README.md) | making the harness work under a coding agent other than Claude Code, or adding support for a new one | open |
@@ -50,10 +55,11 @@
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
 | [autonomy-modes](tracks/autonomy-modes/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js autonomy-modes` | 2026-10-06 |
+| [founder-guide](tracks/founder-guide/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js founder-guide` | 2026-10-07 |
 | [multi-tool](tracks/multi-tool/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js multi-tool` | 2026-10-06 |
 
 ## Blocked: waiting on someone outside the code
 
 Nothing is blocked.
 
-<!-- 18 live docs -->
+<!-- 23 live docs -->
