@@ -5,11 +5,11 @@
    Two halves, and they prove different things.
 
    THE DIALECTS, from fixtures. Each fixture payload is built from the PROTOCOL CELL of that
-   tool's row in docs/tracks/multi-tool/research/2026-10-05-tool-instruction-surfaces.md: the
+   tool's row in docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md: the
    event names, the stdin field names and the deny spelling written there, and nothing that is
    not. Those cells were read off vendor pages and no tool but one was ever run, so what these
    fixtures pin is that the module does what the CELL says. They do not pin that the tool does.
-   The registry rows stay `docs` evidence, and one test below holds them to that.
+   The registry rows stay `docs` evidence but the one that was run, and one test below holds them to that.
 
    THE ENTRY, as a process. scripts/harness/hook.js is started with a payload on stdin in a
    throwaway root, and its stdout and EXIT CODE are read back. A deny is both. The equivalence
@@ -367,12 +367,14 @@ describe('the dialect modules — fixtures built from the research file\'s proto
     for (const id of ['codex-cli', 'kimi-code']) assert.match(rowOf(id).notes, /emits an ask as a deny/, id);
   });
 
-  test('every row wired to a dialect is still `docs` evidence: these fixtures test the cell, not the tool', () => {
+  test('a row wired to a dialect is `docs` evidence unless it records the command it was run with: these fixtures test the cell, not the tool', () => {
     // Invariant 6. Promoting a row is running the tool and recording the command, and a fixture
-    // built from a paraphrased vendor page is not that.
+    // built from a paraphrased vendor page is not that. One row was run; no fixture here did it.
     for (const row of REGISTRY.tools.filter((r) => r.dialect)) {
-      assert.strictEqual(row.evidence, 'docs', row.id + ' was promoted; if a tool was really run, record the command and update this test');
+      if (row.evidence === 'ran') { assert.ok(String(row.command || '').trim(), row.id + ' is `ran` with no command'); continue; }
+      assert.strictEqual(row.evidence, 'docs', row.id + ' is neither `docs` nor `ran`');
     }
+    assert.deepStrictEqual(REGISTRY.tools.filter((r) => r.evidence === 'ran').map((r) => r.id), ['claude-code'], 'if another tool was really run, record the command and update this test');
   });
 });
 

@@ -48,7 +48,7 @@
     "evidence      `docs` or `ran`.   asOf  the date the evidence was gathered.",
     "source        where each cell came from.   notes  what the row does not establish.",
     "",
-    "Evidence for every `docs` row: docs/tracks/multi-tool/research/2026-10-05-tool-instruction-surfaces.md"
+    "Evidence for every `docs` row: docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md"
   ],
 
   "dialects": ["claude", "gemini", "cursor", "antigravity"],
@@ -65,13 +65,14 @@
       "projectHooks": true,
       "skills": ".claude/skills",
       "tier": "full",
-      "evidence": "docs",
-      "asOf": "2026-10-05",
+      "evidence": "ran",
+      "command": "claude -p \"Without reading any file, quote the hard rule beginning 'This file is the only policy body' and name its file; then spawn a subagent to do the same without file tools. Label LEAD and SUBAGENT.\"",
+      "asOf": "2026-10-07",
       "source": [
         "https://code.claude.com/docs/en/memory",
         "https://code.claude.com/docs/en/hooks"
       ],
-      "notes": "CLAUDE.md is a stub whose only content is the line importing AGENTS.md; the policy body is AGENTS.md. EVIDENCE IS `docs` BECAUSE THE POLICY ROUTE WAS NEVER RUN: that the import delivers AGENTS.md rests on the first source, and whether it reaches a subagent has not been probed. The tool WAS run on 2026-10-05, before the stub existed (started at this repo's root, asked which instruction files it held, then asked to Write a scratch file whose body spells the guarded secret filename), and that run observed two things only: the root CLAUDE.md, which then held the policy body, was in context at session start; and the pre-tool guard registered in .claude/settings.json denied the Write (hookConfig, dialect, projectHooks; trap MT-01). `nested` and `sessionStart` were not observed and rest on the two sources. To promote this row to `ran`: re-run against the stub, including from a spawned subagent, and record that command."
+      "notes": "CLAUDE.md is a stub whose only content is the line importing AGENTS.md; the policy body is AGENTS.md. WHAT THE RUNS OBSERVED. 2026-10-07, the recorded command, in a fresh headless session started at this repo's root (tool version 2.1.293): the lead and a spawned subagent that used no tool each quoted that rule verbatim and named AGENTS.md, so the import delivers the policy and it reaches a subagent (`policy`). The same day, in a working session under the registration in .claude/settings.json: the one hook entry refused a shell call, a commit that staged the gate baseline with a subject it could not read (hookConfig, dialect, projectHooks; trap MT-23). 2026-10-05, before the stub and the one entry existed: the pre-tool guard then registered there denied a Write whose body spells the guarded secret filename (trap MT-01). NOT OBSERVED, resting on the two sources: `nested` and `sessionStart`. No run watched a nested instruction file load, and none watched the session-start reports arrive."
     },
     {
       "id": "codex-cli",

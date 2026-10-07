@@ -14,8 +14,8 @@
  * `permissionDecision: "deny"` in JSON on stdout. emit() does BOTH for a deny, because several
  * tools are documented to fail open on any exit code but 2.
  *
- * EVIDENCE: `docs` for every row (see the registry). Field names are read off vendor pages;
- * only Claude Code was run here, and only its pre-tool deny was observed.
+ * EVIDENCE: the registry says, row by row. Field names are read off vendor pages; only Claude
+ * Code was run here, and what was observed is its policy route and a pre-tool deny.
  *
  * WHAT IS NOT IN THE RESEARCH CELLS, and what this file does about each:
  *   - where a payload with no `tool_input` object keeps the call's arguments (the third cell).

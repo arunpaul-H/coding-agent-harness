@@ -131,7 +131,7 @@ A second session is opening a track for run modes. These are settled, so neither
 | 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
 | 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, committed, closed by `close-phase.js` on 2026-10-07 (the receipt is in this file's frontmatter) | open |
 | 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, closed by `close-phase.js` on 2026-10-07 | open |
-| 6 | The method doc `docs/methods/15-many-tools-one-policy.md`, "Add a tool" in `CONTRIBUTING.md`, the tool list in the root README. Landed; the frontmatter receipt says whether it is closed | open |
+| 6 | The method doc `docs/methods/15-many-tools-one-policy.md`, "Add a tool" in `CONTRIBUTING.md`, the tool list in the root README. Landed, committed, closed by `close-phase.js` on 2026-10-07 | open |
 
 ## How to work
 

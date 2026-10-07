@@ -175,13 +175,13 @@ its cost and its limits.
   agents to wire. A hook file is written for Claude Code and, for shell calls and file reads only,
   for Cursor. Every other tool below gets the policy, the skills and a stated gap. The agent files
   and the status line are Claude Code's only.
-- **Which tools, and on what evidence.** `docs` means the row was read off the vendor's pages and
-  the tool was never run here. Printed by `node scripts/harness/tools.js --list`, 2026-10-07:
+- **Which tools, and on what evidence.** `ran` means the tool was run here and the row records
+  the command. `docs` means the row was read off the vendor's pages and the tool was never run. Printed by `node scripts/harness/tools.js --list`, 2026-10-07:
 
   <!-- tools-list:start -->
   ```
   id              tier        evidence  enabled
-  claude-code     full        docs      yes
+  claude-code     full        ran       yes
   codex-cli       full        docs
   gemini-cli      full        docs
   antigravity     guard-only  docs
