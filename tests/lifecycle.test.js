@@ -900,8 +900,11 @@ describe('findings-check.js — a finding is closed when a command says so', () 
       // sound proof is removed within the day.
       const repo = mkRepo();
       const t = mini(repo);
+      // `# SKIP` is refused first, and that is measured: Node 20 still PRINTS a test the pattern
+      // filtered out, as `ok 1 - alpha bravo # SKIP test name does not match pattern` (Node 22
+      // omits it), so a proof that looks only for the `ok` line is vacuous there after all.
       const proof = 'sh -c \'o=$(node --test --test-reporter=tap --test-name-pattern "alpha bravo" '
-        + t + ' 2>&1); case "$o" in *"ok 1 - alpha bravo"*) exit 0;; esac; exit 1\'';
+        + t + ' 2>&1); case "$o" in *"# SKIP"*) exit 1;; *"ok 1 - alpha bravo"*) exit 0;; esac; exit 1\'';
       const r = grade([row(1, { status: 'closed', proof })], { repo });
       assert.doesNotMatch(r.stdout, /VACUOUS/, 'a proof that reads its TAP lines was called vacuous');
       assert.strictEqual(r.status, 0, 'a sound proof reds the ledger: ' + r.out);
