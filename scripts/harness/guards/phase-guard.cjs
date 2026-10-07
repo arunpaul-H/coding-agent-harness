@@ -68,6 +68,15 @@
  *       servers: both are lists, and a list is silent about every server added after it
  *       was written.
  *
+ *   D6  THE RUN-MODE RECEIPT IS NOT THE AGENT'S TO WRITE. `<tracksDir>/<track>/.phase` records
+ *       which phase a person approved and in which mode; scripts/harness/run.js writes it from
+ *       a terminal before the agent exists. A receipt the agent could write would be the agent
+ *       approving itself, so the refusal lives here, outside the file it protects.
+ *       IT ACTS ON A WRITE'S PATH FIELD AND NOTHING ELSE. A shell command that redirects into
+ *       the file is NOT caught: telling a read from a write inside a command line is a guess,
+ *       and a guess that denies a read is worse than the gap. So this DETECTS the plain write
+ *       and does not PREVENT a determined one.
+ *
  *   D5  A MISSING SHARED PREDICATE IS ASKED, NEVER ASSUMED. D3's frozen-evidence
  *       exemption lives in doc-frozen.cjs. If that file cannot be loaded, this guard
  *       cannot tell a dated measurement from a figure smuggled into a plan — so it asks
@@ -184,6 +193,9 @@ const movesToArchive = (cmd, P) => new RegExp(
 /** A track doc: anything under a track folder. */
 const isTrackDoc = (p, P) => new RegExp('^' + esc(P.tracksDir) + '/[^/]+/.+\\.md$').test(String(p));
 
+/** A track's run-mode receipt. Any case: on a case-blind disk another spelling is the same file. */
+const isReceipt = (p, P) => new RegExp('^' + esc(P.tracksDir) + '/[^/]+/\\.phase$', 'i').test(String(p));
+
 /**
  * What the doc linter governs. The guard must never deny something the lint would
  * accept, so this list is the lint's, not a second opinion about it.
@@ -283,6 +295,15 @@ function rules(action, e, read, known, P, fz, root) {
       + 'which requires a green gates.json recorded at HEAD, a clean tree and a lint-clean handoff, writes the '
       + 'receipt, and regenerates the generated doc index.\n'
       + 'A bare mv leaves a track archived with no receipt and an index that still routes to it.';
+  }
+
+  /* D6 — the run-mode receipt. The path field of a write, and only that. */
+  if (write && isReceipt(file, P)) {
+    return 'D6 THE RUN-MODE RECEIPT IS WRITTEN BY THE LAUNCHER, NEVER BY THE AGENT.\n'
+      + file + ' records which phase a person approved, and in which mode. A receipt the agent writes '
+      + 'is the agent approving itself.\n'
+      + 'The owner approves a phase by starting it: `node bin/harness.js run <mode> --track <track-id>`, '
+      + 'from a terminal. Report the phase as ready and stop.';
   }
 
   /* D2 — a status flip or a hand-written receipt, in a track doc */
@@ -543,6 +564,24 @@ function selfTest() {
   // The lookahead earns its keep here: neither of these is the archive.
   allowed('a move into a similarly named directory is not archiving', 'shell', { command: 'mv docs/tracks/t docs/archives/t' });
   allowed('nor is one into an archive-old sibling', 'shell', { command: 'mv docs/tracks/t docs/archive-old/t' });
+
+  /* D6 — the run-mode receipt: the path field of a write, and only that */
+  const RCPT = '{"track":"t","phase":2,"mode":"fully-auto"}';
+  denied('a Write of the run-mode receipt', 'write', { path: 'docs/tracks/t/.phase', content: RCPT }, 'D6');
+  denied('an Edit of one', 'write', { path: 'docs/tracks/t/.phase', old: '"hitl"', content: '"fully-auto"' }, 'D6');
+  denied('one with no content to read is still its path', 'write', { path: 'docs/tracks/t/.phase' }, 'D6');
+  denied('spelled with backslashes', 'write', { path: 'docs\\tracks\\t\\.phase', content: RCPT }, 'D6');
+  denied('in another case, which is the same file on a case-blind disk', 'write', { path: 'docs/tracks/t/.PHASE', content: RCPT }, 'D6');
+  allowed('a file merely named like it elsewhere is not a receipt', 'write', { path: 'notes/.phase', content: RCPT });
+  allowed('nor one a level deeper in a track', 'write', { path: 'docs/tracks/t/research/.phase', content: RCPT });
+  allowed('nor a longer name', 'write', { path: 'docs/tracks/t/.phases', content: RCPT });
+  // THE STATED GAP: a command line is never searched for the path, so a read is never denied.
+  allowed('reading the receipt is not writing it', 'shell', { command: 'cat docs/tracks/t/.phase' });
+  allowed('...and a shell redirect into it is NOT caught, which the header says', 'shell', { command: "echo '" + RCPT + "' > docs/tracks/t/.phase" });
+  eq('D6 is a refusal, not a question', decisionFor('D6 x'), 'deny');
+  eq('a renamed tracks dir moves the receipt with it',
+    [String(rules('write', { path: 'work/t/.phase' }, read, known, { docsRoot: 'documentation', tracksDir: 'work', archiveDir: 'documentation/archive' }, FZ) || '').slice(0, 2),
+      rules('write', { path: 'docs/tracks/t/.phase', content: RCPT }, read, known, { docsRoot: 'documentation', tracksDir: 'work', archiveDir: 'documentation/archive' }, FZ)], ['D6', null]);
 
   /* D2 */
   denied('an Edit that flips status', 'write', { path: 'docs/tracks/t/README.md', old: 'status: open', content: 'status: complete' }, 'D2');

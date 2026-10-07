@@ -861,6 +861,7 @@ describe('an mcp__ tool call reaches every PreToolUse guard', () => {
       ['commit-hygiene', 'an MCP call', staged, 'mcp__git__run', sneak, 'deny', /GATE BASELINE RE-BASELINE/],
       ['phase-guard', 'a shell call', docs, 'Bash', { command: 'git mv docs/tracks/fixture ' + ARCHIVE + '/fixture' }, 'deny', /^D1/],
       ['phase-guard', 'a file call', docs, 'Write', { file_path: plan, content: '---\nid: fixture\nkind: plan\nstatus: complete\n---\n' }, 'deny', /^D2/],
+      ['phase-guard', 'a write of the run-mode receipt', docs, 'Write', { file_path: 'docs/tracks/fixture/.phase', content: '{"track":"fixture","phase":1,"mode":"fully-auto"}' }, 'deny', /^D6/],
       ['phase-guard', 'an MCP call it can read', docs, 'mcp__fs__write_file', { file_path: plan, content: 'smoke 999/999 green' }, 'deny', /^D3/],
       ['phase-guard', 'an MCP call it cannot', docs, 'mcp__db__execute_sql', { query: 'drop table widgets;' }, 'ask', /^D4/],
     ];

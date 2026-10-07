@@ -1,13 +1,18 @@
 ---
 id: autonomy-modes
 kind: track
-status: open
+status: complete
 read_when: "changing how a run mode is chosen or enforced, or stating who this harness is for"
 trap_prefix: AM
 paths: ["README.md", "scripts/harness/mode.js", "scripts/harness/actions.js", "scripts/harness/carveouts.js", "scripts/harness/peers.js", "scripts/harness/run.js", "scripts/harness/tools.json", "scripts/harness/tools.js", "scripts/harness/config.js", "schema/harness.config.schema.json", "harness.config.json"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js autonomy-modes"
 last_verified: 2026-10-06
 max_age_days: 30
+closed_phase: 6
+closed_at: 2026-10-07
+gates_sha: d3b128384f515fd7b9b9d1f813ac9f7943cf97090ec5d0322d304397001cda57
+block_sha: 018af90ad32ca1b4b56bac5a726e667d127b62fbe34a198fa155a85d5ec54433
+receipt: 201f407650d85ddcc9ff4c6952f053a7d27b624aff80861dfe141f40e0c8cd98
 ---
 
 # Autonomy modes: the audience, and a mode a script can enforce
@@ -24,13 +29,16 @@ compliance framing, and dollar-cost accounting.
 
 | Piece | Where | State |
 |---|---|---|
-| The four-mode verdict | `scripts/harness/mode.js` | written, self-tested, registered nowhere |
-| Duplicate-effect ledger | `scripts/harness/actions.js` | written, self-tested, not gated |
-| Carve-out ratchet | `scripts/harness/carveouts.js` | written, self-tested, not gated, no baseline recorded |
-| Cross-session claims | `scripts/harness/peers.js` | HALF-EDITED, self-test red — see `plan.md` phase 1 |
-| The launcher | `scripts/harness/run.js` | not written |
-| Audience statement | `README.md` | not written |
-| Mode config section | `harness.config.json`, `schema/` | not written, waits on multi-tool |
+| The four-mode verdict | `scripts/harness/mode.js` | written; its self-test is the `mode` gate; registered on NO hook event, so no mode is enforced |
+| Duplicate-effect ledger | `scripts/harness/actions.js` | written; its self-test is the `effects` gate; no ledger exists in this repo and nothing grades one |
+| Carve-out ratchet | `scripts/harness/carveouts.js` | written; the `carveouts` gate compares the index with the committed census `scripts/harness/carveouts.baseline.json` (traps AM-11) |
+| Cross-session claims | `scripts/harness/peers.js` | written; its self-test is the `peers` gate; hook NOT wired |
+| Mode flags per tool | `scripts/harness/tools.json` `modes` | validated by the `tools` gate; one row filled, its `fully-auto` null pending the owner |
+| The program per tool | `scripts/harness/tools.json` `bin` | validated by the `tools` gate; one row filled, from the command its own evidence ran |
+| The launcher | `scripts/harness/run.js`, `harness run` | written, self-tested, tested as a process against a planted program; no real tool started through it |
+| The phase receipt | `<track>/.phase`, written by `harness run --track` | written only from a terminal; the phase guard refuses a write to it by path (D6) and NOT a shell redirect; git-ignored; nothing reads it yet, since `mode.js` is registered on no hook |
+| Audience statement | `README.md`, `docs/methods/00-overview.md` | written |
+| Mode config section | `scripts/harness/config.js` `mode`, `schema/` | written, closed in both places; `mode.default` is what a bare Enter takes at the launcher's question and is never used without one; this repo's own config leaves it unset |
 
 No gate figure appears in this folder. It comes from `node scripts/harness/gates.js --check` and
 lives only in `scripts/harness/gates.json` and `gates.baseline.json`.
@@ -78,5 +86,5 @@ End the phase by running its exit command in the foreground and pasting the outp
 cannot close and stop. Do not flip a `status:` and do not type a receipt — `close-phase.js` writes
 both. Replace `handoff.md`'s single block wholesale; never append a second.
 
-**Coordination:** another session owns the `multi-tool` track. Its phases 1 and 2 have landed, phase 3
-(`scripts/harness/hook.js`) has not. Do not edit its files; see `traps.md` AM-01 and AM-02.
+**Coordination:** none open. The `multi-tool` track is archived under `docs/archive/multi-tool/`, so
+no other session claims a file this track touches. `traps.md` AM-02 still holds.

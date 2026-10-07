@@ -40,18 +40,17 @@ The root `README.md` gains the scope statement and the quota-not-cost framing, a
 `docs/methods/00-overview.md` gains one line so the methods set agrees with it. Cheapest phase, and
 it constrains every later decision, which is why it is not last.
 
-Waits on the `multi-tool` session confirming its phase 1, because that session is editing
-`README.md`. See `traps.md` AM-01.
+No longer waits on anything: the `multi-tool` track that was editing `README.md` is archived. See
+`traps.md` AM-01.
 
 **First commit:** `autonomy-modes: README states the subscription-seat audience`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
 ## Phase 3 — the `modes` column in the tool registry
 
-Owned by this track end to end, by agreement with the `multi-tool` session: `scripts/harness/tools.json`
-gains an OPTIONAL `modes` field mapping each harness mode to that tool's own flags, and
-`scripts/harness/tools.js` plus `tests/tools.test.js` are updated to validate it. It must finish before
-that track's phase 3 begins. See `traps.md` AM-02.
+Owned by this track end to end: `scripts/harness/tools.json` gains an OPTIONAL `modes` field mapping
+each harness mode to that tool's own flags, and `scripts/harness/tools.js` plus `tests/tools.test.js`
+are updated to validate it. See `traps.md` AM-02.
 
 **First commit:** `autonomy-modes: tools.json carries each tool's mode flags`
 **Exit:** `node scripts/harness/tools.js --check && node --test`
@@ -62,6 +61,9 @@ that track's phase 3 begins. See `traps.md` AM-02.
 terminal when no mode is given, map the mode onto that tool's native flags from the registry, exec the
 tool. This is the whole reason the selector works — it is a parent process, so the model never sees the
 decision and cannot skip it.
+
+Delivered with one addition the plan did not name: the registry row gained an optional `bin` cell,
+because the launcher may name no tool and the row recorded flags but not the program to start.
 
 **First commit:** `autonomy-modes: the launcher owns the mode`
 **Exit:** `node scripts/harness/run.js --self-test`
@@ -75,6 +77,12 @@ defaulting. Then the `.phase` receipt, written only by the launcher and `close-p
 Per invariant 1, the receipt is worthless unless something outside it refuses to let the agent write
 it. Ship the deny rule in the same change or do not ship the receipt.
 
+Delivered, with three things narrower than the paragraph above reads. The receipt is written by the
+launcher alone: `close-phase.js` does not touch it, because a receipt for a closed phase already
+denies the next one. The deny rule is the phase guard's D6, on a write's path field only, so a
+shell redirect into the file is a stated gap (invariant 5). And the launcher writes a receipt only
+from a terminal, which detects a terminal and does not prove a person.
+
 **First commit:** `autonomy-modes: the mode config section and the phase receipt`
 **Exit:** `node scripts/harness/config.js --self-test && node bin/harness.js doctor`
 
@@ -85,6 +93,12 @@ suite total rises and the re-baseline is visible. `carveouts.js` records its fir
 nowhere earlier: a census measured against a half-edited tree is a fixture that lies.
 
 A re-baseline commit's subject starts `gates:`.
+
+Delivered narrower than "each gets an entry" reads. `mode`, `effects` and `peers` gate the
+script's own self-test through the exit status, because none of the three prints a verdict about
+this tree: `mode.js` is registered on no hook, there is no ledger for `actions.js` to grade, and
+the peers hook is not wired. Only `carveouts` grades the tree. The gates are in this repo's suite
+and not in the config `harness init` writes, since a census must be bootstrapped per repo.
 
 **First commit:** `gates: the mode, effects, carveouts and peers gates`
 **Exit:** `node scripts/harness/gates.js --check --allow-skip reproducible-build=1`

@@ -26,9 +26,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   skip without explaining what that gives up and getting a yes. `harness init` installs it, and
   the README opens with a "Not a developer? Start here" section. No gate, guard or threshold
   changed.
+- **An optional `modes` cell in the tool registry**: each harness run mode mapped to the tool's own
+  command-line flags, or null where none is established. `tools.js --check` validates it. One row
+  carries it, read off that tool's help and not run.
+- **A launcher: `harness run [<mode>] [--tool <id>]`** (`scripts/harness/run.js`). The run mode is
+  chosen by a person before the agent exists: with no mode it asks on the terminal, and with no
+  terminal it refuses. It starts the tool with the flags its registry row records for that mode,
+  and the program named by the row's new optional `bin` cell. A tool with no `modes` cell or no
+  `bin`, and a mode whose cell is null, are refused and never started bare. `--dry-run` starts
+  nothing. No session of any tool was started under a mode through it.
+- **A `mode` config section and a phase receipt.** `mode.default` is the mode a bare Enter takes
+  at the launcher's question; it is never used without one. `harness run --track <id>` writes
+  `<track>/.phase`, recording which phase was approved and in which mode, and only from a
+  terminal. The phase guard refuses the agent's own write to that file (D6) by the path of a
+  write call; a shell redirect into it is not caught, and the guard says so. `init` and `doctor`
+  now require the receipt to be git-ignored. Nothing reads the receipt yet.
+- **Four gates in this repo's suite: `mode`, `effects`, `carveouts`, `peers`.** Three run a
+  script's self-test and read its exit status; they grade the script, not the tree. `carveouts`
+  compares the waivers in the git index, per kind, with a committed census
+  (`scripts/harness/carveouts.baseline.json`): a count of mentions, so an edit that spells a
+  waiver moves it. The config `harness init` writes does not list them.
 
 ### Changed
 
+- **The README states who the harness is for:** flat-rate subscription seats, where quota and
+  context are what runs out. Per-token cost accounting and organisation-wide policy are out of scope.
 - **`AGENTS.md` is the always-on policy file** and `CLAUDE.md` is a stub that imports it. Routing
   moved to `docs/reference/routing/README.md`.
 - **The guards moved** from `.claude/helpers/` to `scripts/harness/guards/`. Their verdicts did not change.

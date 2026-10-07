@@ -1,0 +1,36 @@
+{
+  "allow-skip": {
+    "total": 36,
+    "undescribed": 36,
+    "files": {
+      "AGENTS.md": 2,
+      "CONTRIBUTING.md": 2,
+      "README.md": 7,
+      "bin/harness.js": 2,
+      "docs/archive/founder-guide/handoff.md": 1,
+      "harness.config.json": 1,
+      "package.json": 1,
+      "schema/harness.config.schema.json": 1,
+      "scripts/harness/actions.js": 1,
+      "scripts/harness/close-phase.js": 2,
+      "scripts/harness/common.json": 1,
+      "scripts/harness/gates.baseline.json": 1,
+      "scripts/harness/gates.js": 4,
+      "tests/cli.test.js": 2,
+      "tests/gates.test.js": 5,
+      "tests/lifecycle.test.js": 3
+    }
+  },
+  "clear-waiver": {
+    "total": 44,
+    "undescribed": 44,
+    "files": {
+      ".claude/settings.json": 1,
+      ".gitignore": 1,
+      "scripts/harness/guards/commit-hygiene.cjs": 7,
+      "scripts/harness/hook.js": 1,
+      "scripts/harness/peers.js": 25,
+      "tests/guards.test.js": 9
+    }
+  }
+}

@@ -348,6 +348,47 @@ describe('tools.js --check — what it refuses, by row and field', () => {
     });
   });
 
+  test('a `modes` cell answers all four harness modes, each with a list of arguments or null', () => {
+    const modes = (over) => Object.assign({ 'fully-auto': null, 'auto-edit': ['--mode', 'edits'], hitl: ['--mode', 'edits'], manual: [] }, over || {});
+    withFixture(registry([row({ modes: modes() }), row({ id: 'tool-b' })]), enabling(['tool-a']), (run) => {
+      assert.strictEqual(run('tools.js', ['--check']).status, 0, 'a full `modes` cell, and a row with none, were refused');
+    });
+    const partial = modes();
+    delete partial.hitl;
+    for (const [cell, where, why] of [
+      [partial, 'tool-a.modes.hitl', /missing mode — write null/],
+      [modes({ yolo: ['--yolo'] }), 'tool-a.modes.yolo', /unknown mode \(one of `fully-auto`, `auto-edit`, `hitl`, `manual`\)/],
+      [modes({ manual: ['--mode manual'] }), 'tool-a.modes.manual', /one per element with no whitespace/],
+      [modes({ manual: '--mode' }), 'tool-a.modes.manual', /must be null or a list of arguments/],
+      [{ 'fully-auto': null, 'auto-edit': null, hitl: null, manual: null }, 'tool-a.modes', /establishes nothing — leave the key out/],
+      [['--mode'], 'tool-a.modes', /must be an object mapping each harness mode/],
+    ]) {
+      withFixture(registry([row({ modes: cell })]), enabling(['tool-a']), (run) => {
+        refuses(run('tools.js', ['--check']), where, why);
+      });
+    }
+    // A model has no command line: the cell is refused there however well formed it is.
+    const model = row({ id: 'model-a', tier: 'inherits', policy: null, nested: null, hookConfig: null, dialect: null, sessionStart: null, projectHooks: null, modes: modes() });
+    withFixture(registry([row(), model]), enabling(['tool-a']), (run) => {
+      refuses(run('tools.js', ['--check']), 'model-a.modes', /no command line to pass a flag to/);
+    });
+  });
+
+  test('a `bin` cell is the bare name of a program, never a path or a command line', () => {
+    withFixture(registry([row({ bin: 'tool-a' }), row({ id: 'tool-b' })]), enabling(['tool-a']), (run) => {
+      assert.strictEqual(run('tools.js', ['--check']).status, 0, 'a bare program name, and a row with none, were refused');
+    });
+    for (const bin of ['tool-a --fast', 'bin/tool-a', '../tool-a', 'tool;x', '']) {
+      withFixture(registry([row({ bin: bin })]), enabling(['tool-a']), (run) => {
+        refuses(run('tools.js', ['--check']), 'tool-a.bin', /must be the bare name of the tool's program/);
+      });
+    }
+    const model = row({ id: 'model-a', tier: 'inherits', policy: null, nested: null, hookConfig: null, dialect: null, sessionStart: null, projectHooks: null, bin: 'model-a' });
+    withFixture(registry([row(), model]), enabling(['tool-a']), (run) => {
+      refuses(run('tools.js', ['--check']), 'model-a.bin', /no program of its own to start/);
+    });
+  });
+
   test('a registry that cannot be read is a stop, never an empty registry', () => {
     for (const reg of [null, '{ "tools": [ }']) {
       withFixture(reg, enabling(['tool-a']), (run) => {
@@ -459,6 +500,13 @@ describe('the `tools` config key', () => {
     assert.strictEqual(schema.properties.tools.additionalProperties, false);
     assert.deepStrictEqual(Object.keys(schema.properties.tools.properties).sort(), TOOLS_KEYS.slice().sort());
     assert.deepStrictEqual(schema.properties.tools.properties.enabled.default, DEFAULTS.tools.enabled);
+    // ...and `mode`, closed the same way, offering the modes the loader accepts and no other.
+    const C = require(path.join(SRC, 'config.js'));
+    assert.strictEqual(schema.properties.mode.additionalProperties, false);
+    assert.deepStrictEqual(Object.keys(schema.properties.mode.properties).sort(), C.MODE_KEYS.slice().sort());
+    assert.deepStrictEqual(schema.properties.mode.properties.default.enum, C.RUN_MODES.concat([null]));
+    assert.strictEqual(schema.properties.mode.properties.default.default, DEFAULTS.mode.default);
+    assert.deepStrictEqual(C.RUN_MODES, require(path.join(SRC, 'mode.js')).MODE_IDS);
   });
 
   test('this repo\'s own config names its tools, and every one has a row', () => {
@@ -568,6 +616,32 @@ describe('the shipped registry — what it claims, and on what evidence', () => 
     assert.match(r.notes, /it reaches a subagent/);
     assert.match(r.notes, /the one hook entry refused a shell call/);
     assert.match(r.notes, /NOT OBSERVED, resting on the two sources: `nested` and `sessionStart`/);
+  });
+
+  test('the mode ids the registry validates are the modes mode.js decides', () => {
+    // tools.js cannot load mode.js (a fixture carries it without), so it spells the list itself.
+    // A mode added to one file only would be a flag no launcher asks for, or a mode with no column.
+    const T = require(path.join(SRC, 'tools.js'));
+    assert.deepStrictEqual(T.HARNESS_MODES, require(path.join(SRC, 'mode.js')).MODE_IDS);
+  });
+
+  test('mode flags are recorded for the one tool whose own help was read here, and not guessed elsewhere', () => {
+    const r = byId('claude-code');
+    assert.deepStrictEqual(r.modes, {
+      'fully-auto': null,
+      'auto-edit': ['--permission-mode', 'acceptEdits'],
+      hitl: ['--permission-mode', 'acceptEdits'],
+      manual: ['--permission-mode', 'manual'],
+    });
+    // The unattended flag is the owner's decision: a row that fills it in has made that decision.
+    assert.match(r.notes, /`fully-auto` is null on purpose/);
+    assert.match(r.notes, /No session was started under any of them/);
+    // Every other row came from pages that name no flag. A `modes` cell there is a recalled one.
+    assert.deepStrictEqual(reg.tools.filter((x) => 'modes' in x).map((x) => x.id), ['claude-code']);
+    // The program is the first word of the command that row's own evidence ran, and no other row
+    // ran one.
+    assert.strictEqual(r.bin, r.command.split(' ')[0]);
+    assert.deepStrictEqual(reg.tools.filter((x) => 'bin' in x).map((x) => x.id), ['claude-code']);
   });
 
   test('a tool whose default file the sources disagree on gets a row that claims only what they agree on', () => {

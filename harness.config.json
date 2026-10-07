@@ -103,6 +103,37 @@
     {
       "name": "tools",
       "command": "node scripts/harness/tools.js --check"
+    },
+    {
+      "_readme": [
+        "THE RUN-MODE SCRIPTS. `mode`, `effects` and `peers` each grade the SCRIPT, by its own",
+        "self-test: one check, the exit status. They say the verdict logic still holds. They do NOT",
+        "say a mode is in force, that any effects ledger is clean, or that a claim hook is wired:",
+        "mode.js is registered on no hook event, there is no ledger in this repo to grade, and the",
+        "peers hook is not installed.",
+        "`carveouts` is the one that grades the TREE: the waivers in the git index, per kind,",
+        "against the census in scripts/harness/carveouts.baseline.json. It is a count of MENTIONS,",
+        "so a doc or test edit that spells a waiver moves it and reds the gate until the census is",
+        "re-recorded on a clean tree: node scripts/harness/carveouts.js --accept",
+        "--i-know-the-tree-is-clean. Reason-less waivers may fall and never rise."
+      ],
+      "name": "mode",
+      "command": "node scripts/harness/mode.js --self-test",
+      "adapter": "exit-code"
+    },
+    {
+      "name": "effects",
+      "command": "node scripts/harness/actions.js --self-test",
+      "adapter": "exit-code"
+    },
+    {
+      "name": "carveouts",
+      "command": "node scripts/harness/carveouts.js --check"
+    },
+    {
+      "name": "peers",
+      "command": "node scripts/harness/peers.js --self-test",
+      "adapter": "exit-code"
     }
   ],
 
