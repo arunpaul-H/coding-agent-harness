@@ -1,7 +1,7 @@
 ---
 id: multi-tool
 kind: track
-status: open
+status: complete
 read_when: "making the harness work under a coding agent other than Claude Code, or adding support for a new one"
 trap_prefix: MT
 paths: ["AGENTS.md", "CLAUDE.md", ".claude/**", "scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "harness.config.json", "tests/**", "docs/methods/**"]
@@ -10,9 +10,9 @@ last_verified: 2026-10-06
 max_age_days: 30
 closed_phase: 6
 closed_at: 2026-10-07
-gates_sha: a43b43314c51902b70e5d1d1959e222ac9c8a64292b79e2a406b6ff40ffd314c
-block_sha: 1a0f62d95d9426f17ddb3ff25dbff359d2cba6d9d18879376a0c928d721fd7f0
-receipt: 0bba45355c9de1b44a58480f5d4733b1962cbdc08e45b4e20b0f99d3adfdd906
+gates_sha: 6451bd40aaf9eb60811b79151b65949c5f20b4005ed823f82b972d92388011f4
+block_sha: 7b6b97051d9b55dde088f66b96835614a3507358a3681df264c7758ad72ca05e
+receipt: 469beab886d40a1763dc9dff24c76c345f61658e43fc641b5854590e9d035f01
 ---
 
 # Multi-tool: one policy, one guard core, a thin adapter per agent
