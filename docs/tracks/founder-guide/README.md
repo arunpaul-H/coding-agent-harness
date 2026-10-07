@@ -8,11 +8,11 @@ paths: [".claude/skills/guide/**", "bin/harness.js", "package.json", "scripts/ha
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js founder-guide"
 last_verified: 2026-10-07
 max_age_days: 30
-closed_phase: 2
+closed_phase: 3
 closed_at: 2026-10-07
-gates_sha: 25a6a56d65a864a84543d29fe997b17ecac944a1a98ab48d4ad5e79756cbf9e6
-block_sha: 8b7cf18dbbf937f1bc763cddbfbb93664ea5ac5beba7b8083642eb21e9506785
-receipt: 57f491812d6a398630f98a9b9efa3d74ccb6f2fda7ddcd626398dcd81560734c
+gates_sha: 37cbaf35bb5368732a4c65f3bc0a3f13ce13147a9e4a51e88786be396d836089
+block_sha: d5f3d81a91293cd27048696829a536362082983515ae44e6e23f4bc7d5714ca7
+receipt: 275d1fa12389c3cc6365c95958ed5dce796f096c341ddbe8ec1e673319a93136
 ---
 
 # Non-tech guide: a plain-English on-ramp that changes no check
