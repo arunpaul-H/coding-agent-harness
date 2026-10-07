@@ -8,6 +8,11 @@ paths: ["AGENTS.md", "CLAUDE.md", ".claude/**", "scripts/harness/**", "bin/harne
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js multi-tool"
 last_verified: 2026-10-06
 max_age_days: 30
+closed_phase: 4
+closed_at: 2026-10-07
+gates_sha: e269fb7b4d3620de17a7205b5399661538ca1d1e273e2728ddfa952507aae48e
+block_sha: 062ac4fb1fadd9ff4e4ef2d481bc6ce537f9f2c36eda89836c037e5fa7e3482f
+receipt: 936d57dde90d3853bdaefa52094e6a67a3a9352b2131714b9f77f52f1e5b8d42
 ---
 
 # Multi-tool: one policy, one guard core, a thin adapter per agent
@@ -27,10 +32,10 @@ max_age_days: 30
 
 ## What this is
 
-`harness init --tools <ids>` wires the tools a repo names: the one hook entry,
-`scripts/harness/hook.js`, registered in each tool's own hook file, the policy pointer, and the
-skills. Since phase 4 two rows get a hook file, Claude Code and Cursor (its shell and read events
-only); Codex, Gemini CLI, Antigravity and Kimi Code get the rules, the skills and a stated gap (MT-20).
+`harness init --tools <ids>` wires the tools a repo names: the one hook entry, `scripts/harness/hook.js`,
+in each tool's own hook file, the policy pointer, and the skills. Two rows get a hook file, Claude Code
+and Cursor (shell and read events only); the other four get the rules, the skills and a stated gap (MT-20).
+`tools.js --matrix` prints what each rule rests on per enabled tool; `init --git-hooks` adds the opt-in backstop.
 Evidence: `research/2026-10-05-tool-instruction-surfaces.md` (what each tool loads and can deny)
 and `research/2026-10-05-claude-coupling-inventory.md` (where this repo is tied to Claude Code).
 The inventory's finding is that gates, config, lifecycle and every helper's CLI mode already run
@@ -97,9 +102,7 @@ A second session is opening a track for run modes. These are settled, so neither
 4. It does not touch `close-phase.js` until phase 2 has landed, nor `.claude/settings.json` at all.
 5. Its hook findings (fail-open defaults, hook trust lost after a pull, no session-start event on
    some tools) were read from docs and nothing was run. They are `docs` evidence under invariant 6.
-6. Phases 1 to 3 landed by 2026-10-06, so every window above is open. `mode.js`, `actions.js`,
-   `carveouts.js` and `peers.js` sit untracked under `scripts/harness/` and are the neighbour's; a
-   later phase re-reads `tools.json`, `tools.js` and `config.js` immediately before each edit.
+6. Every window above is open. A later phase re-reads `tools.json`, `tools.js` and `config.js` before each edit.
 7. `hook.js` keeps one ordered handler list per event (`HANDLERS`). Phase 3 did not wire `mode.js`:
    `prompt-submit` and `stop` are empty lists, and the neighbour adds its handler there, in one
    place, never as a second registration. Open on its side: the `mode.js` self-test passes a tool's
@@ -126,8 +129,8 @@ A second session is opening a track for run modes. These are settled, so neither
 | 1 | `AGENTS.md` is the always-on policy; routing is a reference doc. Landed, committed, not closed | open |
 | 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, committed, not closed | open |
 | 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
-| 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, uncommitted | open |
-| 5 | A git-hook backstop and the rule-by-tool enforcement matrix | open |
+| 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, committed, closed by `close-phase.js` on 2026-10-07 (the receipt is in this file's frontmatter) | open |
+| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, uncommitted, not closed | open |
 | 6 | The method doc and the contributor path for adding a tool | open |
 
 ## How to work

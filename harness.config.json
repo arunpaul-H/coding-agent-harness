@@ -99,6 +99,10 @@
     {
       "name": "skills",
       "command": "node scripts/harness/guards/skill-verify.cjs --check"
+    },
+    {
+      "name": "tools",
+      "command": "node scripts/harness/tools.js --check"
     }
   ],
 
