@@ -8,6 +8,11 @@ paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
+closed_phase: 0
+closed_at: 2026-10-07
+gates_sha: 2280a0ecc599618cf1e56f3d360f5b226d440de0a2b076acc6356dbd926496aa
+block_sha: 1c73cc8b88f0ce009c58f1f24eb3f2740f379ec50a176f1f0f724b6482b1697b
+receipt: a1cb0162eb578e6bd5b5681a00305d594fca0b42a9c8dacade3abec2e7680533
 ---
 
 # Project reference docs: asked for by name, and never stale in silence
