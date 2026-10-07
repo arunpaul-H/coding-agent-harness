@@ -41,7 +41,10 @@ scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 Inherited state:
   The receipt in README.md's frontmatter names the last phase closed. Trust it over any
   sentence, this one included.
-  Every phase was closed by close-phase.js.
+  Every phase was closed by close-phase.js, the last on 2026-10-07; the archive followed it in
+  a separate run, because a close and an archive each need a handoff that has changed.
+  One anchor outside this folder named its open-track path, the archived founder-guide trap
+  FG-04; it names the archived path.
   WHAT IS MECHANISM: the mode is chosen by a person at a terminal, in a parent process, before
   the agent exists; the tool is started with the flags its registry row records; a null mode, a
   row with no cell and a missing terminal are refused. A write to a track's receipt is refused
