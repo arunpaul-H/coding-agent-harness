@@ -4,7 +4,7 @@
 /*
  * run.js — the launcher: the run mode is chosen HERE, before the agent exists.
  *
- *   node scripts/harness/run.js [<mode>] [--tool <id>] [--dry-run]
+ *   node scripts/harness/run.js [<mode>] [--tool <id>] [--track <id>] [--dry-run]
  *   node scripts/harness/run.js --modes | --self-test
  *
  * WHY A PARENT PROCESS. No coding agent surveyed lets a repo-local hook ask a blocking question
@@ -23,9 +23,18 @@
  *   - no mode on the command line and no terminal to ask on: an answer that arrives down a pipe
  *     was chosen by whoever wrote the pipe
  *
+ * THE RECEIPT. With --track it records what was approved, before the tool starts, in the file
+ * mode.js reads: <tracksDir>/<track>/.phase = { track, phase, mode, tool, nonce, written_at },
+ * the phase being the handoff's `phase_next`. A receipt is an approval, so it is written only
+ * from a terminal: with none, --track is refused whether or not a mode was named. THAT DETECTS A
+ * TERMINAL, IT DOES NOT PROVE A PERSON. What keeps the agent from writing the file itself is
+ * outside this script and outside the file: the phase guard refuses a write to it (D6), under
+ * a tool whose hook is wired; elsewhere that is prose.
+ *
  * WHAT IT DOES NOT DO. It grants nothing. The flags are what the registry RECORDS for a mode; the
  * tool grants the permission, and whether it then behaves that way is what the row's evidence
- * says, not this script. It writes no receipt and wires no hook.
+ * says, not this script. The config's `mode.default` is only what a bare Enter takes at the
+ * question: it is never used without one. It wires no hook, and nothing reads the receipt yet.
  */
 
 const fs = require('node:fs');
@@ -36,7 +45,9 @@ const { load } = require(path.join(__dirname, 'config.js'));
 const TOOLS = require(path.join(__dirname, 'tools.js'));
 const { MODES, MODE_IDS } = require(path.join(__dirname, 'mode.js'));
 
-const USAGE = 'usage: node scripts/harness/run.js [<' + MODE_IDS.join('|') + '>] [--tool <id>] [--dry-run] | --modes | --self-test';
+const USAGE = 'usage: node scripts/harness/run.js [<' + MODE_IDS.join('|') + '>] [--tool <id>] [--track <id>] [--dry-run] | --modes | --self-test';
+const RECEIPT = '.phase';
+const isId = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(v);
 const REG = TOOLS.REGISTRY_REL;
 /* An argument reaches the tool through a shell on one platform (a `.cmd` shim cannot be started
    without one), so nothing a shell would read as syntax is ever passed. */
@@ -48,20 +59,21 @@ const refuse = (why, fix) => ({ ok: false, why: why, fix: fix });
 
 /* ---------- pure decisions (every one is exercised by --self-test) ---------- */
 
-/** argv -> { mode, tool, dry } or { error }. Strict: an unknown flag, a second positional or a
- *  doubled --tool is a usage error, never one of them silently dropped. */
+/** argv -> { mode, tool, track, dry } or { error }. Strict: an unknown flag, a second positional
+ *  or a doubled flag is a usage error, never one of them silently dropped. */
 function parseArgs(argv) {
-  const out = { mode: null, tool: null, dry: false };
+  const out = { mode: null, tool: null, track: null, dry: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--dry-run') {
       if (out.dry) return { error: '--dry-run given twice' };
       out.dry = true;
-    } else if (a === '--tool') {
-      if (out.tool !== null) return { error: '--tool given twice' };
+    } else if (a === '--tool' || a === '--track') {
+      const key = a.slice(2);
+      if (out[key] !== null) return { error: a + ' given twice' };
       const v = argv[i + 1];
-      if (typeof v !== 'string' || !v || v.startsWith('-')) return { error: '--tool needs a registry id' };
-      out.tool = v; i += 1;
+      if (typeof v !== 'string' || !v || v.startsWith('-')) return { error: a + ' needs a ' + (key === 'tool' ? 'registry' : 'track') + ' id' };
+      out[key] = v; i += 1;
     } else if (a.startsWith('-')) {
       return { error: 'unknown flag `' + a + '`' };
     } else if (out.mode !== null) {
@@ -146,23 +158,50 @@ function menuLines(row) {
     (Array.isArray(cell[id]) ? '' : '   (no flag established for this tool)'));
 }
 
-/** One typed answer -> a mode id, or null. A number from the menu or the id itself. */
-function answerMode(text) {
+/** One typed answer -> a mode id, or null. A number from the menu, the id itself, or nothing at
+ *  all when the config suggests a mode: a bare Enter is still a person's keypress. */
+function answerMode(text, suggested) {
   const t = String(text || '').trim().toLowerCase();
+  if (t === '') return MODE_IDS.includes(suggested) ? suggested : null;
   if (/^[0-9]+$/.test(t)) return MODE_IDS[Number(t) - 1] || null;
   return MODE_IDS.includes(t) ? t : null;
 }
 
+/** The phase a track's handoff asks for next: its frontmatter's `phase_next`, or null. */
+function phaseOf(handoffText) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(handoffText || ''));
+  const m = fm && /^phase_next:\s*(\d+)\s*$/m.exec(fm[1]);
+  return m ? Number(m[1]) : null;
+}
+
+/** What --track approves: { ok, file, phase }, or the refusal. `read(rel)` answers a
+ *  repo-relative file's text, or null. The id is a folder name and nothing else. */
+function trackPlan(track, tracksDir, read) {
+  if (!isId(track)) return refuse('`' + track + '` is not a track id (a folder name: lower-case letters, digits and dashes)', 'name the folder under ' + tracksDir + '/');
+  const dir = String(tracksDir).replace(/\\/g, '/').replace(/\/+$/, '') + '/' + track;
+  const handoff = read(dir + '/handoff.md');
+  if (handoff === null) return refuse('no ' + dir + '/handoff.md: there is no open track `' + track + '` to approve a phase of', 'name a folder under ' + tracksDir + '/ that holds a handoff');
+  const phase = phaseOf(handoff);
+  if (phase === null) return refuse(dir + '/handoff.md names no `phase_next:` in its frontmatter, so there is no phase to approve', 'set `phase_next: <n>` in the handoff frontmatter');
+  return { ok: true, file: dir + '/' + RECEIPT, phase: phase };
+}
+
+/** The receipt, in the field order mode.js documents. */
+function receiptFor(track, phase, mode, tool, nonce, now) {
+  return { track: track, phase: phase, mode: mode, tool: tool, nonce: nonce, written_at: now };
+}
+
 /* ---------- the terminal ---------- */
 
-async function ask(row) {
+async function ask(row, suggested) {
   const readline = require('node:readline/promises');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     console.log('harness run: which mode for `' + row.id + '`?');
     for (const l of menuLines(row)) console.log(l);
+    const hint = MODE_IDS.includes(suggested) ? ', Enter = ' + suggested : '';
     for (let i = 0; i < ASKS; i += 1) {
-      const got = answerMode(await rl.question('mode [1-' + MODE_IDS.length + ']: '));
+      const got = answerMode(await rl.question('mode [1-' + MODE_IDS.length + hint + ']: '), suggested);
       if (got) return got;
       console.log('   not a mode: type a number from the list or the mode\'s name.');
     }
@@ -190,14 +229,27 @@ async function main(argv) {
   const picked = pickTool(reg, cfg.tools.enabled, a.tool);
   if (!picked.ok) return stop(picked.why, picked.fix);
   const row = picked.row;
+  const terminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+  // The track is checked before anything is asked: a question whose answer is then refused
+  // for a reason known beforehand wastes the one thing this script exists to collect.
+  let tp = null;
+  if (a.track !== null) {
+    tp = trackPlan(a.track, cfg.project.tracksDir, (rel) => { try { return fs.readFileSync(path.join(cfg.root, ...rel.split('/')), 'utf8'); } catch { return null; } });
+    if (!tp.ok) return stop(tp.why, tp.fix);
+    if (!terminal && !a.dry) {
+      return stop('--track writes an approval receipt, and there is no terminal here: a receipt written with nobody at a terminal approves nothing',
+        'run it from a terminal. Without --track the tool starts and no receipt is written');
+    }
+  }
 
   let mode = a.mode;
   if (mode === null) {
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    if (!terminal) {
       return stop('no mode given and no terminal to ask on: a mode that arrives down a pipe was chosen by whoever wrote the pipe',
         'run it from a terminal, or name the mode: ' + MODE_IDS.join(' | '));
     }
-    mode = await ask(row);
+    mode = await ask(row, cfg.mode.default);
     if (!mode) return stop('no mode chosen after ' + ASKS + ' answers', USAGE);
   }
 
@@ -207,11 +259,20 @@ async function main(argv) {
   const file = resolveBin(p.bin, process.env, process.platform, (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } });
   console.log('harness run: `' + row.id + '` in mode ' + mode + ' -> ' + [p.bin].concat(p.args).join(' '));
   console.log('   the flags are what ' + REG + ' records for this mode (evidence: ' + row.evidence + '); the tool grants the permission, not the harness.');
+  if (tp) console.log('   receipt: ' + tp.file + ' approves phase ' + tp.phase + ' of `' + a.track + '` in mode ' + mode + '.');
   if (a.dry) {
-    console.log('   --dry-run: nothing started. ' + (file ? 'Would start ' + file : '`' + p.bin + '` is NOT on PATH, so a real run would be refused'));
+    console.log('   --dry-run: nothing started' + (tp ? ', no receipt written' : '') + '. ' + (file ? 'Would start ' + file : '`' + p.bin + '` is NOT on PATH, so a real run would be refused'));
     return 0;
   }
   if (!file) return stop('`' + p.bin + '` is not on PATH, so there is no tool to start', 'install the tool, or open a shell where `' + p.bin + '` runs');
+
+  // Written last before the start, so a refusal above never leaves an approval behind.
+  if (tp) {
+    const receipt = receiptFor(a.track, tp.phase, mode, row.id, require('node:crypto').randomBytes(16).toString('hex'), new Date().toISOString());
+    try { fs.writeFileSync(path.join(cfg.root, ...tp.file.split('/')), JSON.stringify(receipt, null, 2) + '\n'); } catch (e) {
+      return stop('could not write the receipt ' + tp.file + ' (' + (e.code || e.message) + ')', 'check the track folder is writable');
+    }
+  }
 
   const s = spawnSpec(file, p.args, process.platform);
   const r = spawnSync(s.file, s.args, { stdio: 'inherit', shell: s.shell, cwd: cfg.root });
@@ -233,8 +294,11 @@ function selfTest() {
   const reg = (rows) => ({ tools: rows });
 
   // the command line
-  eq('args: a mode, a tool and a dry run', parseArgs(['hitl', '--tool', 'tool-a', '--dry-run']), { mode: 'hitl', tool: 'tool-a', dry: true });
-  eq('args: nothing at all asks later', parseArgs([]), { mode: null, tool: null, dry: false });
+  eq('args: a mode, a tool and a dry run', parseArgs(['hitl', '--tool', 'tool-a', '--dry-run']), { mode: 'hitl', tool: 'tool-a', track: null, dry: true });
+  eq('args: nothing at all asks later', parseArgs([]), { mode: null, tool: null, track: null, dry: false });
+  eq('args: a track', parseArgs(['hitl', '--track', 'my-track']).track, 'my-track');
+  eq('args: --track with no id', parseArgs(['hitl', '--track']).error, '--track needs a track id');
+  eq('args: --track twice', parseArgs(['--track', 'a', '--track', 'b']).error, '--track given twice');
   eq('args: the flag may come first', parseArgs(['--tool', 'tool-a', 'manual']).mode, 'manual');
   eq('args: an unknown flag is a usage error', parseArgs(['hitl', '--yolo']).error, 'unknown flag `--yolo`');
   eq('args: two modes is a usage error', parseArgs(['hitl', 'manual']).error, 'two modes given (`hitl` and `manual`)');
@@ -291,6 +355,27 @@ function selfTest() {
   eq('answer: a number from the menu', answerMode(' 2 '), MODE_IDS[1]);
   eq('answer: the id itself, any case', answerMode('HITL'), 'hitl');
   for (const t of ['', '0', '9', 'yes', '1.5', '-1', null]) eq('answer: ' + JSON.stringify(t) + ' is no mode', answerMode(t), null);
+  eq('answer: a bare Enter takes the suggested mode', answerMode('  ', 'hitl'), 'hitl');
+  eq('answer: ...and nothing when none is suggested', [answerMode('', null), answerMode('', undefined)], [null, null]);
+  eq('answer: a suggestion that is not a mode suggests nothing', answerMode('', 'yolo'), null);
+  eq('answer: a typed answer beats the suggestion', answerMode('manual', 'hitl'), 'manual');
+  eq('answer: a wrong answer is not replaced by the suggestion', answerMode('9', 'hitl'), null);
+
+  // the track and its receipt
+  const HANDOFF = '---\nid: t-handoff\nkind: handoff\nphase_next: 3\n---\n# next\nphase_next: 9\n';
+  const disk = (files) => (rel) => (Object.prototype.hasOwnProperty.call(files, rel) ? files[rel] : null);
+  eq('phase: read off the handoff frontmatter', phaseOf(HANDOFF), 3);
+  eq('phase: CRLF changes nothing', phaseOf(HANDOFF.replace(/\n/g, '\r\n')), 3);
+  eq('phase: a body line is not frontmatter', phaseOf('---\nid: x\n---\nphase_next: 9\n'), null);
+  for (const t of ['', '# no frontmatter\n', '---\nphase_next: soon\n---\n', '---\nphase_next: -1\n---\n', null]) eq('phase: ' + JSON.stringify(t) + ' names none', phaseOf(t), null);
+  eq('track: the receipt sits beside the handoff', trackPlan('my-track', 'docs/tracks', disk({ 'docs/tracks/my-track/handoff.md': HANDOFF })), { ok: true, file: 'docs/tracks/my-track/.phase', phase: 3 });
+  eq('track: a tracks dir typed the other way, with a trailing separator', trackPlan('t', 'a\\b\\', disk({ 'a/b/t/handoff.md': HANDOFF })).file, 'a/b/t/.phase');
+  eq('track: no such folder is refused', /no docs\/tracks\/gone\/handoff\.md/.test(why(trackPlan('gone', 'docs/tracks', disk({})))), true);
+  eq('track: a handoff with no next phase is refused', /names no `phase_next:`/.test(why(trackPlan('t', 'docs/tracks', disk({ 'docs/tracks/t/handoff.md': '---\nid: x\n---\n' })))), true);
+  for (const t of ['../x', 'a/b', 'a\\b', '.', '..', 'My-Track', 'a b', '']) {
+    eq('track: ' + JSON.stringify(t) + ' is not an id, and no file is read for it', (() => { let reads = 0; const r = trackPlan(t, 'docs/tracks', () => { reads += 1; return HANDOFF; }); return [r.ok, reads]; })(), [false, 0]);
+  }
+  eq('receipt: the six fields mode.js documents, in its order', Object.keys(receiptFor('t', 3, 'hitl', 'tool-a', 'n', 'now')), ['track', 'phase', 'mode', 'tool', 'nonce', 'written_at']);
 
   // the two lists this script joins, and the registry it ships beside
   eq('modes: the registry validates the modes mode.js decides', TOOLS.HARNESS_MODES, MODE_IDS);
@@ -312,7 +397,7 @@ function selfTest() {
   return 0;
 }
 
-module.exports = { parseArgs, pickTool, plan, resolveBin, spawnSpec, menuLines, answerMode, USAGE };
+module.exports = { parseArgs, pickTool, plan, resolveBin, spawnSpec, menuLines, answerMode, phaseOf, trackPlan, receiptFor, RECEIPT, USAGE };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);

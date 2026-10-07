@@ -35,6 +35,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the program named by the row's new optional `bin` cell. A tool with no `modes` cell or no
   `bin`, and a mode whose cell is null, are refused and never started bare. `--dry-run` starts
   nothing. No session of any tool was started under a mode through it.
+- **A `mode` config section and a phase receipt.** `mode.default` is the mode a bare Enter takes
+  at the launcher's question; it is never used without one. `harness run --track <id>` writes
+  `<track>/.phase`, recording which phase was approved and in which mode, and only from a
+  terminal. The phase guard refuses the agent's own write to that file (D6) by the path of a
+  write call; a shell redirect into it is not caught, and the guard says so. `init` and `doctor`
+  now require the receipt to be git-ignored. Nothing reads the receipt yet.
 
 ### Changed
 

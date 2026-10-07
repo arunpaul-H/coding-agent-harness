@@ -3,7 +3,7 @@ id: autonomy-modes-handoff
 kind: handoff
 status: open
 read_when: "starting or resuming autonomy-modes"
-phase_next: 5
+phase_next: 6
 ---
 
 # Autonomy modes: the next phase
@@ -11,49 +11,47 @@ phase_next: 5
 ## ▶ THE NEXT SESSION: paste this into a new chat
 
 ```
-PHASE 5: the mode config section and the phase receipt, then stop
+PHASE 6: gate the four mode scripts, then stop
 
 Read, in this order:
   docs/tracks/autonomy-modes/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/autonomy-modes/plan.md     (Phase 5 only)
-  docs/tracks/autonomy-modes/traps.md    (before touching anything)
-  scripts/harness/config.js              (DEFAULTS, the allowed top-level keys, the `tools` section)
-  schema/harness.config.schema.json      (the `tools` property, as the precedent)
-  scripts/harness/mode.js                (readReceipt, and the receipt's fields)
-  scripts/harness/run.js                 (main: where a launch is decided)
-  scripts/harness/guards/phase-guard.cjs (how a write to a track file is refused today)
+  docs/tracks/autonomy-modes/plan.md     (Phase 6 only)
+  docs/tracks/autonomy-modes/traps.md    (before touching anything; AM-09 decides the order)
+  harness.config.json                    (the `gates` array and its `_readme`)
+  scripts/harness/mode.js, actions.js, carveouts.js, peers.js
+                                         (each file's header and its main block only: what it
+                                          prints last, and which command line grades the tree)
 Nothing else unless a line below cites it.
 
-SCOPE: in: a new top-level config section for the run mode, closed like `tools` (an unknown
-sub-key is an error); the `.phase` receipt, written by the launcher; and, in the SAME change, a
-refusal outside the receipt that stops the agent writing it. Out: gating the four mode scripts,
-wiring the peers hook, registering mode.js on any hook event, and filling a null mode.
+SCOPE: in: one entry in the `gates` array for each of the four scripts, each command ending in a
+GATE line the runner can parse; the first carve-out baseline, recorded on a whole, committed
+tree; and the re-baseline that follows. Out: wiring the peers hook, registering mode.js on any
+hook event, filling a null mode, and any change to what the four scripts decide.
 
 Do NOT re-derive, re-measure or re-open: the research sweeps are frozen under
 docs/tracks/autonomy-modes/research/. The locked decisions in README.md were settled by the owner
-on 2026-10-06. The launcher's refusals are settled and pinned by tests/run.test.js.
+on 2026-10-06. The launcher, the config section and the receipt are settled and pinned by tests.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phases 1 to 4 are closed. `node bin/harness.js run [<mode>] [--tool <id>] [--dry-run]` starts
-  the program a row's `bin` names with the flags its `modes` cell records, and refuses a null
-  mode, a row with no cell or no `bin`, a tool the config has not enabled, and a missing mode
-  with no terminal to ask on. It writes NO receipt yet and nothing reads one.
-  INVARIANT 1 DECIDES THIS PHASE: a receipt the agent can write approves nothing. The config
-  loader is closed twice (the loader's key list AND the schema), so a new section in one place
-  only reds every gate with a config stop.
-  The owner has still not chosen the unattended flag: that mode stays null in the one filled row
-  and the launcher refuses it by name. Ask; do not pick.
-  The peers hook is still NOT wired, and wiring it needs the owner.
+  Phases 1 to 5 are closed. The config has a closed `mode` section; `harness run --track <id>`
+  writes the receipt `<track>/.phase` from a terminal only; the phase guard refuses a write to
+  it by path (D6) and says a shell redirect is not caught; the file is git-ignored and `doctor`
+  checks that. Nothing reads the receipt: mode.js is registered on no hook event.
+  A GATE WHOSE COMMAND PRINTS NO GATE LINE IS A HARD FAILURE, so a script that only prints a
+  PASS line needs one before it can be listed. Two of the four already name a gate of their own.
+  The suite total rises in this phase, so the re-baseline is the point and its commit subject
+  starts `gates:`.
+  The owner has still not chosen the unattended flag, and the peers hook is still NOT wired.
   On a machine with no auto-memory index the docs gate reports one declared skip, so the gate
   command is `node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1`.
-  No real coding agent was ever started through the launcher: its tests plant a throwaway
-  program under the row's `bin`.
+  This is the last phase: after it closes, the track is archived by
+  `node scripts/harness/close-phase.js autonomy-modes --archive`.
 
-First commit: `autonomy-modes: the mode config section and the phase receipt`
-Exit: `node scripts/harness/config.js --self-test && node bin/harness.js doctor`
+First commit: `gates: the mode, effects, carveouts and peers gates`
+Exit: `node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
 
 How to work: follow "How to work" in docs/tracks/autonomy-modes/README.md. One phase, then stop
 and hand off.

@@ -48,8 +48,8 @@ const no = (reason) => ({ deny: true, reason });
 
 /* ---------------------------------------------------------------- state
 
-   The receipt is {track, phase, mode, tool, nonce, written_at}, written ONLY by run.js and
-   close-phase.js. An unreadable receipt is NOT a pass: a mode that cannot be read is a mode that
+   The receipt is {track, phase, mode, tool, nonce, written_at}, written ONLY by run.js, from
+   a terminal; the phase guard refuses the agent's own write to it (D6). An unreadable receipt is NOT a pass: a mode that cannot be read is a mode that
    is not in force, and the caller is told to re-launch rather than guess. */
 
 function readReceipt(root, tracksDir, track) {

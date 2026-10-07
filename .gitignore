@@ -104,3 +104,8 @@ scripts/harness/gates.red.*.log
 # A mis-quoted brace command can drop a literal file named "{," or "{,bak}" into the tree.
 {,*
 {,}
+
+# ── Run-mode receipt (local, per phase) ───────────────────────────
+# Written by `harness run --track <id>` into a track folder: which phase one person approved, in
+# which mode, on this machine. It approves nothing for anyone else, so it is never versioned.
+.phase

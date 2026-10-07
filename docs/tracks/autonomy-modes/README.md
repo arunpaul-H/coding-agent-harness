@@ -35,9 +35,10 @@ compliance framing, and dollar-cost accounting.
 | Cross-session claims | `scripts/harness/peers.js` | written, self-tested, hook NOT wired, not gated |
 | Mode flags per tool | `scripts/harness/tools.json` `modes` | validated by the `tools` gate; one row filled, its `fully-auto` null pending the owner |
 | The program per tool | `scripts/harness/tools.json` `bin` | validated by the `tools` gate; one row filled, from the command its own evidence ran |
-| The launcher | `scripts/harness/run.js`, `harness run` | written, self-tested, tested as a process against a planted program; no real tool started through it; writes no receipt |
+| The launcher | `scripts/harness/run.js`, `harness run` | written, self-tested, tested as a process against a planted program; no real tool started through it |
+| The phase receipt | `<track>/.phase`, written by `harness run --track` | written only from a terminal; the phase guard refuses a write to it by path (D6) and NOT a shell redirect; git-ignored; nothing reads it yet, since `mode.js` is registered on no hook |
 | Audience statement | `README.md`, `docs/methods/00-overview.md` | written |
-| Mode config section | `harness.config.json`, `schema/` | not written |
+| Mode config section | `scripts/harness/config.js` `mode`, `schema/` | written, closed in both places; `mode.default` is what a bare Enter takes at the launcher's question and is never used without one; this repo's own config leaves it unset |
 
 No gate figure appears in this folder. It comes from `node scripts/harness/gates.js --check` and
 lives only in `scripts/harness/gates.json` and `gates.baseline.json`.

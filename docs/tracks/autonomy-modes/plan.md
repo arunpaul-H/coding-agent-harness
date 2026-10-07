@@ -77,6 +77,12 @@ defaulting. Then the `.phase` receipt, written only by the launcher and `close-p
 Per invariant 1, the receipt is worthless unless something outside it refuses to let the agent write
 it. Ship the deny rule in the same change or do not ship the receipt.
 
+Delivered, with three things narrower than the paragraph above reads. The receipt is written by the
+launcher alone: `close-phase.js` does not touch it, because a receipt for a closed phase already
+denies the next one. The deny rule is the phase guard's D6, on a write's path field only, so a
+shell redirect into the file is a stated gap (invariant 5). And the launcher writes a receipt only
+from a terminal, which detects a terminal and does not prove a person.
+
 **First commit:** `autonomy-modes: the mode config section and the phase receipt`
 **Exit:** `node scripts/harness/config.js --self-test && node bin/harness.js doctor`
 

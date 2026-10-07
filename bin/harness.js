@@ -113,6 +113,7 @@ const STATIC_IGNORES = [
   { pattern: '.claude/settings.local.json', probe: '.claude/settings.local.json', why: 'personal settings; may hold a credential' },
   { pattern: '.claude/.commit-hygiene-clearance.json', probe: '.claude/.commit-hygiene-clearance.json', why: 'a waiver bound to one tree state' },
   { pattern: 'node_modules/', probe: 'node_modules/example/index.js', why: 'dependency tree' },
+  { pattern: '.phase', probe: 'docs/tracks/example/.phase', why: 'a run-mode receipt: one person\'s approval of one phase on one machine' },
 ];
 function requiredIgnores(guarded) {
   const secrets = (guarded || []).map((p) => ({
@@ -1530,11 +1531,13 @@ const HELP = [
   '  harness docs [--index] [--check]',
   '      Run the doc gate (scripts/harness/guards/docs-lint.cjs), or with --index the index generator.',
   '',
-  '  harness run [<mode>] [--tool <id>] [--dry-run]',
+  '  harness run [<mode>] [--tool <id>] [--track <id>] [--dry-run]',
   '      Start a coding agent in a run mode (fully-auto, auto-edit, hitl, manual). The mode is chosen',
   '      here, by a person, before the agent exists: with no mode it asks on the terminal, and with no',
   '      terminal it refuses. The flags and the program come from the tool\'s registry row; a mode or',
   '      a tool with nothing recorded is refused, never started bare. --dry-run starts nothing.',
+  '      --track records which phase of that track was approved, in a receipt beside its handoff.',
+  '      A receipt is an approval, so it is written only from a terminal.',
   '',
   '  harness host           Print the host-dependent inputs a gate verdict rests on. Always exits 0.',
   '  harness selftest       Run every --self-test in the repo; exit 1 if any fails.',

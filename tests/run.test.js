@@ -153,6 +153,64 @@ describe('run.js starts the tool with the flags its row records', () => {
   });
 });
 
+describe('run.js --track: the receipt is an approval, so it needs a terminal', () => {
+  const R = require(RUN);
+  const MODE = require(path.join(ROOT, 'scripts', 'harness', 'mode.js'));
+  /** A throwaway repo with one open track whose handoff asks for phase 3. */
+  function repoWithTrack() {
+    const dir = emptyDir();
+    fs.writeFileSync(path.join(dir, 'harness.config.json'), JSON.stringify({ project: { name: 'acme' }, gates: [{ name: 'test', command: 'node --test' }], tools: { enabled: ENABLED } }));
+    fs.mkdirSync(path.join(dir, 'docs', 'tracks', 'fixture'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'tracks', 'fixture', 'handoff.md'), '---\nid: fixture-handoff\nkind: handoff\nstatus: open\nphase_next: 3\n---\n# next\n');
+    return dir;
+  }
+  const receipt = (dir) => path.join(dir, 'docs', 'tracks', 'fixture', R.RECEIPT);
+  const runIn = (dir, args, bin) => {
+    const r = spawnSync(process.execPath, [RUN].concat(args), { cwd: dir, encoding: 'utf8', env: envWithPath(bin || emptyDir()) });
+    return { code: r.status, out: String(r.stdout || ''), err: String(r.stderr || '') };
+  };
+
+  test('with no terminal it is refused, nothing is written and nothing starts, even with the mode named', () => {
+    const dir = repoWithTrack();
+    const r = runIn(dir, [SET, '--tool', ROW.id, '--track', 'fixture'], fakeProgram(ROW.bin, 0));
+    assert.strictEqual(r.code, 1, r.out + r.err);
+    assert.match(r.err, /--track writes an approval receipt, and there is no terminal here/);
+    assert.doesNotMatch(r.out, /ARGS/);
+    assert.strictEqual(fs.existsSync(receipt(dir)), false, 'a receipt was written with nobody at a terminal');
+  });
+  test('--dry-run says what it would approve and writes nothing', () => {
+    const dir = repoWithTrack();
+    const r = runIn(dir, [SET, '--tool', ROW.id, '--track', 'fixture', '--dry-run']);
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    assert.ok(r.out.includes('receipt: docs/tracks/fixture/' + R.RECEIPT + ' approves phase 3 of `fixture` in mode ' + SET), r.out);
+    assert.match(r.out, /nothing started, no receipt written/);
+    assert.strictEqual(fs.existsSync(receipt(dir)), false);
+  });
+  test('a track that is not there, and an id that is a path, are refused before anything is asked', () => {
+    const dir = repoWithTrack();
+    for (const [id, why] of [['gone', /no docs\/tracks\/gone\/handoff\.md/], ['../fixture', /is not a track id/]]) {
+      const r = runIn(dir, ['--tool', ROW.id, '--track', id, '--dry-run']);
+      assert.strictEqual(r.code, 1, r.out + r.err);
+      assert.match(r.err, why);
+    }
+  });
+  test('what the launcher writes is what mode.js reads, and it approves that phase only', () => {
+    const dir = repoWithTrack();
+    const tp = R.trackPlan('fixture', 'docs/tracks', (rel) => { try { return fs.readFileSync(path.join(dir, rel), 'utf8'); } catch { return null; } });
+    assert.deepStrictEqual(tp, { ok: true, file: 'docs/tracks/fixture/' + R.RECEIPT, phase: 3 });
+    fs.writeFileSync(receipt(dir), JSON.stringify(R.receiptFor('fixture', tp.phase, 'hitl', ROW.id, 'abc', '2026-10-07T00:00:00.000Z')));
+    const state = MODE.readReceipt(dir, 'docs/tracks', 'fixture');
+    assert.strictEqual(state.receipt.mode, 'hitl');
+    assert.strictEqual(MODE.decide({ event: 'prompt-submit' }, Object.assign({}, state, { phaseNext: 3 })).deny, false);
+    assert.strictEqual(MODE.decide({ event: 'prompt-submit' }, Object.assign({}, state, { phaseNext: 4 })).deny, true);
+  });
+  test('this repo ignores a receipt, and the installer writes the rule', () => {
+    const r = spawnSync('git', ['check-ignore', '--no-index', '-q', 'docs/tracks/example/' + R.RECEIPT], { cwd: ROOT });
+    assert.strictEqual(r.status, 0, 'a receipt in a track folder is not ignored here');
+    assert.ok(require(BIN).requiredIgnores([]).some((x) => x.pattern === R.RECEIPT));
+  });
+});
+
 describe('harness run (the CLI surface)', () => {
   test('`harness run` reaches the launcher', () => {
     const r = run(['run', SET, '--tool', ROW.id, '--dry-run'], { via: BIN });
@@ -166,6 +224,6 @@ describe('harness run (the CLI surface)', () => {
   });
   test('the help names it', () => {
     const r = run(['--help'], { via: BIN });
-    assert.match(r.out, /harness run \[<mode>\] \[--tool <id>\] \[--dry-run\]/);
+    assert.match(r.out, /harness run \[<mode>\] \[--tool <id>\] \[--track <id>\] \[--dry-run\]/);
   });
 });
