@@ -8,11 +8,11 @@ paths: ["AGENTS.md", "CLAUDE.md", ".claude/**", "scripts/harness/**", "bin/harne
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js multi-tool"
 last_verified: 2026-10-06
 max_age_days: 30
-closed_phase: 5
+closed_phase: 6
 closed_at: 2026-10-07
-gates_sha: 2338ed680574af68ce28b839f7e1591b7b6616175e357366d6a4b1a22a2b4b53
-block_sha: ea8fa4455a6580a5872e2ba6ff19de68015a4396bf05a774c8e5e2655a18b899
-receipt: b70c8102eed90622fe2a072cb882b075f989de109753cfdf8afb82ca6114cf89
+gates_sha: a43b43314c51902b70e5d1d1959e222ac9c8a64292b79e2a406b6ff40ffd314c
+block_sha: 1a0f62d95d9426f17ddb3ff25dbff359d2cba6d9d18879376a0c928d721fd7f0
+receipt: 0bba45355c9de1b44a58480f5d4733b1962cbdc08e45b4e20b0f99d3adfdd906
 ---
 
 # Multi-tool: one policy, one guard core, a thin adapter per agent
