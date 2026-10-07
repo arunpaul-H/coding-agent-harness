@@ -1,18 +1,18 @@
 ---
 id: founder-guide
 kind: track
-status: open
+status: complete
 read_when: "any work on the non-technical on-ramp: the guide skill, its install by init, or the start-here section of the root README"
 trap_prefix: FG
 paths: [".claude/skills/guide/**", "bin/harness.js", "package.json", "scripts/harness/common.json", "tests/cli.test.js", "README.md", "CHANGELOG.md", "docs/methods/**", "docs/reference/branches/README.md"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js founder-guide"
 last_verified: 2026-10-07
 max_age_days: 30
-closed_phase: 3
+closed_phase: 2
 closed_at: 2026-10-07
-gates_sha: 37cbaf35bb5368732a4c65f3bc0a3f13ce13147a9e4a51e88786be396d836089
-block_sha: d5f3d81a91293cd27048696829a536362082983515ae44e6e23f4bc7d5714ca7
-receipt: 275d1fa12389c3cc6365c95958ed5dce796f096c341ddbe8ec1e673319a93136
+gates_sha: 543fab9f1e84b42cffaba3b643f1f9ddee134970c7adeac06a17f537b04e9c7d
+block_sha: 481b1438d94e108c091713c3d8690454a695cd56583df49597f9c9ab4314503c
+receipt: cbd1dc69f95d5db781bb243be89b61b2312d7c116bc1510b58fd6f16bda903e5
 ---
 
 # Non-tech guide: a plain-English on-ramp that changes no check
