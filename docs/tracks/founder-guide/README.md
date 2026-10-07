@@ -88,8 +88,8 @@ the research file, and stand until the owner says otherwise.
 | Phase | What it delivers | Status |
 |---|---|---|
 | 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed and closed |
-| 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed once `closed_phase` above reads 2 or more |
-| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; NOT closed: a person has not yet looked at the page on GitHub (FG-06) |
+| 2 | `init` installs it; a test ties the installer's list to the package file list | landed and closed; CI ran it green on both older Node versions (FG-03) |
+| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; the owner looked at the page on GitHub in light and dark mode on 2026-10-07 (FG-06); closed once `closed_phase` above reads 3 |
 
 ## How to work
 
