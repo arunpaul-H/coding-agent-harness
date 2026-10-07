@@ -69,7 +69,7 @@ describe('harness (the binary)', () => {
   test('--help names every command', () => {
     const r = run(['--help']);
     assert.strictEqual(r.code, 0);
-    for (const c of ['harness init', 'harness doctor', 'harness gates', 'harness docs', 'harness selftest']) assert.ok(r.out.includes(c), c);
+    for (const c of ['harness init', 'harness doctor', 'harness gates', 'harness docs', 'harness reference new', 'harness selftest']) assert.ok(r.out.includes(c), c);
   });
 
   test('an unknown command is exit 1 with a fix line, not a silent help screen', () => {
@@ -153,9 +153,14 @@ describe('harness init (from the real package)', () => {
     for (const f of ['.claude/settings.json', 'scripts/harness/guards/env-guard.cjs', 'scripts/harness/gates.js',
       'scripts/harness/config.js', 'scripts/harness/tools.js', 'scripts/harness/tools.json', 'harness.config.json', 'skills-lock.json',
       'CLAUDE.md', 'AGENTS.md', 'docs/reference/routing/README.md',
-      'templates/track/handoff.md', 'schema/harness.config.schema.json', '.gitignore']) {
+      'templates/track/handoff.md', 'templates/reference/README.md', 'schema/harness.config.schema.json', '.gitignore']) {
       assert.ok(files.includes(f), 'expected ' + f + ' to be installed');
     }
+    // The reference TEMPLATE travels, byte for byte; no reference doc does. The routing doc is the
+    // only file init puts under the docs root's reference folder.
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'templates', 'reference', 'README.md'), 'utf8'),
+      fs.readFileSync(path.join(ROOT, 'templates', 'reference', 'README.md'), 'utf8'));
+    assert.deepStrictEqual(files.filter((f) => f.startsWith('docs/reference/')), ['docs/reference/routing/README.md']);
     assert.ok(!files.includes('scripts/harness/gates.json'), 'run output must not be installed');
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'skills-lock.json'), 'utf8')), { version: 2, skills: {} });
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'scripts', 'harness', 'gates.baseline.json'), 'utf8')).gates, {});
@@ -305,6 +310,151 @@ describe('harness init (from the real package)', () => {
     assert.match(r.out, /NO TEST GATE/);
     const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'harness.config.json'), 'utf8'));
     assert.ok(!cfg.gates.some((g) => g.name === 'test'));
+  });
+});
+
+describe('harness reference new (one doc for one named subsystem)', () => {
+  const { REFERENCE_TEMPLATES, localDate } = require(BIN);
+  const CFG = { 'harness.config.json': JSON.stringify({ project: { name: 'acme', docsRoot: 'doc' }, gates: [{ name: 'test', command: 'node --test' }] }) };
+  const GOOD = ['--read-when', 'changing what the export writes', '--paths', 'src/billing/**, tests/billing/**'];
+  const DOC = 'doc/reference/billing-export/README.md';
+  const frontmatter = (text) => /^---\n([\s\S]*?)\n---\n/.exec(text)[1].split('\n');
+
+  test('the template list is the files on disk, and the template holds its rule on exactly one line', () => {
+    assert.deepStrictEqual(fs.readdirSync(path.join(ROOT, 'templates', 'reference')).sort(), REFERENCE_TEMPLATES.slice().sort());
+    const lines = fs.readFileSync(path.join(ROOT, 'templates', 'reference', 'README.md'), 'utf8').split(/\r?\n/);
+    assert.strictEqual(lines.filter((l) => /a fact an agent can get by search does not belong here/i.test(l)).length, 1);
+    assert.ok(lines.length < 150, 'the template is ' + lines.length + ' lines');
+    assert.ok(!lines.some((l) => l.includes('—')), 'an em-dash in the template is a doc-gate warning in every doc rendered from it');
+  });
+
+  test('each refusal is exit 1 with a fix line, and writes nothing', () => {
+    const dir = tempRepo(Object.assign({ 'doc/taken.md': '---\nid: taken\nkind: reference\nstatus: open\nread_when: "x"\n---\n# taken\n' }, CFG));
+    const before = listing(dir);
+    const cases = [
+      [[], /needs its subcommand, `new`/],
+      [['list'], /unknown subcommand `reference list`/],
+      [['new'], /no subsystem named/],
+      [['new', 'Billing_Export'].concat(GOOD), /subsystem `Billing_Export` is not kebab-case/],
+      [['new', 'billing--export'].concat(GOOD), /is not kebab-case/],
+      [['new', 'billing-export', '--paths', 'src/**'], /--read-when is required/],
+      [['new', 'billing-export', '--read-when', '', '--paths', 'src/**'], /--read-when is required/],
+      [['new', 'billing-export', '--read-when', 'x'], /--paths is required/],
+      [['new', 'billing-export', '--read-when', 'x', '--paths', ','], /--paths is required/],
+      [['new', 'billing-export', '--read-when', 'say "x"', '--paths', 'src/**'], /--read-when holds a double quote/],
+      [['new', 'billing-export'].concat(GOOD, '--verify', 'node --test "a b"'), /--verify holds a double quote/],
+      [['new', 'billing-export'].concat(GOOD, '--force'), /unknown flag `--force`/],
+      [['new', 'billing-export'].concat(GOOD, '--dryrun'), /unknown flag `--dryrun`/],
+      [['new', 'taken'].concat(GOOD), /id `taken` is already used by doc\/taken\.md/],
+    ];
+    for (const [args, why] of cases) {
+      const r = run(['reference'].concat(args, args.includes('new') && args.length > 1 ? ['--into', dir] : []), dir);
+      assert.strictEqual(r.code, 1, args.join(' ') + '\n' + r.out + r.err);
+      assert.match(r.err, why);
+      assert.match(r.err, /^FATAL — .*\n {3}fix: \S/, 'no fix line for: ' + args.join(' '));
+      assert.strictEqual(r.out, '', 'a refusal printed to stdout: ' + args.join(' '));
+    }
+    assert.deepStrictEqual(listing(dir), before);
+  });
+
+  test('a target with no config, or one that does not parse, is refused and nothing is written', () => {
+    const bare = tempRepo({});
+    const none = run(['reference', 'new', 'billing-export'].concat(GOOD, '--into', bare));
+    assert.strictEqual(none.code, 1);
+    assert.match(none.err, /FATAL — no harness\.config\.json in /);
+    assert.match(none.err, /fix: .* init/);
+    assert.deepStrictEqual(listing(bare), []);
+    const broken = tempRepo({ 'harness.config.json': '{ "project": }' });
+    const bad = run(['reference', 'new', 'billing-export'].concat(GOOD, '--into', broken));
+    assert.strictEqual(bad.code, 1);
+    assert.match(bad.err, /^FATAL — .*\n {3}fix: \S/);
+    assert.deepStrictEqual(listing(broken), ['harness.config.json']);
+    const nowhere = run(['reference', 'new', 'billing-export'].concat(GOOD, '--into', path.join(bare, 'no-such-dir')));
+    assert.strictEqual(nowhere.code, 1);
+    assert.match(nowhere.err, /FATAL — no directory at /);
+  });
+
+  test('--dry-run prints the path and writes nothing', () => {
+    const dir = tempRepo(CFG);
+    const before = listing(dir);
+    const r = run(['reference', 'new', 'billing-export'].concat(GOOD, '--dry-run', '--into', dir));
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    assert.match(r.out, /DRY RUN: nothing is written/);
+    assert.ok(r.out.includes('WOULD WRITE  ' + DOC), r.out);
+    assert.deepStrictEqual(listing(dir), before);
+  });
+
+  test('writes exactly one file under the configured docs root, dated today, with no verify line; a second run refuses', () => {
+    const dir = tempRepo(CFG);
+    const before = listing(dir);
+    const dayBefore = localDate(new Date());
+    // From INSIDE the repo and with no --into: the root is found the way every other command finds it.
+    const r = run(['reference', 'new', 'billing-export'].concat(GOOD), dir);
+    const dayAfter = localDate(new Date());
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    assert.deepStrictEqual(listing(dir).filter((f) => !before.includes(f)), [DOC], 'exactly one file is the whole write');
+    assert.ok(r.out.includes('WROTE  ' + DOC), r.out);
+    // It NAMES the index command as its last line and does not run it: no index was written.
+    assert.strictEqual(r.out.trim().split('\n').pop().trim(), 'node scripts/harness/docs-index.js');
+    assert.ok(!fs.existsSync(path.join(dir, 'doc', 'INDEX.md')));
+
+    const text = fs.readFileSync(path.join(dir, ...DOC.split('/')), 'utf8');
+    const fm = frontmatter(text);
+    const date = fm.find((l) => l.startsWith('last_verified: ')).slice('last_verified: '.length);
+    assert.deepStrictEqual(fm.filter((l) => !l.startsWith('last_verified: ')), ['id: billing-export', 'kind: reference', 'status: open',
+      'read_when: "changing what the export writes"', 'paths: ["src/billing/**", "tests/billing/**"]', 'max_age_days: 90']);
+    assert.ok([dayBefore, dayAfter].includes(date), 'last_verified is ' + date + ', not today');
+    assert.ok(!Number.isNaN(Date.parse(date)), 'a date the staleness check cannot parse is silent for ever');
+    assert.ok(!/^verify:/m.test(text), 'a verify line nobody asked for');
+    // The body is a person's to fill: its placeholders and its guidance are still there.
+    assert.match(text, /\n# <TITLE>\n/);
+    assert.match(text, /<!-- THE RULE: a fact an agent can get by search does not belong here\./);
+
+    const again = run(['reference', 'new', 'billing-export', '--read-when', 'something else', '--paths', 'lib/**'], dir);
+    assert.strictEqual(again.code, 1);
+    assert.match(again.err, /doc\/reference\/billing-export\/README\.md already exists, and a reference doc is never overwritten/);
+    assert.match(again.err, /fix: \S/);
+    assert.strictEqual(fs.readFileSync(path.join(dir, ...DOC.split('/')), 'utf8'), text, 'the refused run changed the file');
+  });
+
+  test('--verify writes the verify line, and a single quote inside a value survives', () => {
+    const dir = tempRepo(CFG);
+    const r = run(['reference', 'new', 'ledger', '--read-when', 'the ledger\'s totals look wrong', '--paths', 'src/ledger/**', '--verify', 'node --test tests/ledger', '--into', dir]);
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    const fm = frontmatter(fs.readFileSync(path.join(dir, 'doc', 'reference', 'ledger', 'README.md'), 'utf8'));
+    assert.ok(fm.includes('verify: "node --test tests/ledger"'), fm.join('\n'));
+    assert.ok(fm.includes('read_when: "the ledger\'s totals look wrong"'), fm.join('\n'));
+    assert.ok(fm.includes('paths: ["src/ledger/**"]'), fm.join('\n'));
+  });
+
+  // Templates sit outside the doc gate's sweep, so only a RENDERED one can be graded, and only here.
+  test('the rendered doc passes the real doc gate in an installed tree, and the index takes it', () => {
+    const dir = tempRepo({ 'package.json': JSON.stringify({ name: 'acme-api' }) });
+    assert.strictEqual(run(['init', '--into', dir]).code, 0);
+    const node = (rel, args) => spawnSync(process.execPath, [path.join(dir, ...rel.split('/'))].concat(args || []), { cwd: dir, encoding: 'utf8', env: cleanEnv() });
+    const fails = (r) => Number(/^GATE docs pass=\d+ fail=(\d+) skipped=\d+$/.exec(r.stdout.trim().split('\n').pop())[1]);
+    const clean = node('scripts/harness/guards/docs-lint.cjs');
+    assert.strictEqual(clean.status, 0, clean.stdout + clean.stderr);
+
+    const r = run(['reference', 'new', 'billing-export'].concat(GOOD, '--verify', 'node --test tests/billing', '--into', dir));
+    assert.strictEqual(r.code, 0, r.out + r.err);
+    const lint = node('scripts/harness/guards/docs-lint.cjs');
+    assert.strictEqual(lint.status, 0, lint.stdout + lint.stderr);
+    assert.strictEqual(fails(lint), 0);
+    assert.doesNotMatch(lint.stdout + lint.stderr, /billing-export/, 'the doc gate has something to say about the rendered doc');
+    // ...and it is not vacuous there: the same doc with its id taken away is caught, by name.
+    const file = path.join(dir, 'docs', 'reference', 'billing-export', 'README.md');
+    const text = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, text.replace('id: billing-export\n', ''));
+    const red = node('scripts/harness/guards/docs-lint.cjs');
+    assert.strictEqual(red.status, 1, 'the doc gate does not grade the rendered doc at all');
+    assert.match(red.stderr, /FAIL {2}docs\/reference\/billing-export\/README\.md/);
+    fs.writeFileSync(file, text);
+
+    // The command it names is the one that works: the index lists the doc by its read_when.
+    assert.strictEqual(node('scripts/harness/docs-index.js').status, 0);
+    const index = fs.readFileSync(path.join(dir, 'docs', 'INDEX.md'), 'utf8');
+    assert.ok(index.includes('changing what the export writes'), 'the index has no row for the new doc');
   });
 });
 

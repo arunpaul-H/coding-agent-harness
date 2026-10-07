@@ -71,12 +71,14 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 0 | The track opened: research frozen, plan and handoff written | open |
-| 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | open |
+| 0 | The track opened: research frozen, plan and handoff written | closed |
+| 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | built |
 | 2 | A paths-against-history drift warning, and a warning for an unreadable date | open |
 | 3 | One measured task with and without a reference doc, and the adopter guidance it supports | open |
 
-Phase 0 is uncommitted on branch `project-reference`; it closes when the owner asks for a commit.
+Branch `project-reference`, commits only: no push, no PR. `harness reference new` and its template
+are in the tree; nothing reads `paths` yet, so a doc it writes can still drift in silence (phase 2).
+No reference doc was created in this repo.
 
 ## How to work
 

@@ -3,7 +3,7 @@ id: project-reference-plan
 kind: plan
 status: open
 read_when: "project-reference: the phases, each with its exit command and first commit"
-first_commit: "project-reference: a reference template and harness reference new"
+first_commit: "project-reference: warn when a doc's governed paths changed since it was verified"
 ---
 
 # Project reference docs: the phases
@@ -29,7 +29,7 @@ and its result decides what the root README tells an adopter.
 **Delivered.** `research/2026-10-07-project-reference-docs.md`, written by a research agent with
 no shell, so its repo claims are reads and not runs. Deviation: the owner asked for the documents
 to be created up front; the evidence supports creating them on request and by hand, so that is
-what phases 1 to 3 build (README decisions 1 to 3). Not committed.
+what phases 1 to 3 build (README decisions 1 to 3).
 
 ## Phase 1: a doc for a named subsystem, in one command
 
@@ -61,7 +61,19 @@ call (README invariants 2 and 3). Do not create a reference doc in THIS repo as 
 **First commit:** `project-reference: a reference template and harness reference new`
 **Exit:** `node bin/harness.js --self-test && node --test`
 
-**Delivered.** not started
+**Delivered.** The template, `cmdReference` with the pure `referenceArgs`, `renderReference` and
+`referencePlan` in `bin/harness.js`, the init copy, and cases in the self-test and
+`tests/cli.test.js`, one of which lints the rendered doc in a temp repo. Built by an `implement`
+agent; the lead reviewed the diff. Deviations, all beyond what the Do list names:
+- A double quote or a line break in `--read-when`, `--verify` or a glob is refused, not escaped (REF-08).
+- With no `--verify` the rendered doc has no `verify` line; an empty `--verify` is refused.
+- Further refusals: an unknown flag (so there is no `--force`), a subcommand other than `new`, a
+  target with no valid config, a target that is not a directory, a package with no template, and
+  a template that lost a frontmatter field line.
+- The id scan covers `project.tracksDir` as well as the docs root.
+- `last_verified` is the local date, not UTC, and `max_age_days` is fixed by the template.
+- The template is read from the package that runs the command, not from the target's copy.
+- The self-test's absent-piece assertion now also names the track templates, which it never did.
 
 ## Phase 2: a doc that has drifted says so
 
