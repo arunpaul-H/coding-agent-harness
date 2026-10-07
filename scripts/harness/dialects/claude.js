@@ -126,6 +126,8 @@ const HOOK = (id, ev) => 'node "$CLAUDE_PROJECT_DIR/scripts/harness/hook.js" --t
 const wiring = {
   file: '.claude/settings.json',
   evidence: 'the registration this repo\'s own sessions start under; the registry row says what was and was not observed',
+  // The neutral actions the matcher's names carry: what a guard can be said to see here.
+  actions: Array.from(new Set(Object.values(ACTION_OF))),
   gaps: [],
   entries(row) {
     const one = (ev) => ({ type: 'command', command: HOOK(row.id, ev), timeout: 30 });

@@ -37,11 +37,16 @@
    --list       id, tier, evidence, and whether the config enables it. Exit 1, with the table
                 still printed, on a registry --check would refuse: a refused registry must not
                 read as a short but successful listing
+   --matrix     each hard rule of the policy file against each ENABLED tool. A cell is the
+                mechanism that enforces the rule under that tool in THIS repo, worked out from
+                the tool's registration, the handler table and the config's gates, or `prose`.
+                Exit 1, with no table, on a registry --check would refuse. It is a report, not
+                a gate: it prints no GATE line
    Exactly one mode per run: two on one command line is a usage error (exit 2), never one of
    them silently dropped.
    --self-test  drive the pure decision with literals, including the cases that must come out NO
    Zero-dep, Node built-ins only.
-   Usage: node scripts/harness/tools.js --check | --list | --self-test */
+   Usage: node scripts/harness/tools.js --check | --list | --self-test | --matrix */
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -382,6 +387,161 @@ function readRegistry() {
   }
 }
 
+/* ---------- the enforcement matrix: each hard rule against each enabled tool ----------
+   THE RULES are the hard rules of the policy file, section 3, in its order, each with the
+   mechanisms that file names for it. A mechanism is one of:
+     guard     a pre-tool handler of scripts/harness/hook.js, and the neutral actions the rule is
+               about. It refuses a call, so it holds only where the tool's hook is registered AND
+               that registration carries the action
+     report    a session-start reporter. It says, it refuses nothing
+     denyList  an entry of the tool's own declarative deny list, where its dialect names one
+     always    true under every tool: it is in the harness, not in a hook
+     gate      a gate of the config's suite, by its conventional name. Red when somebody runs the
+               suite; with the git hook standing, run at commit or push time
+   THE CELLS ARE NEVER TYPED. cellFor() works one out from what the tool's row is wired for in
+   this repo, the handler table and the config's gates. Nothing left standing is `prose`. */
+const RULES = [
+  { id: 'gate-figure', rule: 'a gate figure comes from the gate run and lives in the baseline, not prose',
+    by: [{ guard: 'phase-guard', on: ['write'] }, { gate: 'docs' }] },
+  { id: 'suite-is-config', rule: 'the suite is the gates array of the config; nothing invents one',
+    by: [{ always: 'the config loader stops on an absent or malformed config' }] },
+  { id: 'no-secrets', rule: 'no secret, credential or guarded env file is committed, read or printed',
+    by: [{ guard: 'env-guard', on: ['shell', 'read', 'search', 'write'] }, { guard: 'commit-hygiene', on: ['shell'] }, { gate: 'hygiene' }] },
+  { id: 'clean-commit', rule: 'no strays, secrets, ignore gaps or root clutter in a commit or push',
+    by: [{ guard: 'commit-hygiene', on: ['shell'] }, { gate: 'hygiene' }] },
+  { id: 'phase-close', rule: 'a phase closes through the close script, never by assertion',
+    by: [{ guard: 'phase-guard', on: ['shell', 'write'] }] },
+  { id: 'skill-install', rule: 'no skill or plugin is installed, vendored or updated unread',
+    by: [{ report: 'skill-verify' }, { gate: 'skills' }] },
+  { id: 'docs-contract', rule: 'docs obey the contract: frontmatter, caps, trap paths, one handoff',
+    by: [{ gate: 'docs' }] },
+  { id: 'one-policy-body', rule: 'the policy file is the only policy body; a stub is a pointer',
+    by: [{ gate: 'docs' }] },
+  { id: 'context-ceiling', rule: 'always-on context has a ceiling',
+    by: [{ gate: 'context' }] },
+  { id: 'source-branch-first', rule: 'harness files change on the source branch first',
+    by: [{ report: 'branch-sync' }] },
+  { id: 'self-test', rule: 'every deciding script keeps its self-test',
+    by: [{ gate: 'test' }] },
+  { id: 'no-inline-node', rule: 'no inline `node -e`',
+    by: [{ denyList: 'node -e' }] },
+];
+
+/**
+ * ONE CELL. Pure.
+ *   T  what this repo holds for one tool: { wired, actions, sessionStart, denyList }
+ *   G  what is the same for every tool: { handlers: { name: actions | null }, reporters: [name],
+ *      gates: [{ name, command }], report: the command the pre-commit hook runs,
+ *      hooks: { commit, push } }
+ * A guard the handler table does not hold, a gate the config does not run and a reporter nobody
+ * registered each add nothing: the cell says what stands, not what the rule table hoped for.
+ */
+function cellFor(rule, T, G) {
+  const parts = [];
+  for (const m of rule.by) {
+    if (m.guard) {
+      if (!T.wired || !Object.prototype.hasOwnProperty.call(G.handlers, m.guard)) continue;
+      const offered = G.handlers[m.guard];
+      const wanted = m.on.filter((a) => !Array.isArray(offered) || offered.includes(a));
+      const on = wanted.filter((a) => T.actions.includes(a));
+      if (!on.length) continue;
+      const missed = wanted.filter((a) => !on.includes(a));
+      parts.push('deny ' + m.guard + ' [' + on.join(',') + ']' + (missed.length ? ' (NOT ' + missed.join(',') + ')' : ''));
+    } else if (m.report) {
+      if (T.wired && T.sessionStart && G.reporters.includes(m.report)) parts.push('report ' + m.report + ' at session start');
+    } else if (m.denyList) {
+      if (Array.isArray(T.denyList) && T.denyList.some((d) => typeof d === 'string' && d.includes(m.denyList))) parts.push('the tool\'s own deny list');
+    } else if (m.always) {
+      parts.push(m.always);
+    } else if (m.gate) {
+      const g = G.gates.find((x) => x.name === m.gate);
+      if (!g) continue;
+      const when = g.command === G.report && G.hooks.commit ? 'commit' : G.hooks.push ? 'push' : null;
+      parts.push(when ? 'backstop: gate ' + g.name + ' at ' + when : 'gate ' + g.name + ' when run');
+    }
+  }
+  return parts.length ? parts.join(' + ') : 'prose';
+}
+
+const MATRIX_LEGEND = [
+  'deny      refused at the tool call, for the calls in [brackets]. (NOT x): calls of kind x reach no guard under this tool.',
+  'report    said at session start. It refuses nothing.',
+  'gate      red when somebody runs the suite. Nothing runs it for you.',
+  'backstop  the git hook runs it at commit or push time: after the work, not a deny, and `--no-verify` passes it.',
+  'prose     nothing enforces the rule under this tool. The policy file asks; that is all.',
+  'A cell under a tool whose evidence is `docs` is the documented shape. No tool was run to produce this table.',
+];
+
+/** The --matrix output, as lines. `tools` is one `{ row, facts }` per enabled row. Pure. */
+function matrixLines(tools, G) {
+  const out = ['THE ENFORCEMENT MATRIX: each hard rule against each enabled tool, read off the registry and the wiring.'];
+  const hook = (on, name) => name + ' ' + (on ? 'standing' : 'not installed');
+  out.push('git hooks: ' + hook(G.hooks.commit, 'pre-commit') + ', ' + hook(G.hooks.push, 'pre-push')
+    + (G.hooks.commit && G.hooks.push ? '' : '   (opt-in: harness init --git-hooks)'));
+  const w = Math.max(...RULES.map((r) => r.id.length));
+  for (const t of tools) {
+    const row = t.row; const T = t.facts;
+    out.push('');
+    out.push(row.id + '   tier ' + row.tier + ', evidence ' + (row.evidence === 'ran' ? 'ran (' + row.command + ')' : 'docs (NOT run here: read from vendor pages)'));
+    if (T.wired) out.push('  hooks: ' + row.hookConfig + ' registers the hook entry for ' + T.actions.join(', ') + (T.sessionStart ? '; and for session start' : '; NO session start'));
+    else out.push('  NO HOOK IS WIRED: ' + T.why + '. No guard and no reporter runs under this tool.');
+    for (const r of RULES) out.push('  ' + r.id.padEnd(w) + '  ' + cellFor(r, T, G));
+  }
+  out.push('');
+  out.push('the rules, in the policy file\'s order:');
+  for (const r of RULES) out.push('  ' + r.id.padEnd(w) + '  ' + r.rule);
+  out.push('');
+  for (const l of MATRIX_LEGEND) out.push(l);
+  return out;
+}
+
+/* The disk half of the matrix. Loaded only by --matrix: the modules below are not beside this
+   script in every place it is copied to (a fixture carries this file and the config loader). */
+
+/** What THIS REPO holds for one row: is its hook registered, for which actions, and its deny list. */
+function toolFacts(row, root) {
+  const WIRE = require(path.join(__dirname, 'wire.js'));
+  let dialect = null;
+  if (isId(row.dialect)) { try { dialect = require(path.join(__dirname, 'dialects', row.dialect + '.js')); } catch { dialect = null; } }
+  const at = (rel) => path.join(root, ...String(rel).split('/'));
+  const read = (rel) => { try { return fs.readFileSync(at(rel), 'utf8'); } catch { return null; } };
+  const facts = { wired: false, why: null, actions: [], sessionStart: false, denyList: null };
+
+  const perms = dialect && dialect.permissions;
+  if (perms && row.hookConfig === perms.file) { try { facts.denyList = perms.read(read(perms.file)) || null; } catch { facts.denyList = null; } }
+
+  facts.why = WIRE.unwiredReason(row, dialect);
+  if (facts.why) return facts;
+  const w = WIRE.wiringFor(row, dialect);
+  const text = read(row.hookConfig);
+  const st = text === null ? { why: 'it is not there' } : WIRE.hookState(text, row, w);
+  const pre = st.why ? [] : st.wanted.filter((x) => x.event === 'pre-tool');
+  // A wiring the harness COULD render is not a hook: the registration has to be in the file.
+  if (st.why || !pre.length || !pre.every((x) => x.ok)) {
+    facts.why = row.hookConfig + ' does not register the hook entry as `' + row.id + '`' + (st.why ? ' (' + st.why + ')' : '') + ': `harness init` puts it back';
+    return facts;
+  }
+  facts.wired = true;
+  facts.actions = Array.isArray(w.actions) ? w.actions.slice() : [];
+  facts.sessionStart = st.wanted.some((x) => x.event === 'session-start' && x.ok);
+  return facts;
+}
+
+/** What is the same for every tool: the handler table, the config's gates, the git hooks. */
+function matrixContext(cfg) {
+  const HOOK = require(path.join(__dirname, 'hook.js'));
+  const GIT = require(path.join(__dirname, 'githooks.js'));
+  const handlers = {};
+  for (const h of HOOK.HANDLERS['pre-tool']) handlers[h.name] = Array.isArray(h.actions) ? h.actions.slice() : null;
+  return {
+    handlers: handlers,
+    reporters: HOOK.HANDLERS['session-start'].map((h) => h.name),
+    gates: cfg.gates.map((g) => ({ name: g.name, command: g.command })),
+    report: GIT.REPORT,
+    hooks: GIT.standing(cfg.root),
+  };
+}
+
 /* ---------- --self-test ---------- */
 function selfTest() {
   let CHECKS = 0; const f = [];
@@ -575,6 +735,44 @@ function selfTest() {
   eq('stub: a pointer with no policy file beside it points at nothing', stubFindings(STUB, false).length, 1);
   eq('stub: ...and says so', /beside it/.test(stubFindings(STUB, false)[0]), true);
 
+  // The matrix. A cell is worked out, and the ones that must come out `prose` do.
+  const G = { handlers: { 'guard-a': ['shell', 'write'], 'guard-b': null }, reporters: ['rep-a'],
+    gates: [{ name: 'gate-a', command: 'node a.js' }, { name: 'gate-r', command: 'node report.js' }], report: 'node report.js', hooks: { commit: false, push: false } };
+  const withHooks = (h) => Object.assign({}, G, { hooks: h });
+  const FULL = { wired: true, actions: ['shell', 'read', 'write'], sessionStart: true, denyList: ['Shell(tool -x*)'] };
+  const PART = { wired: true, actions: ['shell', 'read'], sessionStart: false, denyList: null };
+  const NONE = { wired: false, actions: [], sessionStart: false, denyList: null };
+  const one = (by) => ({ id: 'r', rule: 'r', by: by });
+  eq('cell: a guard on a registered action denies', cellFor(one([{ guard: 'guard-a', on: ['write'] }]), FULL, G), 'deny guard-a [write]');
+  eq('cell: THE SAME RULE IS PROSE where the write is not registered', cellFor(one([{ guard: 'guard-a', on: ['write'] }]), PART, G), 'prose');
+  eq('cell: a rule over two actions names the one that reaches no guard', cellFor(one([{ guard: 'guard-a', on: ['shell', 'write'] }]), PART, G), 'deny guard-a [shell] (NOT write)');
+  eq('cell: an action the handler is not offered is not claimed, nor called missing', cellFor(one([{ guard: 'guard-a', on: ['shell', 'read'] }]), FULL, G), 'deny guard-a [shell]');
+  eq('cell: a handler offered every call takes the rule\'s actions as they are', cellFor(one([{ guard: 'guard-b', on: ['read'] }]), PART, G), 'deny guard-b [read]');
+  eq('cell: a guard under a tool with no hook is prose', cellFor(one([{ guard: 'guard-a', on: ['shell'] }]), NONE, G), 'prose');
+  eq('cell: a guard the handler table does not hold is prose', cellFor(one([{ guard: 'guard-z', on: ['shell'] }]), FULL, G), 'prose');
+  eq('cell: a reporter needs the session-start registration', [cellFor(one([{ report: 'rep-a' }]), FULL, G), cellFor(one([{ report: 'rep-a' }]), PART, G), cellFor(one([{ report: 'rep-a' }]), NONE, G)],
+    ['report rep-a at session start', 'prose', 'prose']);
+  eq('cell: a reporter nobody registered is prose', cellFor(one([{ report: 'rep-z' }]), FULL, G), 'prose');
+  eq('cell: a deny-list entry counts only where the list holds it', [cellFor(one([{ denyList: 'tool -x' }]), FULL, G), cellFor(one([{ denyList: 'tool -y' }]), FULL, G), cellFor(one([{ denyList: 'tool -x' }]), PART, G)],
+    ['the tool\'s own deny list', 'prose', 'prose']);
+  eq('cell: a gate is a gate under every tool, and says nobody runs it', cellFor(one([{ gate: 'gate-a' }]), NONE, G), 'gate gate-a when run');
+  eq('cell: a gate the config does not run is prose', cellFor(one([{ gate: 'gate-z' }]), FULL, G), 'prose');
+  eq('cell: with the push hook standing a gate is a BACKSTOP, at push', cellFor(one([{ gate: 'gate-a' }]), NONE, withHooks({ commit: false, push: true })), 'backstop: gate gate-a at push');
+  eq('cell: the commit hook covers only the gate it runs', [cellFor(one([{ gate: 'gate-r' }]), NONE, withHooks({ commit: true, push: false })), cellFor(one([{ gate: 'gate-a' }]), NONE, withHooks({ commit: true, push: false }))],
+    ['backstop: gate gate-r at commit', 'gate gate-a when run']);
+  eq('cell: A BACKSTOP IS NEVER SPELLED AS A DENY', /deny/.test(cellFor(one([{ guard: 'guard-a', on: ['shell'] }, { gate: 'gate-r' }]), NONE, withHooks({ commit: true, push: true }))), false);
+  eq('cell: mechanisms are listed together, in the rule\'s order', cellFor(one([{ guard: 'guard-a', on: ['shell'] }, { gate: 'gate-a' }]), FULL, G), 'deny guard-a [shell] + gate gate-a when run');
+  eq('cell: what holds under every tool holds under an unwired one', cellFor(one([{ always: 'the loader stops' }]), NONE, G), 'the loader stops');
+  eq('cell: a rule with no mechanism is prose', cellFor(one([]), FULL, G), 'prose');
+  eq('rules: ids are kebab-case and unique', [RULES.every((r) => isId(r.id)), new Set(RULES.map((r) => r.id)).size], [true, RULES.length]);
+  eq('rules: every mechanism is one of the five kinds', RULES.flatMap((r) => r.by).filter((m) => Object.keys(m).filter((k) => ['guard', 'report', 'denyList', 'always', 'gate'].includes(k)).length !== 1), []);
+  eq('rules: a guard mechanism names its actions', RULES.flatMap((r) => r.by).filter((m) => m.guard && !(Array.isArray(m.on) && m.on.length)), []);
+  const mx = matrixLines([{ row: good(), facts: FULL }, { row: good({ id: 'tool-n' }), facts: Object.assign({}, NONE, { why: 'no shape is recorded' }) }], G);
+  eq('matrix: one line per rule per tool', mx.filter((l) => l.startsWith('  ' + RULES[0].id.padEnd(4))).length, 3);
+  eq('matrix: an unwired tool is said to be unwired, with the reason', mx.some((l) => /NO HOOK IS WIRED: no shape is recorded\./.test(l)), true);
+  eq('matrix: a `docs` row is never called verified', /\bverified\b/i.test(mx.join('\n')), false);
+  eq('matrix: it says the git hooks are not installed, and how to get them', mx[1], 'git hooks: pre-commit not installed, pre-push not installed   (opt-in: harness init --git-hooks)');
+
   // The registry this script ships with has to pass its own contract, with the default tool
   // enabled. Whatever it parses to goes through validate(): `null` parses, and is not a registry.
   let shipped; let parsed = false;
@@ -593,16 +791,17 @@ function selfTest() {
 
 module.exports = { validate, checkRow, listLines, REQUIRED, TIERS, EVIDENCE, NESTED, POLICY_MODES,
   POLICY_FILE, IMPORT_LINE, policyFilesOf, injectedFiles, stubFiles, enabledStubFiles, enabledFindings,
-  hasPolicyBody, importTokens, stubFindings, readRegistry, REGISTRY_REL, enabledRows, skillRoots };
+  hasPolicyBody, importTokens, stubFindings, readRegistry, REGISTRY_REL, enabledRows, skillRoots,
+  RULES, cellFor, matrixLines, toolFacts, matrixContext };
 
 /* ---------- main ---------- */
 if (require.main === module) {
   const args = process.argv.slice(2);
   // --self-test is a mode like the others. Tested first and alone, it would turn
   // `--check --self-test` into a green run that never checked.
-  const mode = ['--check', '--list', '--self-test'].filter((m) => args.includes(m));
+  const mode = ['--check', '--list', '--self-test', '--matrix'].filter((m) => args.includes(m));
   if (mode.length !== 1) {
-    console.error('usage: node scripts/harness/tools.js --check | --list | --self-test');
+    console.error('usage: node scripts/harness/tools.js --check | --list | --self-test | --matrix');
     process.exit(2);
   }
   if (mode[0] === '--self-test') { selfTest(); process.exit(0); }
@@ -626,6 +825,18 @@ if (require.main === module) {
       console.error('TOOLS RED — ' + REGISTRY_REL + ', ' + v.findings.length + ' finding(s); `node scripts/harness/tools.js --check` names them');
       process.exit(1);
     }
+    process.exit(0);
+  }
+
+  if (mode[0] === '--matrix') {
+    // A matrix over a registry --check refuses would be cells worked out from rows nobody can
+    // trust: it is not printed at all.
+    if (v.findings.length) {
+      console.error('TOOLS RED — ' + REGISTRY_REL + ', ' + v.findings.length + ' finding(s); `node scripts/harness/tools.js --check` names them');
+      process.exit(1);
+    }
+    const tools = enabledRows(reg, enabled).map((row) => ({ row: row, facts: toolFacts(row, CFG.root) }));
+    for (const l of matrixLines(tools, matrixContext(CFG))) console.log(l);
     process.exit(0);
   }
 

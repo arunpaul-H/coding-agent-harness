@@ -28,7 +28,7 @@
 
    Zero dependencies, Node built-ins only, like everything it installs.
 
-   Run:  harness init [--into <dir>] [--tools <id>[,<id>]] [--force] [--dry-run] [--only <path-prefix>]
+   Run:  harness init [--into <dir>] [--tools <id>[,<id>]] [--git-hooks] [--force] [--dry-run] [--only <path-prefix>]
          harness doctor [--root <dir>] [--no-self-tests]
          harness gates [--check] [--print-allow-skip [--with <gate>=<n>]] [...flags for gates.js]
          harness docs [--index] [...flags for the doc scripts]
@@ -68,6 +68,7 @@ const posix = (p) => String(p).split(path.sep).join('/');
    line that names the missing piece, and a `require` up here would die before it. */
 const WIRE = () => require('../scripts/harness/wire.js');
 const SKILLS = () => require('../scripts/harness/guards/skill-verify.cjs');
+const GITHOOKS = () => require('../scripts/harness/githooks.js');
 /** A row's dialect module, or null: the row has none, or the module is not in this copy. */
 const dialectOf = (row) => {
   if (!row || typeof row.dialect !== 'string' || !/^[a-z][a-z0-9-]*$/.test(row.dialect)) return null;
@@ -279,7 +280,9 @@ function buildConfig(d) {
     { name: 'docs', command: 'node scripts/harness/guards/docs-lint.cjs' },
     { name: 'context', command: 'node scripts/harness/measure-context.js --check' },
     { name: 'hygiene', command: 'node scripts/harness/guards/commit-hygiene.cjs --report' },
-    { name: 'skills', command: 'node scripts/harness/guards/skill-verify.cjs --check' });
+    { name: 'skills', command: 'node scripts/harness/guards/skill-verify.cjs --check' },
+    // The registry and the enabled list, held to their contract on every run of the suite.
+    { name: 'tools', command: 'node scripts/harness/tools.js --check' });
   const uniq = (a) => [...new Set(a)];
   const stub = stubFileFor(d.enabled);
   // Where the enabled tools keep what init writes for them: a file there is not a stray.
@@ -780,11 +783,38 @@ function toolsArgError(ids, reg) {
   const found = TOOLS.enabledFindings(R, ids);
   return found.length ? found[0] : null;
 }
-const INIT_USAGE = 'harness init [--into <dir>] [--tools <id>[,<id>]] [--force] [--dry-run] [--only <path-prefix>]';
+const INIT_USAGE = 'harness init [--into <dir>] [--tools <id>[,<id>]] [--git-hooks] [--force] [--dry-run] [--only <path-prefix>]';
+
+/** The GIT HOOKS block init prints, from what the plan found. Pure: `p` is githooks.plan()'s answer. */
+function gitHookLines(p, o) {
+  const G = GITHOOKS();
+  const out = [''];
+  const tail = 'a backstop, not a deny: it runs after the work, at commit or push time';
+  if (p.refuse) {
+    out.push('GIT HOOKS — ' + (o.asked ? 'NOT WRITTEN' : 'not installed') + ': ' + p.refuse + '.');
+    for (const h of G.HOOKS) out.push('  ' + h.name.padEnd(10) + '  by hand, where your hooks live:   ' + G.commandOf(h.name, o.skips || '') + ' || exit 1');
+    return out;
+  }
+  if (!o.asked) {
+    out.push('GIT HOOKS — not installed. They are opt-in: `' + o.me + ' init ' + G.FLAG + '` writes the two below and never replaces a hook that exists.');
+    for (const h of p.hooks) out.push('  ' + h.name.padEnd(10) + '  ' + h.command + (h.action === 'present' || h.action === 'same' ? '   (already standing)' : ''));
+    out.push('  ' + tail);
+    return out;
+  }
+  out.push('GIT HOOKS' + (o.dry ? ' (DRY RUN)' : '') + ' — ' + tail + '.');
+  const said = {
+    write: o.dry ? 'WOULD WRITE' : 'WROTE',
+    same: 'UNCHANGED (already identical)',
+    present: 'LEFT ALONE — your hook already runs it',
+    kept: 'LEFT ALONE — a hook is already there and is yours; add this line to it yourself',
+  };
+  for (const h of p.hooks) out.push('  ' + said[h.action] + '   .git/hooks/' + h.name + '   ' + h.command + (h.action === 'kept' ? ' || exit 1' : ''));
+  return out;
+}
 
 function initArgError(argv) {
   const VALUED = ['--into', '--only', '--tools'];
-  const BARE = ['--force', '--dry-run'];
+  const BARE = ['--force', '--dry-run', GITHOOKS().FLAG];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (VALUED.includes(a)) {
@@ -872,6 +902,13 @@ function cmdInit(argv) {
   show('UNCHANGED (already identical)', res.kept);
   show('SKIPPED — exists, not overwritten (pass --force, or --force --only <path> for one)', res.skipped);
   if (!res.wrote.length && !res.overwrote.length && !res.merged.length) console.log('\nNothing to write: every file is already there.');
+
+  /* THE GIT-HOOK BACKSTOP. The hook directory is the user's, so nothing is written there unless
+     the caller asked, a hook that exists is never replaced, and a repo that keeps its hooks
+     somewhere of its own is left alone and told why. Asked or not, the commands are printed. */
+  const hookSkips = skipArg(configSkips(had || plan.config));
+  const hooks = GITHOOKS().install(target, { dry: opts.dry || !argv.includes(GITHOOKS().FLAG), skips: hookSkips });
+  for (const line of gitHookLines(hooks, { asked: argv.includes(GITHOOKS().FLAG), dry: opts.dry, me: selfInvocation(target), skips: hookSkips })) console.log(line);
 
   // Only for a file this run actually (or, dry, would have) produced: a skipped
   // AGENTS.md is the human's own, and its contents are not this plan's to describe.
@@ -1465,6 +1502,9 @@ const HELP = [
   '      budget marked `placeholder`: no figure measured on another tree is inherited.',
   '      Never overwrites an existing file without --force. --dry-run prints the plan and writes nothing.',
   '      --only limits the run to one path or directory, e.g. --force --only .claude/helpers',
+  '      --git-hooks writes a git pre-commit (the commit gate report) and pre-push (the gate suite).',
+  '      Opt-in: without it init only prints what they would run. A hook that exists is never replaced,',
+  '      and a repo with core.hooksPath set is left alone. A backstop at commit or push time, not a deny.',
   '',
   '  harness doctor [--root <dir>] [--no-self-tests]',
   '      Report every installed piece as OK / MISSING / DRIFTED, each with the one command that fixes it.',
@@ -1528,6 +1568,7 @@ function selfTest() {
     eq('skips: a mistyped tolerance parses to nothing at all', parseSkips('docs=1,lint'), null);
     eq('skips: zero is not a tolerance', parseSkips('docs=0'), null);
     eq('init args: the documented flags pass', initArgError(['--into', 'x', '--force', '--dry-run', '--only', '.claude']), null);
+    eq('init args: the git-hook backstop is a bare flag, and takes no value', [initArgError(['--git-hooks']), initArgError(['--git-hooks', 'pre-commit'])], [null, 'unexpected argument `pre-commit`']);
     eq('init args: a misspelt --dry-run is REFUSED, not a real install', initArgError(['--dryrun']), 'unknown flag `--dryrun`');
     eq('init args: --into with no value does not fall back to the cwd', initArgError(['--into']), '--into needs a value');
     eq('init args: nor with a flag where its value should be', initArgError(['--into', '--force']), '--into needs a value');
@@ -1594,7 +1635,7 @@ function selfTest() {
     const dBare = detect(bare);
     eq('detect: the directory names a repo with no package.json', dBare.name, 'bare-repo');
     eq('detect: NO test command is invented', dBare.test, null);
-    eq('detect: so the generated config has no test gate', buildConfig(dBare).gates.map((x) => x.name), ['docs', 'context', 'hygiene', 'skills']);
+    eq('detect: so the generated config has no test gate', buildConfig(dBare).gates.map((x) => x.name), ['docs', 'context', 'hygiene', 'skills', 'tools']);
     eq('detect: docs defaults to docs/', dBare.docsRoot, 'docs');
 
     const t = path.join(tmp, 'target');

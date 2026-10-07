@@ -108,7 +108,7 @@ track's next phase owns that (FG-01). Add a skills key to `tools.json` or a dial
 **Exit:** `node bin/harness.js --self-test && node --test tests/cli.test.js && node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
 
 **Delivered.** Landed on 2026-10-07 as asked: the three list edits and two tests, gates green at
-that commit. NOT RUN: Node 20 and Node 22 (FG-03). Re-baseline and close: see `handoff.md`.
+that commit. Node 20 and Node 22 (FG-03): settled by CI on the pushed branch, both jobs green.
 
 ## Phase 3: the README shows a non-tech reader the way in, in pictures
 
@@ -147,4 +147,4 @@ image file or a diagram tool (locked decision 8).
 
 **Delivered.** Landed on 2026-10-07: the section, the "Who it is for" line, three counts and the
 changelog entry. Left alone: `docs/methods/09-the-phase-lifecycle.md` (its three working skills
-still walk a phase). NOT DONE: nobody has looked at the page on GitHub (FG-06); not pushed.
+still walk a phase). The owner looked at the page on GitHub on 2026-10-07, light and dark: all good.

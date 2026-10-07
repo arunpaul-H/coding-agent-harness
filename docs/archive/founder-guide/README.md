@@ -1,7 +1,7 @@
 ---
 id: founder-guide
 kind: track
-status: open
+status: complete
 read_when: "any work on the non-technical on-ramp: the guide skill, its install by init, or the start-here section of the root README"
 trap_prefix: FG
 paths: [".claude/skills/guide/**", "bin/harness.js", "package.json", "scripts/harness/common.json", "tests/cli.test.js", "README.md", "CHANGELOG.md", "docs/methods/**", "docs/reference/branches/README.md"]
@@ -10,9 +10,9 @@ last_verified: 2026-10-07
 max_age_days: 30
 closed_phase: 2
 closed_at: 2026-10-07
-gates_sha: 25a6a56d65a864a84543d29fe997b17ecac944a1a98ab48d4ad5e79756cbf9e6
-block_sha: 8b7cf18dbbf937f1bc763cddbfbb93664ea5ac5beba7b8083642eb21e9506785
-receipt: 57f491812d6a398630f98a9b9efa3d74ccb6f2fda7ddcd626398dcd81560734c
+gates_sha: 543fab9f1e84b42cffaba3b643f1f9ddee134970c7adeac06a17f537b04e9c7d
+block_sha: 481b1438d94e108c091713c3d8690454a695cd56583df49597f9c9ab4314503c
+receipt: cbd1dc69f95d5db781bb243be89b61b2312d7c116bc1510b58fd6f16bda903e5
 ---
 
 # Non-tech guide: a plain-English on-ramp that changes no check
@@ -88,8 +88,8 @@ the research file, and stand until the owner says otherwise.
 | Phase | What it delivers | Status |
 |---|---|---|
 | 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed and closed |
-| 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed once `closed_phase` above reads 2 or more |
-| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; NOT closed: a person has not yet looked at the page on GitHub (FG-06) |
+| 2 | `init` installs it; a test ties the installer's list to the package file list | landed and closed; CI ran it green on both older Node versions (FG-03) |
+| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; the owner looked at the page on GitHub in light and dark mode on 2026-10-07 (FG-06); closed once `closed_phase` above reads 3 |
 
 ## How to work
 

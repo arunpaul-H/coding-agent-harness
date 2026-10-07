@@ -82,6 +82,8 @@ const wiring = {
   file: '.cursor/hooks.json',
   evidence: 'docs: read from the vendor page, never loaded by the tool',
   base: { version: 1 },
+  // The neutral actions the registered events carry: what a guard can be said to see here.
+  actions: Array.from(new Set(Object.values(ACTION_OF))),
   gaps: [
     'the general pre-tool event and the MCP event are NOT registered: this dialect cannot read their fields, so every such call would be refused (trap MT-16). A file WRITE and an MCP call therefore reach no guard under this tool',
     'the hook command names the entry relative to the repo root; that the tool runs a hook from there is not established',
