@@ -73,7 +73,6 @@ in `skills-lock.json` (locked decision 6).
      shipped skill uses; the body's refusals (locked decision 7) are prose, not a mechanism.
   6. Provenance: first-party, tracked in this repo; duplicates no installed skill.
   7. and 8. Record: not pinned, by locked decision 6, so no lock change to commit with it.
-- Observed: the running session listed `guide` as available without a restart.
 - The live try: the owner ran `/guide` in a session of their own on 2026-10-07 and reported that
   it answered in the chat and waited for an answer, and that nothing it said was confusing or
   wrong. That is one person's report of one run, in Claude Code only; no transcript is kept. It
@@ -110,7 +109,8 @@ track's next phase owns that (FG-01). Add a skills key to `tools.json` or a dial
 **First commit:** `founder-guide: init installs the guide skill`
 **Exit:** `node bin/harness.js --self-test && node --test tests/cli.test.js && node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
 
-**Delivered.** not started
+**Delivered.** Landed on 2026-10-07 as asked: the three list edits and two tests, gates green at
+that commit. NOT RUN: Node 20 and Node 22 (FG-03). Re-baseline and close: see `handoff.md`.
 
 ## Phase 3: the README shows a non-tech reader the way in, in pictures
 
