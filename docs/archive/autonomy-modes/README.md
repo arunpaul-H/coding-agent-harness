@@ -1,7 +1,7 @@
 ---
 id: autonomy-modes
 kind: track
-status: open
+status: complete
 read_when: "changing how a run mode is chosen or enforced, or stating who this harness is for"
 trap_prefix: AM
 paths: ["README.md", "scripts/harness/mode.js", "scripts/harness/actions.js", "scripts/harness/carveouts.js", "scripts/harness/peers.js", "scripts/harness/run.js", "scripts/harness/tools.json", "scripts/harness/tools.js", "scripts/harness/config.js", "schema/harness.config.schema.json", "harness.config.json"]
@@ -10,9 +10,9 @@ last_verified: 2026-10-06
 max_age_days: 30
 closed_phase: 6
 closed_at: 2026-10-07
-gates_sha: c12ca4e483e6490cdb4be879e3416cc91fbb832ffa95c5413ede28a7a7694dc9
-block_sha: bac01774674efd697bd9394c3b6509b38ce4a279597ec59ab2e51d1a94767151
-receipt: df9e6541a98cf69d7389faf6eec2320a83b798bc8af440beffcdb11930e82899
+gates_sha: d3b128384f515fd7b9b9d1f813ac9f7943cf97090ec5d0322d304397001cda57
+block_sha: 018af90ad32ca1b4b56bac5a726e667d127b62fbe34a198fa155a85d5ec54433
+receipt: 201f407650d85ddcc9ff4c6952f053a7d27b624aff80861dfe141f40e0c8cd98
 ---
 
 # Autonomy modes: the audience, and a mode a script can enforce
