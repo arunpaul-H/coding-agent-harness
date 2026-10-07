@@ -72,7 +72,7 @@ BOUNDS:   what it must NOT do: other areas, rebuilds, further spawns, shared fil
   those files, so the table of valid agent names cannot be hand-edited out of step.
 - `docs-index.js --check` validates the agent files and holds each brief to a line cap, because
   a brief's description is startup cost in every session that can spawn it.
-- The PreToolUse guards fire for a spawned agent's tool calls exactly as for the lead's. Probe
+- Under a wired tool the pre-tool guards fire for a spawned agent's calls as for the lead's. Probe
   this in your own runtime: issue one harmless denied command from each and compare.
 
 ## Why a mechanism and not a rule

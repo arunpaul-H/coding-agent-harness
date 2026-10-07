@@ -43,8 +43,9 @@ not prove.
 | Commit hygiene | `commit-hygiene.cjs` | Shell debris, a pasted token and root clutter riding into a commit nobody read the status for |
 | One harness on every branch | `branch-sync.js`, `common.json` | A long-lived branch running the harness of the day it was cut, with nothing comparing |
 | The config seam, the installer | `config.js`, `bin/harness.js` | A harness that grades one repo only, or invents a suite when it cannot read one |
+| Many tools, one policy | `tools.json`, `hook.js`, `dialects/` | A rule enforced under one coding agent and silently prose under the next |
 
-Every script lives under `scripts/harness/` or `.claude/helpers/`, plus the installer at
+Every script lives under `scripts/harness/` (`.claude/helpers/` holds only the status line), plus the installer at
 `bin/harness.js` ([14](14-the-config-seam-and-the-installer.md)). Everything project-specific
 lives in `harness.config.json` and nowhere else: `scripts/harness/config.js` is the only reader,
 and an absent config is a hard stop, never an invented default suite.
@@ -99,8 +100,9 @@ failure, the mechanism, why a mechanism and not a rule, the cost and the limits.
   none failed and that none vanished. They do not prove the checks test the right thing.
 - **Guards deny a shape, never a scope.** Each hook is a match over a tool call. A different
   spelling of the same action can pass. Guards remove accidents; they do not contain an adversary.
-- **The blocking layer speaks one runtime's hook schema.** The gate runner, the linters and the
-  phase lifecycle are plain Node and run anywhere. The PreToolUse guards do not port.
+- **The blocking layer is wired for few tools.** The gate runner, the linters and the phase
+  lifecycle are plain Node and run anywhere. The guards take a neutral event, but a hook file is
+  rendered only for a tool whose file shape is recorded ([15](15-many-tools-one-policy.md)).
 - **Enforcement on one machine is an honour system.** Until the gate suite runs in CI on a pushed
   commit, every guarantee here is local.
 - **The handoff is model-written and read as authority.** Its integers are checked for citations.

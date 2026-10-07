@@ -9,12 +9,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **More than one coding agent.** A tool registry, `scripts/harness/tools.json`, holds one row per
+  agent with the evidence behind it; `harness init --tools <ids>` wires the ones a repo names, and
+  `doctor` prints each tool's tier and every missing wire. The guards now take a neutral event
+  through one hook entry, `scripts/harness/hook.js`, with a dialect module per wire format. A hook
+  file is written for Claude Code and, in part, Cursor; every other row is `docs` evidence and gets
+  the policy, the skills and a stated gap.
+- **The enforcement matrix.** `node scripts/harness/tools.js --matrix` prints what enforces each
+  hard rule under each enabled tool: a deny, a report, a gate, a git-hook backstop, or prose.
+- **An opt-in git-hook backstop.** `harness init --git-hooks` writes a pre-commit and a pre-push.
+  A hook that exists is never replaced.
+- **A `tools` gate** running `tools.js --check`, in this repo's suite and in the config `init` writes.
 - **A plain-English on-ramp.** A fourth skill, `guide`, walks a person who is not a tech expert
   through setup, reading a red or green result, and turning a goal into a request that can be
   checked. It runs as a conversation, and it will not re-baseline, waive a finding or allow a
   skip without explaining what that gives up and getting a yes. `harness init` installs it, and
   the README opens with a "Not a developer? Start here" section. No gate, guard or threshold
   changed.
+
+### Changed
+
+- **`AGENTS.md` is the always-on policy file** and `CLAUDE.md` is a stub that imports it. Routing
+  moved to `docs/reference/routing/README.md`.
+- **The guards moved** from `.claude/helpers/` to `scripts/harness/guards/`. Their verdicts did not change.
 
 ## [0.1.0] - 2026-10-05
 

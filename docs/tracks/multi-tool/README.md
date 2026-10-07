@@ -8,11 +8,11 @@ paths: ["AGENTS.md", "CLAUDE.md", ".claude/**", "scripts/harness/**", "bin/harne
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js multi-tool"
 last_verified: 2026-10-06
 max_age_days: 30
-closed_phase: 4
+closed_phase: 5
 closed_at: 2026-10-07
-gates_sha: e269fb7b4d3620de17a7205b5399661538ca1d1e273e2728ddfa952507aae48e
-block_sha: 062ac4fb1fadd9ff4e4ef2d481bc6ce537f9f2c36eda89836c037e5fa7e3482f
-receipt: 936d57dde90d3853bdaefa52094e6a67a3a9352b2131714b9f77f52f1e5b8d42
+gates_sha: 2338ed680574af68ce28b839f7e1591b7b6616175e357366d6a4b1a22a2b4b53
+block_sha: ea8fa4455a6580a5872e2ba6ff19de68015a4396bf05a774c8e5e2655a18b899
+receipt: b70c8102eed90622fe2a072cb882b075f989de109753cfdf8afb82ca6114cf89
 ---
 
 # Multi-tool: one policy, one guard core, a thin adapter per agent
@@ -25,7 +25,7 @@ receipt: 936d57dde90d3853bdaefa52094e6a67a3a9352b2131714b9f77f52f1e5b8d42
 > | Why the scope is this and not more | **Locked decisions** |
 > | What must not move | **Invariants** |
 > | The phases and their exit commands | `plan.md` |
-> | Adding a tool nobody listed | **The method**, then the registry once phase 0 lands |
+> | Adding a tool nobody listed | **The method**, then "Add a tool" in the root `CONTRIBUTING.md` |
 
 > **Self-evolving tracker. Current truth only, not a changelog.** Rewrite in place when a phase
 > lands. A cold session reads THIS plus `handoff.md` and continues with no memory of the last one.
@@ -130,8 +130,8 @@ A second session is opening a track for run modes. These are settled, so neither
 | 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, committed, not closed | open |
 | 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
 | 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, committed, closed by `close-phase.js` on 2026-10-07 (the receipt is in this file's frontmatter) | open |
-| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, not closed | open |
-| 6 | The method doc and the contributor path for adding a tool | open |
+| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, closed by `close-phase.js` on 2026-10-07 | open |
+| 6 | The method doc `docs/methods/15-many-tools-one-policy.md`, "Add a tool" in `CONTRIBUTING.md`, the tool list in the root README. Landed; the frontmatter receipt says whether it is closed | open |
 
 ## How to work
 

@@ -64,10 +64,32 @@ A guard is a hook that blocks a tool call before it runs.
 3. A payload you cannot parse is an "ask", never a silent allow.
 4. Check every string in `tool_input`, not a fixed list of field names. Match the decoded strings,
    not the raw JSON.
-5. Register it in `.claude/settings.json`. Every matcher includes `mcp__.*`.
+5. Add it to the `HANDLERS` table in `scripts/harness/hook.js`, with the kinds of call it decides
+   on. It takes the neutral event and never a tool's own field names. Nothing else is registered:
+   every tool's hook file already runs that one entry.
 6. The deny message names the alternative and how to get a legitimate exception.
 7. Add a `--self-test` with cases that must not be denied, and a case in `tests/`.
-8. `node bin/harness.js doctor` must list the new hook as OK.
+8. `node bin/harness.js doctor` must list the new guard as OK.
+
+## Add a tool
+
+A tool is a coding agent a repo can enable (`tools.enabled` in `harness.config.json`).
+
+1. One row in `scripts/harness/tools.json`. The row contract is the `_readme` at the top of that
+   file; do not restate it anywhere.
+2. State the evidence. `docs` if you read the vendor's pages. `ran` only if you ran the tool, with
+   the command recorded in the row. A cell you could not establish is `null`, never a guess.
+3. A module under `scripts/harness/dialects/` only if the tool's hook wire format is new:
+   `parse(stdin)` to the neutral event, `emit(verdict, event)` back. Reuse a dialect that fits.
+4. Export a `wiring` from the dialect only if you know the shape of the tool's hook file. Without
+   one the harness writes no hook file for the tool and says so. Never type a shape from memory.
+5. A fixture test in `tests/hook.test.js`, built from the payload the tool sends, with a deny case.
+6. Name the tool nowhere else in code. Only the registry and the dialect modules name one.
+7. Run `node scripts/harness/tools.js --check`, then `--list` and `--matrix`, and read what your
+   row now claims.
+
+Checked by the `tools` gate and `tests/tools.test.js`. Whether a hook fires under the tool is
+checked by nothing until someone runs it. The why is in `docs/methods/15-many-tools-one-policy.md`.
 
 ## Add a doc
 
