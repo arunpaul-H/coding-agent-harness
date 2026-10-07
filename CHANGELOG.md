@@ -26,6 +26,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   skip without explaining what that gives up and getting a yes. `harness init` installs it, and
   the README opens with a "Not a developer? Start here" section. No gate, guard or threshold
   changed.
+- **An optional `modes` cell in the tool registry**: each harness run mode mapped to the tool's own
+  command-line flags, or null where none is established. `tools.js --check` validates it. One row
+  carries it, read off that tool's help and not run; nothing launches a tool with these flags yet.
 
 ### Changed
 

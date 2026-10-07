@@ -26,6 +26,9 @@
         wherever it is planted, so a path there is a stub no sweep would recognise
      8. a dialect list with a repeated name. An EMPTY list is legal: a registry of `backstop`
         rows wires nothing and needs no wire format
+    10. a `modes` cell that is not the four harness modes, each mapped to the tool's own flags
+        as a list of arguments or to null. A mode left out cannot be told from a forgotten one,
+        a cell of four nulls says nothing and is left out whole, and a model has no command line
 
    EVIDENCE IS PRINTED, NEVER UPGRADED. --list shows `docs` or `ran` as the row states it, and
    nothing here reports a `docs` row as verified.
@@ -59,7 +62,11 @@ const REGISTRY_REL = 'scripts/harness/tools.json';
 
 const REQUIRED = ['id', 'policy', 'nested', 'hookConfig', 'dialect', 'sessionStart', 'projectHooks',
   'tier', 'evidence', 'asOf', 'source'];
-const OPTIONAL = ['name', 'command', 'notes', 'skills'];
+const OPTIONAL = ['name', 'command', 'notes', 'skills', 'modes'];
+/* The harness's run modes, most to least autonomous. They are the keys of MODES in mode.js, which
+   this script cannot load: it is copied beside the config loader alone into places that carry no
+   other harness file. tests/tools.test.js holds the two lists to each other. */
+const HARNESS_MODES = ['fully-auto', 'auto-edit', 'hitl', 'manual'];
 const POLICY_MODES = ['native', 'import', 'config'];
 const POLICY_KEYS = ['mode', 'file', 'setting'];
 const NESTED = ['on-touch', 'startup', 'yes', 'unknown'];
@@ -128,6 +135,23 @@ function checkRow(row, dialects) {
   if (has('dialect') && row.dialect !== null && dialects && !dialects.includes(row.dialect)) {
     bad('dialect', 'unknown value ' + show(row.dialect) + ' (one of ' + oneOf(dialects) + ', or null)');
   }
+  // What a launcher would PASS for each harness mode, as argv. A recorded flag is not a tested
+  // one: the row's evidence and notes say whether anything was run under it.
+  if (has('modes')) {
+    const m = row.modes;
+    if (!isPlain(m)) bad('modes', 'must be an object mapping each harness mode to a list of flags or null (got ' + show(m) + ') — leave the key out when no flag is established');
+    else {
+      for (const k of Object.keys(m)) if (!HARNESS_MODES.includes(k)) bad('modes.' + k, 'unknown mode (one of ' + oneOf(HARNESS_MODES) + ')');
+      for (const k of HARNESS_MODES) {
+        if (!(k in m)) { bad('modes.' + k, 'missing mode — write null if its flags are not established, never leave it out'); continue; }
+        const v = m[k];
+        if (v === null) continue;
+        // One argument per element: "--flag value" in one string reaches the tool as one argument.
+        if (!Array.isArray(v) || !v.every((a) => isStr(a) && !/\s/.test(a))) bad('modes.' + k, 'must be null or a list of arguments, one per element with no whitespace; an empty list means the tool\'s default is this mode (got ' + show(v) + ')');
+      }
+      if (HARNESS_MODES.every((k) => m[k] === null)) bad('modes', 'every mode is null, so the cell establishes nothing — leave the key out');
+    }
+  }
   for (const k of ['sessionStart', 'projectHooks']) {
     if (has(k) && row[k] !== null && typeof row[k] !== 'boolean') bad(k, 'must be true, false or null (got ' + show(row[k]) + ')');
   }
@@ -151,6 +175,7 @@ function checkRow(row, dialects) {
     for (const k of ['policy', 'nested', 'hookConfig', 'dialect', 'sessionStart', 'projectHooks']) {
       if (has(k) && row[k] !== null) bad(k, 'tier `inherits` is a model, not an agent: it has no ' + k + ' of its own, so this must be null');
     }
+    if (has('modes')) bad('modes', 'tier `inherits` is a model, not an agent: it has no command line to pass a flag to, so leave the key out');
   } else if (TIERS.includes(row.tier)) {
     if (has('policy') && row.policy === null) bad('policy', 'only tier `inherits` may have no policy route');
   }
@@ -710,6 +735,21 @@ function selfTest() {
   eq('skill roots: only the ENABLED rows, once each, in the config\'s order',
     skillRoots(reg([sharedA, sharedB, ownRoot, good()]), ['tool-u', 'tool-t', 'tool-s', 'tool-a']), ['.tool-u/skills', '.shared/skills']);
   eq('skill roots: a row with no cell adds nothing', skillRoots(reg([good()]), ['tool-a']), []);
+  // The mode flags. Optional as a whole; once present, all four modes are answered.
+  const modes = (over) => Object.assign({ 'fully-auto': null, 'auto-edit': ['--mode', 'edits'], hitl: ['--mode', 'edits'], manual: [] }, over || {});
+  const lacking = (k) => { const m = modes(); delete m[k]; return m; };
+  eq('modes: four modes, each a list of arguments or null, is clean', rowFields(good({ modes: modes() })), []);
+  eq('modes: an empty list is a value: the tool\'s default is that mode', rowFields(good({ modes: modes({ 'auto-edit': [] }) })), []);
+  for (const k of HARNESS_MODES) eq('modes: a row leaving out `' + k + '` names it', rowFields(good({ modes: lacking(k) })), ['modes.' + k]);
+  eq('modes: a mode the harness does not have', rowFields(good({ modes: modes({ yolo: ['--yolo'] }) })), ['modes.yolo']);
+  eq('modes: a flag and its value in one string is refused', rowFields(good({ modes: modes({ hitl: ['--mode edits'] }) })), ['modes.hitl']);
+  for (const v of ['--mode', [''], [7], ['--mode', null], {}, true]) {
+    eq('modes: ' + show(v) + ' for one mode is refused', rowFields(good({ modes: modes({ manual: v }) })), ['modes.manual']);
+  }
+  for (const v of [null, ['--mode'], '--mode', 7]) eq('modes: a cell that is ' + show(v) + ' is refused', rowFields(good({ modes: v })), ['modes']);
+  eq('modes: four nulls establish nothing', rowFields(good({ modes: { 'fully-auto': null, 'auto-edit': null, hitl: null, manual: null } })), ['modes']);
+  eq('modes: an `inherits` row has no command line', rowFields(good(Object.assign({}, inherits, { modes: modes() }))), ['modes']);
+  eq('modes: the list is four kebab-case ids, once each', [HARNESS_MODES.every(isId), new Set(HARNESS_MODES).size], [true, 4]);
   eq('enabled rows: in the config\'s order, an id with no row left out',
     enabledRows(reg([sharedA, ownRoot]), ['tool-u', 'tool-z', 'tool-s']).map((r) => r.id), ['tool-u', 'tool-s']);
   eq('body: text is a body', hasPolicyBody('# Policy\n'), true);
@@ -789,7 +829,7 @@ function selfTest() {
   console.log('PASS — tools.js self-test (' + CHECKS + ' checks)');
 }
 
-module.exports = { validate, checkRow, listLines, REQUIRED, TIERS, EVIDENCE, NESTED, POLICY_MODES,
+module.exports = { validate, checkRow, listLines, REQUIRED, TIERS, EVIDENCE, NESTED, POLICY_MODES, HARNESS_MODES,
   POLICY_FILE, IMPORT_LINE, policyFilesOf, injectedFiles, stubFiles, enabledStubFiles, enabledFindings,
   hasPolicyBody, importTokens, stubFindings, readRegistry, REGISTRY_REL, enabledRows, skillRoots,
   RULES, cellFor, matrixLines, toolFacts, matrixContext };

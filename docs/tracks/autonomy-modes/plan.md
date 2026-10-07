@@ -48,10 +48,9 @@ No longer waits on anything: the `multi-tool` track that was editing `README.md`
 
 ## Phase 3 — the `modes` column in the tool registry
 
-Owned by this track end to end, by agreement with the `multi-tool` session: `scripts/harness/tools.json`
-gains an OPTIONAL `modes` field mapping each harness mode to that tool's own flags, and
-`scripts/harness/tools.js` plus `tests/tools.test.js` are updated to validate it. It must finish before
-that track's phase 3 begins. See `traps.md` AM-02.
+Owned by this track end to end: `scripts/harness/tools.json` gains an OPTIONAL `modes` field mapping
+each harness mode to that tool's own flags, and `scripts/harness/tools.js` plus `tests/tools.test.js`
+are updated to validate it. See `traps.md` AM-02.
 
 **First commit:** `autonomy-modes: tools.json carries each tool's mode flags`
 **Exit:** `node scripts/harness/tools.js --check && node --test`

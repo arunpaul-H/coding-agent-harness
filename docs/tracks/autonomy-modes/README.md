@@ -33,6 +33,7 @@ compliance framing, and dollar-cost accounting.
 | Duplicate-effect ledger | `scripts/harness/actions.js` | written, self-tested, not gated |
 | Carve-out ratchet | `scripts/harness/carveouts.js` | written, self-tested, not gated, no baseline recorded |
 | Cross-session claims | `scripts/harness/peers.js` | written, self-tested, hook NOT wired, not gated |
+| Mode flags per tool | `scripts/harness/tools.json` `modes` | validated by the `tools` gate; one row filled, its `fully-auto` null pending the owner |
 | The launcher | `scripts/harness/run.js` | not written |
 | Audience statement | `README.md`, `docs/methods/00-overview.md` | written |
 | Mode config section | `harness.config.json`, `schema/` | not written |
