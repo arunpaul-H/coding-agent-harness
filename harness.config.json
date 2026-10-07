@@ -1,0 +1,209 @@
+{
+  "$schema": "./schema/harness.config.schema.json",
+
+  "_readme": [
+    "THE CONFIG SEAM. Everything project-specific the harness knows lives in this file, and the",
+    "harness code requires nothing from the repo it grades. That is the whole design move: the",
+    "mechanism is general, this file is the project.",
+    "",
+    "AN ABSENT OR MALFORMED CONFIG IS A HARD STOP, never a default. A harness that invents its own",
+    "gate list when it cannot read one prints a green verdict about a suite nobody agreed to, and",
+    "that figure is the one people then trust. scripts/harness/config.js has no default `gates`",
+    "array and never may.",
+    "",
+    "`artifacts` has no `_readme` of its own because it is an array. It is the REPRODUCIBLE-BUILD",
+    "check: every path (or glob) listed is hashed before the suite and after it, and the gate is",
+    "red unless each committed artifact is byte-identical to what this source produces. The check",
+    "exists for repos where the committed bundle IS the deploy, so a source edit committed without",
+    "a rebuild ships code no gate ever rendered while every other gate stays green.",
+    "THIS repo builds no bundles, so the list is empty — and an empty list DECLARES ITSELF. The",
+    "check prints `not applicable, 0 artifacts graded` and reports skipped=1; it never passes",
+    "silently, because pass-by-absence is the exact failure the gate protocol exists to end. A skip",
+    "is red unless the CALLER tolerates it, so this repo's own green invocation is:",
+    "    node scripts/harness/gates.js --check --allow-skip reproducible-build=1",
+    "The decision to tolerate it is in the invocation, where it is visible, and not in the gate's",
+    "own opinion of its environment.",
+    "",
+    "The schema beside this file documents every key. `node scripts/harness/config.js` prints the",
+    "resolved config, defaults merged in, which is how you find out what the harness thinks it is",
+    "grading before it grades it."
+  ],
+
+  "project": {
+    "_readme": [
+      "What this repo is called in every report, and where its prose lives.",
+      "name        labels the repo in gate output and in generated docs.",
+      "docsRoot    the root of the doc contract: frontmatter, line caps, the generated index.",
+      "tracksDir   where a track folder goes (README.md, plan.md, traps.md, handoff.md, research/).",
+      "Both paths must stay inside the repo — an absolute path or a `..` is rejected, because a doc",
+      "linter pointed outside the tree grades files no commit can fix.",
+      "sourceBranch  OPTIONAL and unset here on purpose. It is the branch every other branch's",
+      "            harness is compared against (scripts/harness/branch-sync.js). Unset, the script",
+      "            DETECTS it — the remote's published head, then the first of main, master, trunk,",
+      "            default that exists — and says which it used, so this repo follows whatever its",
+      "            default branch is called. State it only where detection would be wrong."
+    ],
+    "name": "agent-harness",
+    "docsRoot": "docs",
+    "tracksDir": "docs/tracks"
+  },
+
+  "gates": [
+    {
+      "_readme": [
+        "THE GATE REGISTRY, in run order. Each entry is a command whose LAST stdout line is exactly",
+        "`GATE <name> pass=<n> fail=<n> skipped=<n>`. pass+fail+skipped is the TOTAL, and the total",
+        "is the load-bearing part: comparing only `pass` cannot tell a green run from a run where",
+        "checks VANISHED. A gate that emits no GATE line is a hard failure — silence is not success.",
+        "",
+        "name      kebab-case. It is the token in the GATE line, the key in the baseline, the",
+        "          argument to --only, and the stem of gates.red.<name>.log.",
+        "command   a shell string. A leading bare `node` is re-pointed at the runtime the harness is",
+        "          running under, so the suite is not graded by whichever node is on PATH.",
+        "adapter   only for a runner that prints its OWN summary and will not print ours:",
+        "          `node-test` (reads node:test's pass/fail/skipped), `exit-code` (a tool whose",
+        "          verdict IS its exit status). Omit it and the GATE line is parsed. An UNKNOWN",
+        "          adapter is a hard error, never a fallback — a typo would otherwise read as a gate",
+        "          that crashed before its verdict and send the reader to the wrong file.",
+        "optional  true means an ABSENT TOOL declares a skip instead of a fail. It does NOT mean the",
+        "          gate is optional: a tool that is present and unhappy still fails. The skip is then",
+        "          red unless the caller passes --allow-skip <name>=1.",
+        "gateLine  the name the command actually prints, when it differs from `name` — which is how",
+        "          one script can be gated twice under two different environments.",
+        "",
+        "WITHOUT THIS SECTION there is no suite, and the harness stops rather than guessing one.",
+        "Gates run in declaration order, because a repo's gates are not independent: a build gate has",
+        "to run before the check that grades what it produced.",
+        "",
+        "THE `test` COMMAND BELOW IS `node --test` WITH NO PATH, and that was measured on both sides",
+        "of Node 21. A quoted glob is not understood before it (exit, `Could not find`), and a bare",
+        "directory is read as a module from it on (one failing test). With no path every supported",
+        "version finds the same *.test.js files, which is what `engines: >=20` needs to be true."
+      ],
+      "name": "test",
+      "command": "node --test",
+      "adapter": "node-test"
+    },
+    {
+      "name": "docs",
+      "command": "node scripts/harness/guards/docs-lint.cjs"
+    },
+    {
+      "name": "context",
+      "command": "node scripts/harness/measure-context.js --check"
+    },
+    {
+      "name": "hygiene",
+      "command": "node scripts/harness/guards/commit-hygiene.cjs --report"
+    },
+    {
+      "name": "skills",
+      "command": "node scripts/harness/guards/skill-verify.cjs --check"
+    }
+  ],
+
+  "artifacts": [],
+
+  "env": {
+    "_readme": [
+      "THE SECRET-FILE STANCE, read by the PreToolUse env guard. The default is DENY-ALL: a matched",
+      "path is refused for reading, writing and shelling out to, whatever the tool.",
+      "guarded        glob-ish patterns for the files no agent may open.",
+      "openCarveOuts  the explicit, DATED exceptions. Each is { path, why, until } and the `until`",
+      "               is required — an undated carve-out is permanent by accident. Every open",
+      "               carve-out is reported at SessionStart until it is removed, so the exception is",
+      "               something you keep seeing rather than something you forget.",
+      "WITHOUT THIS SECTION the guard has no deny list, and a credential file is one `cat` away from",
+      "a transcript that leaves the machine."
+    ],
+    "guarded": [".env", ".env.*"],
+    "openCarveOuts": []
+  },
+
+  "commitHygiene": {
+    "_readme": [
+      "WHERE WORKING FILES ARE ALLOWED TO LIVE, read by the commit-hygiene check and the gate that",
+      "reports it.",
+      "workDirs   the directories a working file belongs in. Anything else at the top level is a",
+      "           stray.",
+      "rootAllow  the files that legitimately sit at the repo root. Everything not on this list is",
+      "           refused there.",
+      "WITHOUT THIS SECTION the root accumulates scratch files, and the first casualty is this",
+      "harness's own state: gates.json and gates.baseline.json live beside their script precisely",
+      "because a root-level baseline needed a hygiene waiver on every run, and a gate you waive",
+      "routinely is a gate you have switched off."
+    ],
+    "workDirs": ["scripts", "tests", "docs", "templates", "schema", "bin", ".claude", ".github"],
+    "rootAllow": [
+      "README.md",
+      "LICENSE",
+      "package.json",
+      "package-lock.json",
+      "CLAUDE.md",
+      "AGENTS.md",
+      "harness.config.json",
+      "skills-lock.json",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      ".gitignore",
+      ".gitattributes",
+      ".editorconfig"
+    ]
+  },
+
+  "docs": {
+    "_readme": [
+      "THE DOC CONTRACT'S HARD LIMITS, read by the doc linter.",
+      "caps        line ceilings. `AGENTS.md` is the always-on policy file, so its ceiling is the",
+      "            tightest; `CLAUDE.md` is the stub that imports it, capped at the size of a",
+      "            pointer; `subtreeAgentsMd` is a per-directory AGENTS.md (and the stub beside it);",
+      "            `default` applies to every other doc. Every value must be a POSITIVE INTEGER — a",
+      "            cap of 0 is not `no cap`, it is a cap nothing can satisfy, and a float compares",
+      "            strangely. Both are typos; neither is a policy.",
+      "exemptDirs  the directories where frozen evidence lives. Archived tracks and dated audits are",
+      "            frozen on purpose, so a linter that rewrote them to fit a cap would be editing the",
+      "            record. Listing a directory here is more than a caps exemption: it also takes the",
+      "            directory out of the no-gate-figure rule and the section-reference check, and",
+      "            (unless it is the tracks directory) out of the arrow-block, dead-link and trap-id",
+      "            rules too. So the tracks directory is deliberately NOT listed: a live tracker",
+      "            quoting a stale total is the failure the figure rule exists for, and listing it",
+      "            would switch that rule off exactly there. A research file needs no entry: it is",
+      "            exempt by its own `kind`.",
+      "WITHOUT THIS SECTION there is no ceiling on always-on context, and the file every session",
+      "loads grows until it crowds out the work."
+    ],
+    "caps": {
+      "AGENTS.md": 80,
+      "CLAUDE.md": 5,
+      "subtreeAgentsMd": 50,
+      "default": 150
+    },
+    "exemptDirs": ["docs/archive", "docs/explorations"]
+  },
+
+  "context": {
+    "_readme": [
+      "THE ALWAYS-ON CONTEXT BUDGET.",
+      "budgetFile  a HAND-WRITTEN fixture of per-file ceilings that no script ever rewrites. A",
+      "            budget a tool can update is a budget that records whatever happened rather than",
+      "            what was agreed, and the measurement then always agrees with itself.",
+      "WITHOUT THIS SECTION the context gate has no standard to grade against, and the cost of every",
+      "session's first token is nobody's business."
+    ],
+    "budgetFile": "scripts/harness/context-budget.json"
+  },
+
+  "tools": {
+    "_readme": [
+      "WHICH CODING AGENTS THIS REPO IS WIRED FOR.",
+      "enabled  tool ids, each a row of the registry, scripts/harness/tools.json. That file records",
+      "         what each agent loads and what it can deny, with the evidence behind every row.",
+      "         `node scripts/harness/tools.js --list` prints the ids; `--check` fails on an id here",
+      "         that has no row.",
+      "WITHOUT THIS SECTION the list is the default, claude-code alone. A misspelled sub-key or a",
+      "value that is not an array is a hard stop, because a list that fell back to the default would",
+      "report a tool as enabled that this file never named."
+    ],
+    "enabled": ["claude-code"]
+  }
+}

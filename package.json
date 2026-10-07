@@ -1,0 +1,88 @@
+{
+  "name": "agent-harness",
+  "version": "0.1.0",
+  "description": "A project-agnostic harness for agentic coding: a gate-line protocol with a committed baseline, PreToolUse guards, a doc contract, a context budget and a track/handoff lifecycle. Zero dependencies.",
+  "//": [
+    "ZERO DEPENDENCIES, AND THAT IS LOAD-BEARING. `dependencies` and `devDependencies` are written",
+    "out as empty objects on purpose, so the property is a line in this file and not an absence.",
+    "The harness is copied INTO the repo it grades and runs from a PreToolUse hook on a fresh clone,",
+    "before anyone has installed anything: a helper that needs a package is a guard that is silently",
+    "off on exactly that clone. It is also why CI has no install step and no lockfile to drift.",
+    "`node bin/harness.js --self-test` asserts both objects are empty, and CI asserts it again.",
+    "",
+    "`test` and `gates` must read exactly what scripts/harness/common.json `packageScripts` says:",
+    "scripts/harness/branch-sync.js compares the two. `gates:check` is the same check with the",
+    "tolerated skips DERIVED from harness.config.json and the committed baseline instead of typed.",
+    "",
+    "`test` is `node --test` with NO PATH, and that is measured, not style. `engines` says >=20, and",
+    "no path spelling works on both sides of Node 21: a quoted glob (\"tests/**/*.test.js\") is not",
+    "understood before it and exits `Could not find`, while a bare directory (tests/) is read as a",
+    "module from it on and reported as one failing test. With no path every supported version",
+    "finds the *.test.js files itself, and finds the same ones.",
+    "",
+    "`files` is what an installed copy needs and nothing else. gates.json and the red logs are one",
+    "machine's run output; the agents and skills are listed one by one so a third-party skill",
+    "sitting in a working checkout can never be published by a directory glob."
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arunpaul-H/Agent-Harness.git"
+  },
+  "homepage": "https://github.com/arunpaul-H/Agent-Harness#readme",
+  "bugs": {
+    "url": "https://github.com/arunpaul-H/Agent-Harness/issues"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "harness": "bin/harness.js"
+  },
+  "files": [
+    "bin/harness.js",
+    ".claude/settings.json",
+    ".claude/helpers/statusline.cjs",
+    ".claude/agents/explore.md",
+    ".claude/agents/implement.md",
+    ".claude/agents/research.md",
+    ".claude/agents/review.md",
+    ".claude/skills/plan/",
+    ".claude/skills/research/",
+    ".claude/skills/implement/",
+    "scripts/harness/*.js",
+    "scripts/harness/guards/*.cjs",
+    "scripts/harness/dialects/*.js",
+    "scripts/harness/*.json",
+    "!scripts/harness/gates.json",
+    "schema/",
+    "templates/",
+    "docs/reference/",
+    "skills-lock.json",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "gates": "node scripts/harness/gates.js --check --allow-skip reproducible-build=1",
+    "gates:check": "node bin/harness.js gates --check",
+    "docs": "node scripts/harness/guards/docs-lint.cjs",
+    "docs:index": "node scripts/harness/docs-index.js",
+    "context": "node scripts/harness/measure-context.js --check",
+    "hygiene": "node scripts/harness/guards/commit-hygiene.cjs --report",
+    "skills": "node scripts/harness/guards/skill-verify.cjs --check",
+    "selftest": "node bin/harness.js selftest",
+    "doctor": "node bin/harness.js doctor"
+  },
+  "keywords": [
+    "agent",
+    "harness",
+    "claude-code",
+    "hooks",
+    "gates",
+    "zero-dependency"
+  ],
+  "dependencies": {},
+  "devDependencies": {}
+}

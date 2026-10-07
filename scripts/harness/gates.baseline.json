@@ -1,0 +1,62 @@
+{
+  "_readme": [
+    "The verdict of record. Written ONLY by `node scripts/harness/gates.js --accept`,",
+    "which refuses unless the suite is green. A re-baseline is a deliberate act, so its",
+    "commit subject must start `gates:` — enforced at commit time, not here."
+  ],
+  "generatedAt": "2026-10-05T17:44:59.155Z",
+  "commit": null,
+  "dirty": true,
+  "node": "v24.11.1",
+  "gates": {
+    "test": {
+      "pass": 390,
+      "fail": 0,
+      "skipped": 0,
+      "total": 390,
+      "exit": 0,
+      "ms": 127859
+    },
+    "docs": {
+      "pass": 319,
+      "fail": 0,
+      "skipped": 0,
+      "total": 319,
+      "exit": 0,
+      "ms": 1066
+    },
+    "context": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "total": 6,
+      "exit": 0,
+      "ms": 725
+    },
+    "hygiene": {
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "total": 7,
+      "exit": 0,
+      "ms": 268
+    },
+    "skills": {
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "total": 2,
+      "exit": 0,
+      "ms": 173
+    },
+    "reproducible-build": {
+      "pass": 0,
+      "fail": 0,
+      "skipped": 1,
+      "note": "not applicable — 0 artifacts configured, 0 graded. Declare it: --allow-skip reproducible-build=1",
+      "total": 1,
+      "exit": 0,
+      "ms": 0
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# .github/osv-scanner.toml — read by the CI `scan` job via --config.
+#
+# NO IGNORES, because there is nothing to ignore: this repo has zero dependencies and no lockfile,
+# so the scanner has no package to hold an advisory against. The file exists so the policy is
+# written down BEFORE the first entry is needed, and so the job passes an explicit config rather
+# than whatever the tool defaults to.
+#
+# POLICY: an entry here is a dated bridge, never a waiver.
+#   · Every `[[IgnoredVulns]]` carries an `id`, a `reason` and an `ignoreUntil` no more than 90
+#     days out. When it lapses the advisory comes back and the job goes red, which is the point:
+#     an open-ended ignore is a decision nobody is ever asked to make again.
+#   · The `reason` says why the advisory does not reach this repo (the affected code path is never
+#     called, the package is absent from what ships) AND what removes the entry (the version bump
+#     that fixes it). "Not exploitable" with no mechanism is not a reason.
+#   · A package whose fix is inside its declared semver range is FIXED with a lockfile refresh,
+#     never listed here.
+#   · Do not extend a date without doing the work the reason names. An ignore that has been
+#     extended twice is a waiver with extra steps.
+#
+# The verdict follows a LIVE database, so an unchanged branch can turn red the day an advisory is
+# published. That is correct behaviour. The fix is the upgrade, or a dated entry shaped like this:
+#
+#   [[IgnoredVulns]]
+#   id = "GHSA-xxxx-xxxx-xxxx"
+#   ignoreUntil = 2026-12-15   # a real date, at most 90 days from the day it is written
+#   reason = "<package> <version> (dev only): <what the advisory is>. <why it cannot be reached here>. Fix is the <package> >=<version> bump."

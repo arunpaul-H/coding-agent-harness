@@ -1,0 +1,105 @@
+# ── WHO CHECKS THIS FILE ──────────────────────────────────────────
+# Three things read the EFFECT of these rules, so the file and its checkers cannot drift apart
+# silently. Change a rule here and one of them goes red:
+#
+#   1. scripts/harness/guards/commit-hygiene.cjs, the gitignore-gap probe (SHOULD_BE_IGNORED). An
+#      UNTRACKED file that git is not ignoring and that matches one of these classes is a BLOCK:
+#        dependency tree   node_modules/
+#        build output      dist/ build/ out/ coverage/ .next/ .turbo/ .vite/
+#        transient file    *.log *.tmp *.temp *.bak *.orig *.rej *.swp *.pid
+#        local database    *.db *.sqlite *.sqlite3 *.db-wal *.db-shm *.db-journal
+#        OS junk           .DS_Store Thumbs.db desktop.ini
+#        compiler cache    *.tsbuildinfo
+#        editor backup     *~
+#      Every class has a rule below. Add a class there and it needs a rule here, or the first
+#      such file anyone creates blocks their commit.
+#   2. scripts/harness/common.json `ignore.mustIgnore` / `ignore.mustTrack`, probed by
+#      branch-sync.js with `git check-ignore --no-index`: the run output, the local settings, the
+#      hygiene waiver, node_modules and a guarded secret file must come out ignored; the config,
+#      the shared settings, the agents, the skills and the two committed figure files must not.
+#   3. `node bin/harness.js doctor`, which probes the same paths plus one per pattern in
+#      `env.guarded` (harness.config.json).
+#
+# gitignore takes the LAST matching pattern, and it will not re-include a file whose parent
+# DIRECTORY is excluded. So a negation goes below the rule it overrides, and a directory you
+# intend to carve an exception out of is excluded by its contents (`dir/*`), never as `dir/`.
+
+# ── OS / editor ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# ── Node ──────────────────────────────────────────────────────────
+# The harness has ZERO dependencies and no install step, so nothing here should ever exist in
+# this repo. These are guards for the day a tool drops one in: a node_modules/ in a repo whose
+# CI never installs is a tree only one machine has.
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Transient files, local databases, caches, build output ────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.pid
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+*.tsbuildinfo
+dist/
+build/
+out/
+coverage/
+.next/
+.turbo/
+.vite/
+
+# ── Secrets ───────────────────────────────────────────────────────
+# One rule per pattern in `env.guarded` (harness.config.json): the file the secret guard refuses
+# to open and the file git refuses to track are the same list. `harness doctor` probes each and
+# prints the missing line when one is absent. To publish the SHAPE of a configuration, commit a
+# scaffolding twin (`.example`, `.template`, `.sample`); the guard deliberately does not match
+# those, so add a `!` negation for the twin BELOW the rules of this section.
+.env
+.env.*
+
+# ── Agent runtime: shared settings are tracked, personal ones are not ──
+# .claude/settings.json is the hook registration and IS this repo. The local file is one
+# person's permissions and may hold a credential in its env block.
+.claude/settings.local.json
+# Safety copies taken while changing the tracked settings (settings.json.<suffix>). Kept on disk
+# on purpose, since they hold intermediate states that are in no commit, and never versioned.
+.claude/settings.json.*
+!.claude/settings.json
+
+# ── Commit-hygiene waiver (local, per tree state) ─────────────────
+# Written by `commit-hygiene.cjs --clear` to waive a deliberate finding. Bound to a hash of the
+# tree it was granted for, so it is worthless to anyone else and dies on the next change.
+.claude/.commit-hygiene-clearance.json
+
+# ── Gate run output ───────────────────────────────────────────────
+# gates.json is the verdict of ONE run on ONE machine: it carries a timestamp, a node version
+# and a dirty flag, so versioning it would put a conflict in every pull and a figure in the diff
+# of every branch. Its COMMITTED counterpart, gates.baseline.json, is the agreed figure and is
+# deliberately NOT ignored — moving that one is a deliberate re-baseline whose commit subject
+# must start `gates:` (scripts/harness/guards/commit-hygiene.cjs).
+scripts/harness/gates.json
+# A red gate's whole output, one file per gate, kept beside it by gates.js. `*.log` above
+# already covers it; named here so removing that rule cannot put a gate's output in a commit.
+scripts/harness/gates.red.*.log
+
+# ── Stray shell brace-expansion leftovers ─────────────────────────
+# A mis-quoted brace command can drop a literal file named "{," or "{,bak}" into the tree.
+{,*
+{,}

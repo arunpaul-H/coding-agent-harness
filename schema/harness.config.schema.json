@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Harness configuration",
+  "description": "The config seam. Everything project-specific the harness knows lives in harness.config.json at the repo root; the harness code requires nothing from the repo it grades. An absent or malformed config is a hard stop with a one-line fix, never a default: a harness that invents its own gate list prints a green verdict about a suite nobody agreed to. Every section may carry a `_readme` array of strings, because JSON has no comments and the explanation of a rule has to live next to the rule.",
+  "type": "object",
+  "required": ["project", "gates"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "description": "Path or URL to this schema, so an editor can validate and complete the file as you type it.",
+      "type": "string"
+    },
+    "_readme": {
+      "description": "Prose about the file as a whole, as an array of lines. Carried through untouched; read by people, ignored by the harness.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "project": {
+      "description": "What this repo is called, and where its prose lives.",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "name": {
+          "description": "The repo's name in gate output and generated docs. Required: a report that does not say what it is about is a report that gets pasted into the wrong issue.",
+          "type": "string",
+          "minLength": 1
+        },
+        "docsRoot": {
+          "description": "Root of the doc contract — frontmatter, line caps and the generated index all apply under here. Must stay inside the repo: a linter pointed outside the tree grades files no commit can fix.",
+          "type": "string",
+          "minLength": 1,
+          "default": "docs"
+        },
+        "tracksDir": {
+          "description": "Where a track folder lives (README.md, plan.md, traps.md, handoff.md, research/). Must stay inside the repo.",
+          "type": "string",
+          "minLength": 1,
+          "default": "docs/tracks"
+        },
+        "sourceBranch": {
+          "description": "OPTIONAL, and the one key here with no default. The branch every other branch's harness files are compared against by scripts/harness/branch-sync.js. Omit it and the script DETECTS the source: the remote's published head, then the first of main, master, trunk, default that exists as a ref, reported as a fallback so a guess is never read as a setting. State it only where detection would be wrong. One branch name, no whitespace. A branch that names itself here lands in source mode, where nothing is compared, so the script fails its manifest check when this disagrees with the remote's published head.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S+$"
+        }
+      }
+    },
+
+    "gates": {
+      "description": "THE GATE REGISTRY, in run order. Each entry is a command whose LAST stdout line is exactly `GATE <name> pass=<n> fail=<n> skipped=<n>`. pass+fail+skipped is the total, and the total is the load-bearing part: comparing only `pass` cannot tell a green run from a run where checks vanished. Must be non-empty — the harness has no default suite and will not guess one. Gates run in declaration order, because a build gate has to run before the check that grades what it produced.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "command"],
+        "additionalProperties": false,
+        "properties": {
+          "_readme": {
+            "description": "Prose about the registry or this entry, as an array of lines.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "name": {
+            "description": "Kebab-case identifier. It is the token in the GATE line, the key in gates.baseline.json, the argument to --only, and the stem of gates.red.<name>.log. `reproducible-build` is reserved for the artifact check.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "command": {
+            "description": "A shell string, run from the repo root. A leading bare `node` is re-pointed at the runtime the harness is running under, so the suite is not graded by whichever node happens to be on PATH.",
+            "type": "string",
+            "minLength": 1
+          },
+          "adapter": {
+            "description": "Only for a runner that prints its OWN summary and will not print a GATE line. Omit it and the GATE line is parsed. An unknown adapter is a hard error, never a fallback: a typo would otherwise read as a gate that crashed before its verdict and send the reader to the wrong file.",
+            "type": "string",
+            "enum": ["gate-line", "node-test", "exit-code"],
+            "default": "gate-line"
+          },
+          "optional": {
+            "description": "true means an ABSENT TOOL declares a skip instead of a fail. It does not mean the gate is optional: a tool that is present and unhappy still fails. The skip is then red unless the caller passes --allow-skip <name>=1, so the decision to tolerate it stays in the invocation.",
+            "type": "boolean",
+            "default": false
+          },
+          "gateLine": {
+            "description": "The name the command actually prints in its GATE line, when it differs from `name`. This is how one script can be gated twice under two different environments.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+
+    "artifacts": {
+      "description": "THE REPRODUCIBLE-BUILD CHECK. Every listed path is hashed before the suite and after it, and the gate `reproducible-build` is red unless each committed artifact is byte-identical to what this source produces — the defect being a source edit committed without a rebuild, which ships code no gate ever rendered while every other gate stays green. AN EMPTY LIST DECLARES ITSELF: the check prints `not applicable, 0 artifacts graded` and reports skipped=1 rather than passing silently, and that skip is red unless the caller passes --allow-skip reproducible-build=1.",
+      "default": [],
+      "oneOf": [
+        {
+          "description": "Just the files. Whichever declared gate rebuilds them is what this check grades.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactEntry" }
+        },
+        {
+          "description": "The files plus the command that rebuilds them, for a repo whose build is not already a gate.",
+          "type": "object",
+          "required": ["files"],
+          "additionalProperties": false,
+          "properties": {
+            "_readme": {
+              "description": "Prose about this section, as an array of lines.",
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "command": {
+              "description": "The build command, run between the before and after hashes.",
+              "type": "string",
+              "minLength": 1
+            },
+            "files": {
+              "description": "The committed artifacts to grade.",
+              "type": "array",
+              "items": { "$ref": "#/$defs/artifactEntry" }
+            }
+          }
+        }
+      ]
+    },
+
+    "env": {
+      "description": "The secret-file stance, read by the PreToolUse env guard. The default is deny-all: a matched path is refused for reading, writing and shelling out to, whatever the tool asked.",
+      "type": "object",
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "guarded": {
+          "description": "Patterns for the files no agent may open. Without them a credential file is one `cat` away from a transcript that leaves the machine.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": [".env", ".env.*"]
+        },
+        "openCarveOuts": {
+          "description": "The explicit exceptions to the deny-all stance. Every open carve-out is reported at SessionStart until it is removed, so the exception is something you keep seeing rather than something you forget.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": ["path", "why", "until"],
+            "properties": {
+              "path": {
+                "description": "The guarded file this carve-out opens.",
+                "type": "string",
+                "minLength": 1
+              },
+              "why": {
+                "description": "Why it is open. An unexplained carve-out is never removed, because nobody can tell whether it is still needed.",
+                "type": "string",
+                "minLength": 1
+              },
+              "until": {
+                "description": "YYYY-MM-DD expiry. Required: an undated carve-out is permanent by accident.",
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "commitHygiene": {
+      "description": "Where working files are allowed to live, read by the commit-hygiene check. Without it the repo root accumulates scratch files — and the first casualty is the harness's own state, which lives beside its script precisely because a root-level baseline needed a waiver on every run, and a gate you waive routinely is a gate you have switched off.",
+      "type": "object",
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "workDirs": {
+          "description": "The directories a working file belongs in. Anything else at the top level is a stray.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": ["scripts", "tests", "docs"]
+        },
+        "rootAllow": {
+          "description": "The files that legitimately sit at the repo root. Everything not listed is refused there.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "docs": {
+      "description": "The doc contract's hard limits, read by the doc linter.",
+      "type": "object",
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "caps": {
+          "description": "Line ceilings per document. `AGENTS.md` is the always-on policy file, so its ceiling is the tightest; `CLAUDE.md` is the stub that imports it, capped at the size of a pointer; `subtreeAgentsMd` is a per-directory AGENTS.md and the stub beside it; `default` applies to every other doc. Without a ceiling the file every session loads grows until it crowds out the work.",
+          "type": "object",
+          "propertyNames": { "description": "A document name, the key `subtreeAgentsMd`, or `default`." },
+          "additionalProperties": {
+            "description": "A positive integer number of lines. A cap of 0 is not `no cap`, it is a cap nothing can satisfy; a float compares strangely. Both are typos, neither is a policy, and both are rejected.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "default": { "AGENTS.md": 80, "CLAUDE.md": 5, "subtreeAgentsMd": 50, "default": 150 }
+        },
+        "exemptDirs": {
+          "description": "Directories where frozen evidence lives. Research notes and archived tracks are dated and frozen on purpose, so a linter that rewrote them to fit a cap would be editing the record.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        }
+      }
+    },
+
+    "context": {
+      "description": "The always-on context budget.",
+      "type": "object",
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "budgetFile": {
+          "description": "A hand-written fixture of per-file ceilings that no script ever rewrites. A budget a tool can update records whatever happened rather than what was agreed, and the measurement then always agrees with itself.",
+          "type": "string",
+          "minLength": 1,
+          "default": "scripts/harness/context-budget.json"
+        }
+      }
+    },
+
+    "tools": {
+      "description": "Which coding agents this repo is wired for. Absent means [\"claude-code\"]. Each id is a row of the tool registry, scripts/harness/tools.json, which records what that agent loads and what it can deny; `node scripts/harness/tools.js --check` fails on an id with no row. The loader checks only the shape, so the seam loads with no registry.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "enabled": {
+          "description": "Tool ids, each a registry row. An array in the file replaces the default whole. An unknown sub-key or a non-array is a hard stop, never a fallback: a list that quietly fell back to the default would report a tool as enabled that the file never named.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "default": ["claude-code"]
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "artifactEntry": {
+      "description": "One committed artifact: a path string, { path } for a literal, or { glob } for a wildcard pattern. In a glob, `*` and `?` stay inside one path segment and `**/` crosses them.",
+      "oneOf": [
+        {
+          "description": "A repo-relative path, or a glob if it contains a wildcard.",
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "description": "A literal repo-relative path. An artifact listed here but absent on disk is a failing check, not a file that quietly drops out of the total.",
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": {
+            "path": { "description": "A repo-relative path, taken literally.", "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "description": "A wildcard pattern expanded against the working tree at run time.",
+          "type": "object",
+          "required": ["glob"],
+          "additionalProperties": false,
+          "properties": {
+            "glob": { "description": "A repo-relative glob, e.g. `dist/**/*.js`.", "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    }
+  }
+}

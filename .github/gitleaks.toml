@@ -1,0 +1,39 @@
+# .github/gitleaks.toml — read by the CI `scan` job (gitleaks, both the `git` and the `dir` pass).
+#
+# THE DEFAULT RULESET, AND NO WAIVERS. This file ships with zero allowlists on purpose: an
+# allowlist is calibrated against one repo's history, and one inherited from another repo waives
+# shapes nobody here has looked at. Add one only after a finding has been read and judged a false
+# positive, and write it to the standard below.
+#
+# Pass this file DIRECTLY with --config. A config that pulls this one in through `[extend] path`
+# silently drops the `targetRules` allowlists (reported against 8.30.1; NOT re-verified in this repo,
+# which ships no allowlist to lose), and the scan then goes red on every finding this file waived
+# — with nothing in the log saying the waivers were not applied.
+#
+# THE STANDARD FOR A WAIVER. Every `[[allowlists]]` entry carries all four, or it is not merged:
+#   description   WHY it is not a secret, in words a reviewer can check against the file.
+#   targetRules   the one rule it silences. Never omitted: an allowlist with no target rule
+#                 silences every rule on whatever it matches.
+#   regexes       the exact SHAPE of the value, anchored with ^ and $.
+#   paths         where that shape is allowed to appear.
+#   condition = "AND"   so both must hold. A real key in the same file still fires, and the same
+#                 placeholder in a different file still fires.
+# A path-only allowlist is the thing to refuse in review: it turns the scanner off for a file, and
+# the next real credential pasted into that file is invisible.
+#
+# A worked example of the shape, kept commented out because nothing in this repo needs it:
+#
+#   # The literal placeholder in a runbook's `curl -u USER:PASS https://example.com/...`. The
+#   # default curl-auth-user allowlist only exempts lower-case placeholders.
+#   [[allowlists]]
+#   description = "curl -u USER:PASS placeholder in docs"
+#   targetRules = ["curl-auth-user"]
+#   condition = "AND"
+#   regexes = ['''^USER:PASS$''']
+#   paths = ['''(?:^|/)docs/.+\.md$''']
+
+title = "agent-harness gitleaks config"
+minVersion = "v8.25.0"
+
+[extend]
+useDefault = true

@@ -1,0 +1,9 @@
+# LF everywhere, on every platform. This is not a style preference: the harness HASHES files.
+# skills-lock.json pins a sha256 per skill file, a phase receipt is a hash of the handoff block, and
+# branch-sync compares shared files byte for byte. A checkout that converts to CRLF changes every one
+# of those digests without anyone having edited anything, and the gates go red on one machine only.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.woff2 binary

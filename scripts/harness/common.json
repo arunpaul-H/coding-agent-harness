@@ -1,0 +1,89 @@
+{
+  "_readme": [
+    "WHAT EVERY BRANCH SHARES. scripts/harness/branch-sync.js reads this file and checks one thing per",
+    "entry. On the SOURCE BRANCH (the repo's default branch, detected — see the script's header) it",
+    "checks that every listed path exists and every probe holds; on any other branch it checks that",
+    "every listed path is byte-identical to the source's — and it reads THIS FILE FROM THE SOURCE REF,",
+    "never from the branch under test, so a branch cannot exempt itself by editing its own copy.",
+    "",
+    "files       compared whole.",
+    "dirs        mirrored exactly: the same file set, every file byte-identical. A file the source no",
+    "            longer has is drift too, which is how a deleted harness helper stops lingering on an",
+    "            old branch and going on being loaded there.",
+    "perBranch   deliberately NOT compared; only their existence is checked. These are the files that",
+    "            say what THIS branch is, or hold figures measured HERE.",
+    "sections    compared with one `## ` section masked, so a branch can say what it is in one section",
+    "            of AGENTS.md while the rest of that file stays common. `except` is a heading PREFIX.",
+    "ignore      .gitignore is per-branch and its order matters, so its EFFECT is probed instead, with",
+    "            `git check-ignore --no-index`: mustTrack must NOT be ignored, mustIgnore must be.",
+    "packageScripts  package.json is per-branch; these npm scripts must read exactly this.",
+    "",
+    "A path listed NOWHERE is per-branch by default and is not checked at all. Only `perBranch` buys an",
+    "existence check, so list a file there when every branch must have one of its own.",
+    "",
+    "ADDING AN ENTRY IS ITSELF A HARNESS CHANGE: make it on the source branch, then run",
+    "`node scripts/harness/branch-sync.js --apply` on each other branch. Adding it on a branch is the",
+    "one edit the gate is guaranteed not to see, because the manifest in force is the source's.",
+    "Procedure and rationale: docs/reference/branches/README.md"
+  ],
+
+  "files": [
+    "CLAUDE.md",
+    ".claude/settings.json",
+    ".github/workflows/ci.yml",
+    ".gitattributes",
+    "docs/reference/DOC-STANDARD.md",
+    "skills-lock.json"
+  ],
+
+  "dirs": [
+    ".claude/helpers",
+    ".claude/agents",
+    ".claude/skills/plan",
+    ".claude/skills/research",
+    ".claude/skills/implement",
+    "scripts/harness",
+    "schema",
+    "templates",
+    "tests",
+    "docs/reference/skill-safety",
+    "docs/reference/branches",
+    "docs/reference/routing"
+  ],
+
+  "perBranch": [
+    "harness.config.json",
+    "scripts/harness/context-budget.json",
+    "scripts/harness/gates.baseline.json",
+    "scripts/harness/harness-baseline.json"
+  ],
+
+  "sections": [
+    { "path": "AGENTS.md", "except": "## 1." }
+  ],
+
+  "ignore": {
+    "mustTrack": [
+      "harness.config.json",
+      ".claude/settings.json",
+      ".claude/agents/review.md",
+      ".claude/skills/research/SKILL.md",
+      "scripts/harness/common.json",
+      "scripts/harness/gates.baseline.json",
+      "scripts/harness/context-budget.json"
+    ],
+    "mustIgnore": [
+      "scripts/harness/gates.json",
+      "scripts/harness/gates.red.test.log",
+      ".claude/settings.local.json",
+      ".claude/.commit-hygiene-clearance.json",
+      "node_modules/example/index.js",
+      ".env.local"
+    ]
+  },
+
+  "packageScripts": {
+    "test": "node --test",
+    "gates": "node scripts/harness/gates.js --check --allow-skip reproducible-build=1"
+  }
+}

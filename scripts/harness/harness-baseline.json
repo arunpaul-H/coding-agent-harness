@@ -1,0 +1,109 @@
+{
+  "measured": "2026-10-06T00:14:15.133Z",
+  "project": "agent-harness",
+  "harnessOnly": true,
+  "method": "bytes/4, with a CRLF pair taken as the one byte git stores; the injected files are the policy routes of the enabled tools; auto-memory clipped at the loader limit; subtree instruction files are taken as the largest single directory of them, since one touch loads one directory; hook stdout measured by running the wired commands; the generated doc index sits under onDemand and is excluded from startupTokens, because nothing injects it",
+  "tokens": {
+    "injected": 1560,
+    "nestedOnTouchWorst": 1047,
+    "nestedOnTouchTotal": 1047,
+    "subagentInjected": 2567,
+    "policyReads": 2135,
+    "listing": 333,
+    "hookStdout": 100,
+    "onDemand": 856,
+    "startupTokens": 5175
+  },
+  "injected": [
+    {
+      "file": "CLAUDE.md",
+      "bytes": 145,
+      "subagent": true
+    },
+    {
+      "file": "AGENTS.md",
+      "bytes": 5933,
+      "subagent": true
+    },
+    {
+      "file": "~/.claude/projects/C--Projects-Harness/memory/MEMORY.md",
+      "bytes": 160,
+      "subagent": false
+    }
+  ],
+  "nestedOnTouch": [
+    {
+      "file": "templates/AGENTS.md",
+      "bytes": 4042,
+      "subagent": true
+    },
+    {
+      "file": "templates/CLAUDE.md",
+      "bytes": 145,
+      "subagent": true
+    }
+  ],
+  "policyReads": [
+    {
+      "file": "docs/reference/routing/README.md",
+      "bytes": 8541,
+      "leadOnly": true
+    }
+  ],
+  "onDemand": [
+    {
+      "file": "docs/INDEX.md",
+      "bytes": 3424,
+      "openedWhenNeeded": true
+    }
+  ],
+  "listing": [
+    {
+      "set": ".claude/skills (repo)",
+      "count": 3,
+      "bytes": 689,
+      "global": false
+    },
+    {
+      "set": ".claude/agents (repo)",
+      "count": 4,
+      "bytes": 644,
+      "global": false
+    }
+  ],
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "node scripts/harness/guards/skill-verify.cjs --hook",
+      "bytes": 398,
+      "exit": 0
+    },
+    {
+      "event": "SessionStart",
+      "command": "node scripts/harness/guards/env-guard.cjs --rearm-check",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "event": "SessionStart",
+      "command": "node scripts/harness/guards/docs-lint.cjs --memory-check",
+      "bytes": 0,
+      "exit": 0
+    },
+    {
+      "event": "SessionStart",
+      "command": "node scripts/harness/branch-sync.js --hook",
+      "bytes": 0,
+      "exit": 0
+    }
+  ],
+  "groundTruth": {
+    "transcript": "d0194eb9",
+    "at": "2026-10-05T21:55:20.995Z",
+    "model": "claude-opus-5-5",
+    "input": 2,
+    "cacheCreate": 23406,
+    "cacheRead": 33658,
+    "firstTurnTokens": 57066
+  }
+}

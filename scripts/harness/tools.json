@@ -1,0 +1,288 @@
+{
+  "_readme": [
+    "THE TOOL REGISTRY. One row per coding agent the harness knows about. Harness code takes a tool",
+    "fact from a row here and names no tool itself, with one stated exception: the DEFAULTS of",
+    "scripts/harness/config.js, which cannot read this file (this file's script loads that one). They",
+    "spell the default id of `tools.enabled` and the default tool's two file names, as the",
+    "`docs.caps` keys and the `commitHygiene.rootAllow` entries. The tests pin some rows by id.",
+    "A second stated exception: the direct CLI of scripts/harness/guards/phase-guard.cjs names ONE",
+    "dialect, the wire format that CLI has always read and printed. It is the legacy format of a",
+    "guard run by hand or by a gate, not a fact about an enabled tool; scripts/harness/hook.js, the",
+    "registered path, takes the dialect from the row.",
+    "`node scripts/harness/tools.js --check` validates every row and every id in `tools.enabled`",
+    "of harness.config.json; `--list` prints id, tier and evidence.",
+    "",
+    "EVERY ROW CARRIES ITS EVIDENCE. `docs` means the cells were read off the vendor's pages and the",
+    "tool was never run here: field names, exit codes and nested loading are paraphrase. `ran` means",
+    "somebody ran the tool, and the row then records the `command` that was run. A `docs` row is",
+    "never reported as verified. Promote a row only by running the tool and recording the command.",
+    "",
+    "A cell the evidence does not establish is null, or `unknown` for `nested`. It is never a guess:",
+    "null reads as 'nobody knows yet', and a plausible value reads as a fact.",
+    "",
+    "id            kebab-case; what `tools.enabled` names.",
+    "policy        how the tool reaches the one policy file, AGENTS.md. `native`: it auto-loads",
+    "              `file`. `import`: `file` is a stub whose only content is the line importing the",
+    "              policy file (the doc gate fails a stub carrying anything else). `config`:",
+    "              `setting` in `file` points it there. null only for tier `inherits`. The context",
+    "              gate measures what the ENABLED rows load: `file` for native, the stub plus the",
+    "              policy file for import, the policy file for config.",
+    "nested        when a subdirectory's instruction file loads: `on-touch`, `startup` (the chain",
+    "              down to the cwd, once), `yes` (read, timing not established), `unknown`.",
+    "hookConfig    the file a deny-capable pre-tool hook is registered in, or null.",
+    "dialect       the wire format of that hook, one of `dialects` below, or null. A dialect is",
+    "              listed once; the list may be empty when no row has one.",
+    "sessionStart  true if the tool has a session-start hook event, false if it has none.",
+    "projectHooks  true if `hookConfig` can be a checked-in project file.",
+    "tier          full       deny-capable hook + session-start + checked-in project config",
+    "              guard-only deny-capable hook, but no session-start or no project-level config",
+    "              backstop   no hook the harness can wire: instructions, git hook and CI gate.",
+    "                         `dialect` is null. A hook file the tool documents may still be",
+    "                         recorded in `hookConfig`: known, and not wireable without a dialect",
+    "              inherits   a model, not an agent: takes the tier of the host it runs in. Every",
+    "                         cell is null, and `tools.enabled` names the host's row, never this",
+    "evidence      `docs` or `ran`.   asOf  the date the evidence was gathered.",
+    "source        where each cell came from.   notes  what the row does not establish.",
+    "",
+    "Evidence for every `docs` row: docs/tracks/multi-tool/research/2026-10-05-tool-instruction-surfaces.md"
+  ],
+
+  "dialects": ["claude", "gemini", "cursor", "antigravity"],
+
+  "tools": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "policy": { "mode": "import", "file": "CLAUDE.md" },
+      "nested": "on-touch",
+      "hookConfig": ".claude/settings.json",
+      "dialect": "claude",
+      "sessionStart": true,
+      "projectHooks": true,
+      "tier": "full",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://code.claude.com/docs/en/memory",
+        "https://code.claude.com/docs/en/hooks"
+      ],
+      "notes": "CLAUDE.md is a stub whose only content is the line importing AGENTS.md; the policy body is AGENTS.md. EVIDENCE IS `docs` BECAUSE THE POLICY ROUTE WAS NEVER RUN: that the import delivers AGENTS.md rests on the first source, and whether it reaches a subagent has not been probed. The tool WAS run on 2026-10-05, before the stub existed (started at this repo's root, asked which instruction files it held, then asked to Write a scratch file whose body spells the guarded secret filename), and that run observed two things only: the root CLAUDE.md, which then held the policy body, was in context at session start; and the pre-tool guard registered in .claude/settings.json denied the Write (hookConfig, dialect, projectHooks; trap MT-01). `nested` and `sessionStart` were not observed and rest on the two sources. To promote this row to `ran`: re-run against the stub, including from a spawned subagent, and record that command."
+    },
+    {
+      "id": "codex-cli",
+      "name": "Codex CLI",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "startup",
+      "hookConfig": ".codex/hooks.json",
+      "dialect": "claude",
+      "sessionStart": true,
+      "projectHooks": true,
+      "tier": "full",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        "https://learn.chatgpt.com/docs/hooks"
+      ],
+      "notes": "Instruction files load from the repo root down to the cwd, once at startup. Whether one below the cwd loads when touched is not established. An `ask` spelling is not established, so the dialect emits an ask as a deny for this row: a call no guard can read (the patch tool, a server-defined tool) is refused, not asked about."
+    },
+    {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "policy": { "mode": "config", "file": ".gemini/settings.json", "setting": "context.fileName" },
+      "nested": "on-touch",
+      "hookConfig": ".gemini/settings.json",
+      "dialect": "gemini",
+      "sessionStart": true,
+      "projectHooks": true,
+      "tier": "full",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://geminicli.com/docs/cli/gemini-md/",
+        "https://geminicli.com/docs/hooks/",
+        "https://geminicli.com/docs/hooks/reference/"
+      ],
+      "notes": "Whether hooks are on by default is not established. NOT USABLE AS WRITTEN: this tool's own tool names were never read, so the dialect has no name-to-action table, every call is opaque, and with no `ask` spelling every call no guard can read is REFUSED. That is every call spelling neither `command` nor a path plus `content`, every plain file read and search included. `tier` records what the tool offers, not that this wiring is workable; registering the hook needs the tool run and the table written first."
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "yes",
+      "hookConfig": ".agents/hooks.json",
+      "dialect": "antigravity",
+      "sessionStart": false,
+      "projectHooks": true,
+      "tier": "guard-only",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://antigravity.google/docs/rules",
+        "https://antigravity.google/docs/hooks/"
+      ],
+      "notes": "No session-start event is documented, and a substitute for one is not established. Nested files are read; eager versus on-touch rests on a secondary source only. An exit-code deny is not established."
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "yes",
+      "hookConfig": ".cursor/hooks.json",
+      "dialect": "cursor",
+      "sessionStart": true,
+      "projectHooks": true,
+      "tier": "full",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://cursor.com/docs/context/rules",
+        "https://cursor.com/docs/agent/hooks",
+        "https://cursor.com/docs/cli/using"
+      ],
+      "notes": "A nested AGENTS.md combines with its parents, the more specific winning; when it loads is not stated. PARTLY USABLE AS WRITTEN: the field names of the general pre-tool event and of the MCP event were never read, so both are opaque, and with no `ask` spelling every such call no guard can read is REFUSED, a plain read or a call that nests its arguments included. Only the shell-execution and file-read events can be registered without blocking ordinary work."
+    },
+    {
+      "id": "kimi-code",
+      "name": "Kimi Code",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "unknown",
+      "hookConfig": "~/.kimi-code/config.toml",
+      "dialect": "claude",
+      "sessionStart": true,
+      "projectHooks": null,
+      "tier": "guard-only",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://moonshotai.github.io/kimi-code/en/customization/agents.html",
+        "https://moonshotai.github.io/kimi-code/en/customization/hooks.html",
+        "https://moonshotai.github.io/kimi-code/en/configuration/config-files.html"
+      ],
+      "notes": "Only a user-level hook config is documented; a project-level hooks file, nested loading and merge order are not established. The stdin cell names neither `tool_name` nor `tool_input` (`plus event fields`), so until the tool is run every call may arrive opaque; and an `ask` spelling is not established, so the dialect emits an ask as a deny for this row. Together: a call no guard can read is refused."
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "policy": null,
+      "nested": null,
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "inherits",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://api-docs.deepseek.com/guides/coding_agents/"
+      ],
+      "notes": "A model with no first-party agent. It loads and enforces whatever the host it runs in does, so enable the host's row, not this one."
+    },
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot cloud agent",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "yes",
+      "hookConfig": ".github/hooks/*.json",
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": true,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://docs.github.com/en/copilot/how-tos/configure-custom-instructions/add-repository-instructions",
+        "https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-hooks"
+      ],
+      "notes": "The nearest AGENTS.md in the tree takes precedence. Its docs describe checked-in hook files with a pre-tool event that can deny, which is what hookConfig and projectHooks record. The wire protocol was not read, so no dialect is recorded, nothing is wired, and the tier stays backstop until one is. A session-start event is not established."
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf (docs now titled Devin Desktop)",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "yes",
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://docs.devin.ai/desktop/cascade/agents-md"
+      ],
+      "notes": "A root AGENTS.md is an always-on rule; one in a subdirectory becomes a glob rule for that directory. Hooks were not read."
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "unknown",
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://docs.cline.bot/customization/cline-rules"
+      ],
+      "notes": "AGENTS.md is detected and then toggled in the tool's Rules panel, so a user can switch it off. Hooks were not read."
+    },
+    {
+      "id": "aider",
+      "name": "Aider",
+      "policy": { "mode": "config", "file": ".aider.conf.yml", "setting": "read" },
+      "nested": "unknown",
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://aider.chat/docs/usage/conventions.html",
+        "https://agents.md/"
+      ],
+      "notes": "Nothing is auto-loaded. The `read` setting naming AGENTS.md comes from agents.md, not from the tool's own conventions page."
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "policy": { "mode": "native", "file": "AGENTS.md" },
+      "nested": "unknown",
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://opencode.ai/docs/rules/",
+        "https://opencode.ai/docs/plugins/"
+      ],
+      "notes": "AGENTS.md wins and CLAUDE.md is the fallback. It can block a tool call only through a JS or TS plugin, not a command hook, so there is nothing for the harness to wire."
+    },
+    {
+      "id": "qwen-code",
+      "name": "Qwen Code",
+      "policy": { "mode": "native", "file": "QWEN.md" },
+      "nested": "unknown",
+      "hookConfig": null,
+      "dialect": null,
+      "sessionStart": null,
+      "projectHooks": null,
+      "tier": "backstop",
+      "evidence": "docs",
+      "asOf": "2026-10-05",
+      "source": [
+        "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/",
+        "https://qwenlm.github.io/qwen-code-docs/en/users/features/hooks/"
+      ],
+      "notes": "QWEN.md is the one file both pages agree it loads. Its settings page also lists AGENTS.md as a default and a `context.fileName` setting that changes the name, while its hooks page names only QWEN.md: whether AGENTS.md loads natively is not established, and the file that setting lives in was not recorded, so no `config` route is claimed. Hooks exist per the second source; where they are registered and their protocol were not read. Import syntax is not established."
+    }
+  ]
+}

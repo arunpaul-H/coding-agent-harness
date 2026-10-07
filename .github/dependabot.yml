@@ -1,0 +1,53 @@
+# Dependabot VERSION updates. GitHub reads this file from the DEFAULT branch only, so a copy on any
+# other branch does nothing, and no other branch gets version updates from it. That is why this
+# file is deliberately NOT in scripts/harness/common.json: there is exactly one copy that counts.
+#
+# Alerts and SECURITY updates are repository settings, not this file. Security updates skip
+# `schedule`, `cooldown` and `open-pull-requests-limit`, and join no group below (a group defaults
+# to applies-to: version-updates).
+#
+# Cost: Dependabot's own jobs are free on standard runners. The CI a PR starts is not. ci.yml leaves
+# dependabot/** out of its push trigger, so each PR open or rebase starts ONE pull_request run and
+# not two. Hence one grouped PR per ecosystem per interval, and a small PR limit.
+version: 2
+updates:
+  # ⚠ SHA pins in the workflow keep their `# vX.Y.Z` comment only if the comment ENDS with the
+  # version. Put anything after it and Dependabot stops updating that pin, silently.
+  # It bumps the `uses:` pins only. The scanner binaries in the `scan` job are pinned by version and
+  # SHA256 in an env block Dependabot does not read: those are bumped by hand, both values together.
+  - package-ecosystem: "github-actions"
+    directory: "/"                 # scans .github/workflows/
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7              # skip a release under a week old: a bad tag is usually pulled by then
+    open-pull-requests-limit: 1
+    groups:
+      actions:                     # every action bump, majors included, in ONE PR
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  # This repo has ZERO dependencies and zero devDependencies, so today this entry has nothing to
+  # open a PR about. It is here so that the day someone adds a package, the update policy already
+  # exists — and so that adding one is visibly a change to a repo whose CI has no install step.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
+    groups:
+      npm:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # A major needs code changes: a deliberate upgrade, not a weekly PR that stays red. Version
+      # updates only — a security fix that needs a major still arrives as a security PR.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "deps"

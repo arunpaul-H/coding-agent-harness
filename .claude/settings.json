@@ -1,0 +1,48 @@
+{
+  "_comment": "Every hook command here is a FILE run by `node`, and none is wrapped in anything. NEVER wrap a hook in `cmd /c` on Windows. Hook commands run under Git Bash there, and MSYS path conversion rewrites the `/c` switch into a filesystem path before cmd ever sees it. cmd then starts INTERACTIVE instead of running one command: it echoes its banner into the session context and executes the hook's stdin payload as a command line, so every `>` inside a tool call or its output (each `=>` and `->`) becomes a redirect that writes a 0-byte file into the repo root, named after a fragment of whatever was being run. The debris looks like a quoting bug in your own code and is not one. This was measured, not guessed, and it is the reason commit-hygiene.cjs treats a 0-byte untracked file as a BLOCK. `node \"$CLAUDE_PROJECT_DIR/...\"` works unwrapped in Git Bash, macOS and Linux alike. THE HOOKS ARE ONE FILE: scripts/harness/hook.js is the single entry, registered once per event. It looks `--tool` up in scripts/harness/tools.json, has that row's dialect module (scripts/harness/dialects/) parse the payload into a neutral event, runs the event's ordered handler list, and has the dialect spell the verdict. A DENY IS THE JSON ON STDOUT AND EXIT CODE 2, both, because a tool that fails open on any other code would read the JSON alone as a pass. An ask and an allow exit 0. A guard that throws, a payload that does not parse and a registration that names the wrong event are each a deny with a reason, never a silent allow. At session start nothing can be refused, so the exit is 0 whatever was found and a report that could not run is named in the context. Each guard under scripts/harness/guards/ still has its own CLI for the gates and for a person (--self-test, --report, --check and so on); run that way it exits 0 and the decision rides in the JSON it prints.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "_comment": "The one pre-tool entry. THREE GUARDS RUN IN THIS ONE PROCESS, in this order, and the first deny ends the run. (1) The secret-file guard: deny-all on `env.guarded` in harness.config.json; the scaffolding twins (.example, .template, .sample, .dist) are deliberately NOT matched, because a guard that blocks its own recommended alternative trains people to click through it. An exception is a dated entry in `env.openCarveOuts`, never an approval and never an edit to the guard. It tests EVERY STRING the tool input carries as text, keys included and at any depth, so a server-defined field naming the file is caught whatever the server chose to call it. (2) The commit-hygiene gate: self-filters to git commit/push and reads the tree for nothing else; denies while the tree carries strays, secrets, .gitignore gaps or root clutter (a modified tracked file is NOT a finding). Waive a finding you have READ with `node scripts/harness/guards/commit-hygiene.cjs --clear \"<reason>\"`; the waiver is bound to the tree state and to the content of the settings files. (3) The phase guard: denies the three things only scripts/harness/close-phase.js may do: a bare move into the archive directory, a hand-flipped `status:` or hand-typed receipt in a track doc (the prior status is read off DISK), and a gate figure written into a doc the linter governs; the escape hatch for the last is `<!-- figure-ok: why -->`, and the reason is required. THE MATCHER IS THE UNION of what the three were each registered for, and which guard is offered which call is no longer said here: the dialect maps a tool name to a neutral action (shell, read, search, write) and each handler in hook.js lists the actions it looks at. The secret-file guard sees all four, the commit gate a shell call, the phase guard a shell call or a write. `mcp__.*` is in the matcher because an MCP payload carries whatever fields its server defines: no dialect can vouch for its shape, so it is OPAQUE and offered to all three, and one that carries no field a guard can read is an ASK that names the payload's keys and never its values. A tool the matcher does not name never reaches the entry at all.",
+        "matcher": "Bash|PowerShell|Read|Grep|Glob|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/harness/hook.js\" --tool claude-code --event pre-tool",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "_comment": "The one session-start entry. FOUR REPORTERS RUN IN THIS ONE PROCESS, in this order; each is silent when it has nothing to say, none can stop a session, and what they say is joined into one context. (1) Skill drift against skills-lock.json (guards/skill-verify.cjs): silent when every skill on disk is pinned and matches its locked digest; a mismatch is a stop, not a warning, because a skill is instructions the agent will follow. AS SHIPPED IT PRINTS ONE LINE every session: the lock ships empty on purpose, so the skills this repo carries are named as unpinned, along with any plugin enabled on the machine. (2) The secret-guard carve-out report (guards/env-guard.cjs): silent while `env.openCarveOuts` is empty and every wildcard-free guarded path has both of its Read denies in `permissions.deny` below, which hook.js reads out of THIS file and hands to the guard. Every OPEN carve-out is reported at every session start for as long as it exists, and an EXPIRED one is named as expired. (3) The auto-memory index check (guards/docs-lint.cjs): the doc gate deliberately does not go red for a file outside the repo, so the one-pointer-per-line rule bites here instead, on the machine that pays for it. (4) Harness drift (scripts/harness/branch-sync.js): silent on the source branch and on any branch whose common harness files match the source's; on a drifted branch it names the paths and the one command that pulls them in.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/harness/hook.js\" --tool claude-code --event session-start",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "_comment_statusLine": "One line out whatever goes in: model, branch, directory and context percentage. The runtime renders this into a fixed-height strip, so two lines corrupt the frame and a throw blanks it; statusline.cjs can do neither. The `:-.` fallback is for a shell where CLAUDE_PROJECT_DIR is not exported to the status command.",
+  "statusLine": {
+    "type": "command",
+    "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/statusline.cjs\""
+  },
+  "_comment_permissions": "DENY `node -e` and `node --eval`: an inline one-liner is word-split by the shell before node sees it, its `=>` is read as a redirect, and what is left both runs wrong and drops 0-byte debris files named after fragments of the script. Write a script file instead; that is why every hook above is one, and `allow` covers running them. DENY Read on each WILDCARD-FREE path in `env.guarded`, in BOTH spellings: the `./` form matches the path as the repo writes it and the `//**/` form matches the absolute path a tool call usually carries, and either alone leaves the other call shape open. A wildcard pattern such as `.env.*` is deliberately NOT denied here: a settings glob has no way to say `but not the .example twin`, so it would block the documented alternative at the one layer that cannot make an exception. The env-guard hook has that exception and covers the wildcard. The session-start entry (and `node scripts/harness/guards/env-guard.cjs --rearm-check` by hand) reports if a guarded path is missing either spelling, so add both when you add a literal path to `env.guarded`.",
+  "permissions": {
+    "allow": [
+      "Bash(node .claude/*)",
+      "Bash(node scripts/harness/*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(//**/.env)",
+      "Bash(node -e*)",
+      "Bash(node --eval*)"
+    ]
+  }
+}

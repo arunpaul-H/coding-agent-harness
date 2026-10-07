@@ -1,0 +1,324 @@
+name: CI
+
+on:
+  # Every branch, not only the default one. A long-lived branch that is never merged back has its
+  # suite run nowhere but a developer's machine if the trigger names one branch.
+  # dependabot/** is left to the pull_request trigger: Dependabot opens a PR for every branch it
+  # pushes, so a push run there is the same verdict billed twice (.github/dependabot.yml).
+  push:
+    branches: ['**', '!dependabot/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same ref supersedes the older run; the superseded run is pure cost. The
+# default branch is exempt: each run there gets a group of its own. ⚠ A shared group is NOT enough
+# even with cancel-in-progress off, because GitHub keeps one PENDING run per group and replaces
+# it, so a burst of pushes to the default branch would leave a commit with a cancelled run and no
+# verdict.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name == github.event.repository.default_branch && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+jobs:
+  # ONE verdict per Node version. Every gate ends in a machine-readable GATE line, gates.js
+  # collects them, and `--check` compares the lot against the committed gates.baseline.json. That
+  # is the whole point: a figure lives in gates.json or in that baseline or it does not exist, and
+  # a check that quietly VANISHES is red here rather than invisible for three phases.
+  gates:
+    name: gates (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # One leg red must not cancel the other: "red on 20 only" is the finding the matrix exists
+      # to produce, and a cancelled leg reports nothing.
+      fail-fast: false
+      matrix:
+        # package.json says engines >=20. This repo has zero dependencies and no install step, so
+        # a second leg costs seconds and turns that line from a claim into something a run proved.
+        # 20 is the floor the claim names; 22 is the next LTS line. Raise the floor here and in
+        # `engines` in the same commit, or one of them is lying.
+        node: [20, 22]
+    steps:
+      # ⚠ fetch-depth: 0, because the doc gate reads git. On the default shallow clone
+      # `git log -- <file>` sees exactly one commit and `git log --grep` sees none, so the
+      # frozen-evidence and plan-first_commit rules answer "fine" while checking nothing. This
+      # stops two rules being quietly inert on the one box where nobody is watching them.
+      # ⚠ Every action is pinned to a full commit SHA, never a tag: a tag can be moved under you,
+      # and a moved tag runs someone else's code with this job's token. The `# vX.Y.Z` comment
+      # must END with the version, or Dependabot stops updating the pin.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # Nothing here talks to the remote after checkout: the doc gate reads the local history
+          # that fetch-depth: 0 already fetched, and no step pushes. So the token has no reason to
+          # stay in the git config where anything a later step runs could read it.
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          # setup-node switches a package-manager cache on by itself once package.json gains a
+          # packageManager field. There is nothing to cache here. Off on purpose, not by default.
+          package-manager-cache: false
+
+      # THERE IS NO INSTALL STEP, AND THAT IS NOT AN OMISSION. This repo has zero dependencies and
+      # zero devDependencies: the harness is copied into the repo it grades and runs from a hook
+      # on a fresh clone, before anyone has installed anything, so a helper that needs a package
+      # is a guard that is silently off on exactly that clone. `npm ci` here would also need a
+      # lockfile that does not exist. The property is ASSERTED rather than assumed, because the
+      # day someone adds a package this job would otherwise keep passing while every fresh
+      # checkout of the harness broke.
+      - name: Zero dependencies (asserted, so there is nothing to install)
+        run: |
+          node -e '
+            const p = require("./package.json");
+            const n = Object.keys(p.dependencies || {}).length + Object.keys(p.devDependencies || {}).length
+              + Object.keys(p.optionalDependencies || {}).length + Object.keys(p.peerDependencies || {}).length;
+            const fs = require("node:fs");
+            const lock = ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"].filter((f) => fs.existsSync(f));
+            if (n || lock.length) {
+              console.error("::error::package.json declares " + n + " dependenc(ies) and the tree holds " + (lock.join(", ") || "no lockfile")
+                + ". The harness is zero-dependency by contract (CONTRIBUTING.md); remove them.");
+              process.exit(1);
+            }
+            console.log("0 dependencies, 0 devDependencies, no lockfile: nothing to install");
+          '
+
+      # THE INPUTS THIS RUNNER DOES NOT HAVE. Each is supplied implicitly by a developer's machine
+      # and each can move a gate's verdict, so they are printed rather than assumed: a run whose
+      # environment drifted is then legible from its own log instead of from someone's memory of
+      # what CI is like. A report, not a verdict: it always exits 0.
+      - name: Host-dependent inputs
+        run: node bin/harness.js host
+
+      # Every `--self-test` in the repo. The self-tests are where each guard's DECISIONS are
+      # driven with literals, including the cases that must come out NO; the gate suite below can
+      # only ever prove that the happy path of a real tree works.
+      - name: Self-tests
+        run: node bin/harness.js selftest
+
+      # EVERY REGISTERED GATE RUNS HERE. Read the list off `gates.js --self-test`, which prints
+      # every name, never off a comment: a count in prose is wrong the day a gate is added.
+      # Some gates cannot do here everything they do on a developer's machine, and each DECLARES
+      # the shortfall as a skip rather than being left out of the run. Which skips are tolerated
+      # is NOT a literal in this file. It is derived from what the repo has committed:
+      #   · harness.config.json — an empty `artifacts` list makes the reproducible-build check
+      #     declare skipped=1, because it graded nothing and may not say it passed;
+      #   · gates.baseline.json — a row recorded with skipped>0 exists only because someone ran
+      #     `--accept --allow-skip` for it, which is a human decision with a `gates:` commit.
+      # ONE skip is a property of the RUNNER and is declared here, because nothing committed can
+      # know it: the doc gate's rule 10 reads the agent runtime's memory index, which lives in a
+      # user profile and never on a runner. The gate reports skipped=1 for it rather than claim a
+      # sweep it did not make, so without `docs=1` this job is red on every push for a file no
+      # commit can add. It is merged by the LARGER count, never the sum: a baseline accepted on a
+      # box with the same shortfall already says docs=1, and adding the two would tolerate a
+      # second skip nobody declared.
+      # The value is ECHOED before it is used, so the tolerance is in the log of the run it
+      # applied to. The counts are exact on purpose: they tolerate precisely those skips and no
+      # more, so one more check quietly becoming environment-dependent is red rather than absorbed.
+      # ⚠ A declared skip still counts toward the gate's total, so pass-by-absence stays live for
+      # a gate that skips: one that skips more checks than it declares is red here too.
+      - name: Gates
+        env:
+          RUNNER_SKIPS: docs=1
+        run: |
+          SKIPS=$(node bin/harness.js gates --print-allow-skip --with "$RUNNER_SKIPS")
+          echo "declared by harness.config.json, gates.baseline.json and this runner ($RUNNER_SKIPS): --allow-skip ${SKIPS:-<none>}"
+          node scripts/harness/gates.js --check --allow-skip "$SKIPS"
+
+      # gates.json is the artifact worth keeping from a run: it is the figure of record for that
+      # commit, and a red run's copy is what a bisect reads. Named per leg, because two legs
+      # uploading one name is a conflict that fails the second upload.
+      - name: Upload gates.json
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gates-json-node${{ matrix.node }}
+          path: scripts/harness/gates.json
+          if-no-files-found: warn
+
+      # ⚠ `if: always()` IS LOAD-BEARING. Without a condition Actions defaults a step to
+      # success(), so the one CI-side sweep for strays, secrets and gitignore gaps would be
+      # skipped on every red run — which is exactly the run that needs it, and means a step that
+      # looks present in this file can go its whole life without executing. The report already
+      # ran once as the `hygiene` gate; this copy prints it in full on its own line of the log.
+      - name: Tree hygiene
+        if: always()
+        run: node scripts/harness/guards/commit-hygiene.cjs --report
+
+  # THE SECOND VERDICT: secrets, dependency advisories, SAST, and this workflow itself. A job of
+  # its own so neither red hides the other, and pass/fail rather than a figure: these tools report
+  # findings, not counts, so there is nothing for gates.baseline.json to hold.
+  # Every tool is an exact version from its official release, checked against a pinned SHA256 (or
+  # an image digest) before it runs.
+  # NO SARIF ANYWHERE. Code scanning is not available to every repository (a private repo needs a
+  # paid plan for it), and where it is absent an upload step fails or reports nowhere — a job
+  # that looks like it filed its findings and did not is a false green. The log is the report.
+  # Each scanner runs even when an earlier one is red, so one run lists every finding, and the
+  # job is red if any of them is. The two .github/*.toml files are the whole of what is waived,
+  # each entry with its reason; both ship with no waiver at all.
+  scan:
+    name: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # fetch-depth: 0 for gitleaks: on a shallow clone it sees one commit and passes while
+      # checking nothing.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # RAW RELEASE BINARIES, NEVER THE WRAPPER ACTIONS. A wrapper is a second supply chain around
+      # the tool, and each one costs something specific: gitleaks-action needs a paid licence on
+      # an organisation's repo, and osv-scanner-action uploads SARIF (see above). A binary fetched
+      # by exact version and refused unless its SHA256 matches is one thing to trust, and the
+      # check is in this file where a reviewer can read it.
+      # Where each digest comes from, so a bump can be VERIFIED and not merely typed:
+      #   actionlint   actionlint_<version>_checksums.txt on its release
+      #   gitleaks     gitleaks_<version>_checksums.txt on its release
+      #   osv-scanner  osv-scanner_SHA256SUMS on its release
+      #   zizmor       publishes no checksums file, so this is the digest GitHub records for the
+      #                release asset: `gh api repos/zizmorcore/zizmor/releases/tags/v<version>`,
+      #                the `digest` of zizmor-x86_64-unknown-linux-gnu.tar.gz
+      # Dependabot does not read this block. Bump a version and its digest together, by hand.
+      - name: Install the scanners (pinned, SHA256-verified)
+        id: tools
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          ZIZMOR_VERSION: 1.30.1
+          ZIZMOR_SHA256: e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          OSV_VERSION: v2.6.0
+          OSV_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/scan-bin"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz -C scan-bin actionlint
+          curl -fsSL --retry 3 -o zizmor.tar.gz \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ZIZMOR_SHA256}  zizmor.tar.gz" | sha256sum -c -
+          tar -xzf zizmor.tar.gz -C scan-bin zizmor
+          curl -fsSL --retry 3 -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz -C scan-bin gitleaks
+          curl -fsSL --retry 3 -o scan-bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  scan-bin/osv-scanner" | sha256sum -c -
+          chmod +x scan-bin/osv-scanner
+          scan-bin/actionlint -version
+          scan-bin/zizmor --version
+          scan-bin/gitleaks version
+          scan-bin/osv-scanner --version
+
+      # Exit 1 on any finding. run: blocks go through the runner's own shellcheck; actionlint
+      # quietly drops that rule when shellcheck is absent, so its absence is red here rather than
+      # a silent loss of coverage.
+      - name: actionlint (workflow syntax and shell)
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: |
+          command -v shellcheck >/dev/null || { echo "::error::shellcheck is missing; actionlint would skip every run: block"; exit 1; }
+          "$RUNNER_TEMP/scan-bin/actionlint"
+
+      # Exit 11-14 on any finding (the number is the highest severity), 0 when clean. Default
+      # persona, every severity. ⚠ Never add --min-severity or --min-confidence (they DROP
+      # findings and exit 0), and never --format=sarif (exits 0 with findings). The token turns on
+      # the online audits that check the pins themselves (impostor commits, a comment that lies
+      # about its tag).
+      - name: zizmor (workflow security)
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/scan-bin/zizmor" --format=github --no-progress .'
+
+      # Secrets in this branch's history (HEAD; a PR's merge commit on pull_request) AND in the
+      # tree as it stands. TWO passes, because `gitleaks git` reads only the added lines of
+      # `git log -p`, and git prints no patch for a merge commit unless asked: a key pasted while
+      # resolving a conflict is invisible to history alone. --diff-merges=first-parent brings
+      # merges into history; `dir` catches whatever sits at HEAD however it got there.
+      # Both passes always run, so one log lists every finding. --redact keeps the VALUES out of
+      # the log: a scanner that prints the secret it found has published it a second time.
+      # ⚠ Pass the config DIRECTLY: pulling it into another through `[extend] path` silently
+      # drops its allowlists (reported against 8.30.1, not re-verified here). Generated and built files stay in scope on
+      # purpose: a bundler that inlines build-time variables makes its output a real leak path.
+      - name: gitleaks (secrets, history and tree)
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: |
+          rc=0
+          "$RUNNER_TEMP/scan-bin/gitleaks" git --redact --no-banner -v \
+            --config .github/gitleaks.toml \
+            --log-opts="--full-history --diff-merges=first-parent HEAD" . || rc=1
+          "$RUNNER_TEMP/scan-bin/gitleaks" dir --redact --no-banner -v \
+            --config .github/gitleaks.toml . || rc=1
+          exit "$rc"
+
+      # Every lockfile in the tree against osv.dev. Exit 1 on an advisory not ignored in the
+      # config, and non-zero, never "found nothing", when the scan itself fails. The verdict
+      # follows a LIVE database, so an unchanged branch can turn red the day an advisory is
+      # published: fix it, or add a DATED ignore with its reason, never an open-ended one
+      # (.github/osv-scanner.toml holds the rule).
+      # ⚠ It sees lockfiles only. Code that is vendored — copied into the tree rather than
+      # installed — appears in no lockfile, so an advisory against it stays green here and
+      # nothing in this job covers it.
+      # ⚠ THIS REPO HAS NO LOCKFILE, and without --allow-no-lockfiles the scanner exits 128 on
+      # "no packages found". The flag turns that into exit 0, which is a pass standing in for a
+      # check that graded nothing — so the step COUNTS the lockfiles first and says so in the log
+      # and the run summary. When the count is above zero the flag changes nothing.
+      - name: OSV-Scanner (dependency advisories)
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: |
+          LOCKS=$(git ls-files | grep -Ec '(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lock|Cargo\.lock|go\.sum|poetry\.lock|uv\.lock|requirements[^/]*\.txt|Gemfile\.lock|composer\.lock)$' || true)
+          if [ "$LOCKS" = "0" ]; then
+            echo "::notice::OSV-Scanner graded NOTHING: 0 tracked lockfiles. This step is not evidence of anything until a dependency exists."
+          else
+            echo "$LOCKS tracked lockfile(s) in scope"
+          fi
+          "$RUNNER_TEMP/scan-bin/osv-scanner" scan source --allow-no-lockfiles \
+            --config .github/osv-scanner.toml --recursive ./
+
+      # Semgrep CE: the OSS engine only, no login and no token. The image is pinned by index
+      # digest; Docker ignores the tag when a digest is present, so the tag is for readers. The
+      # image trusts only /src as a git safe.directory, so the checkout is mounted there.
+      #  · --error on every severity: the rules that fit this kind of code (eval with an
+      #    expression, a TLS check switched off, HTML built by concatenation) are WARNING tier,
+      #    and a severity floor would drop exactly those.
+      #  · No rule is excluded. An exclusion goes HERE, as --exclude-rule with the reason beside
+      #    it, and not as a `nosemgrep` comment: an inline waiver has no reason a reviewer sees
+      #    and is copied along with the code it sits on.
+      #  · No .semgrepignore: one would REPLACE the built-in ignores rather than add to them.
+      #  · --timeout 30: at the 5 s default a large file can time out, and after three timeouts
+      #    Semgrep silently drops that file for every remaining rule.
+      #  · Never --config auto: with --metrics=off it refuses and exits 2.
+      # The p/javascript rules come from semgrep.dev on every run and are not versioned, so an
+      # upstream rule can turn an unchanged commit red on every branch at once. Exit 0 clean,
+      # 1 findings, 2+ a config, network or engine error; any non-zero is red. ⚠ A file that fails
+      # to parse or times out is reported and SKIPPED with exit 0, so a green step is a statement
+      # about the files Semgrep could read. --strict would close that and is left off only
+      # because it also reds on a partial parse; turn it on if this tree parses cleanly under it.
+      # ⚠ NOT YET CALIBRATED AGAINST THIS TREE. The harness shells out and builds paths and
+      # patterns from configuration by design, which is what several of these rules look for. Read
+      # the first run's findings one by one: fix what is real, and exclude what is not by rule id
+      # with its reason, above.
+      - name: Semgrep CE (p/javascript)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        env:
+          SEMGREP_IMAGE: semgrep/semgrep:1.178.0@sha256:32e459968daabe7ab86968184a29109b9564aa00392401156f9788452b42786b
+        run: |
+          docker pull --quiet "$SEMGREP_IMAGE"
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" "$SEMGREP_IMAGE" \
+            semgrep scan \
+              --config p/javascript \
+              --metrics=off \
+              --disable-version-check \
+              --timeout 30 \
+              --jobs 2 \
+              --error
