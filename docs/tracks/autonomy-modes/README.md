@@ -8,11 +8,11 @@ paths: ["README.md", "scripts/harness/mode.js", "scripts/harness/actions.js", "s
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js autonomy-modes"
 last_verified: 2026-10-06
 max_age_days: 30
-closed_phase: 3
+closed_phase: 4
 closed_at: 2026-10-07
-gates_sha: e45016d23c6a6e8b97652f20f443c1740d810c4a7ce785a91e13e3d1913c6944
-block_sha: 2387c5db190387d882a8ecbc5acd6a2e9a20f75865375839feb64fb1669bdda6
-receipt: 18ea39f0e05536815be6d1b003e54d0c55ba853994ac9b6e85f2c81e8ff36fb5
+gates_sha: b1a46e3ad8cb85f9a7b61fdebc7272100ef4b06b28fd1f2b3040fb11e7a5d667
+block_sha: a2a8c8a130e07a673e211d774afa705839e1f19ed408ad41070a830324bd0861
+receipt: 9a533eea26249faede119302ecc814f94c6b7b6ea7adb59dfd92c69e01bbe8a5
 ---
 
 # Autonomy modes: the audience, and a mode a script can enforce
