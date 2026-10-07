@@ -29,6 +29,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The README states who the harness is for:** flat-rate subscription seats, where quota and
+  context are what runs out. Per-token cost accounting and organisation-wide policy are out of scope.
 - **`AGENTS.md` is the always-on policy file** and `CLAUDE.md` is a stub that imports it. Routing
   moved to `docs/reference/routing/README.md`.
 - **The guards moved** from `.claude/helpers/` to `scripts/harness/guards/`. Their verdicts did not change.

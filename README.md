@@ -58,6 +58,11 @@ one gives you none of those as its main product. It gives you the checks around 
 
 ## Who it is for
 
+**People on a flat-rate subscription seat of an agentic coding tool:** a plan with a usage limit,
+not a bill per token. What rations a seat is quota and context, not dollars. So the harness counts
+what a seat runs out of, the bytes loaded on every turn and the work a session has to redo, and it
+accounts for nothing in money.
+
 - You run a coding agent on a real repo, across many sessions.
 - You have seen an agent skip a rule, quote a stale test count or call unfinished work done.
 - You want that caught by CI and hooks instead of by review.
@@ -65,6 +70,8 @@ one gives you none of those as its main product. It gives you the checks around 
 
 ## Who it is not for
 
+- You pay per token on an API key and want cost in dollars tracked. Nothing here measures it.
+- You are buying for an organisation and need SSO, a policy server or compliance reporting.
 - You want a framework for building or orchestrating agents. This calls no model.
 - You want a prompt or skill library to drop in.
 - You cannot run Node 20 on your machine and in CI.
