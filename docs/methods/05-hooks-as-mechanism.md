@@ -3,9 +3,9 @@ id: method-05-hooks-as-mechanism
 kind: reference
 status: open
 read_when: "writing, wiring or debugging a hook, or asking whether a rule is really enforced"
-paths: [".claude/settings.json", "scripts/harness/guards/**"]
-verify: "node scripts/harness/guards/phase-guard.cjs --self-test && node scripts/harness/guards/env-guard.cjs --self-test"
-last_verified: 2026-10-05
+paths: [".claude/settings.json", "scripts/harness/hook.js", "scripts/harness/guards/**"]
+verify: "node scripts/harness/hook.js --self-test && node scripts/harness/guards/phase-guard.cjs --self-test && node scripts/harness/guards/env-guard.cjs --self-test"
+last_verified: 2026-10-07
 max_age_days: 90
 ---
 
@@ -34,18 +34,22 @@ max_age_days: 90
 
 ## The mechanism
 
-Hooks are wired in `.claude/settings.json`. Each is a file in `scripts/harness/guards/`:
+ONE entry, `scripts/harness/hook.js`, is registered once per event in each wired tool's own hook
+file (`.claude/settings.json` for the default tool). It turns the tool's payload into a neutral
+event, runs that event's ordered handler list, and emits the verdict in the tool's wire format
+([15](15-many-tools-one-policy.md)). Each handler is a file in `scripts/harness/guards/`:
 
-| File | Event | Denies |
+| Handler | Event | Denies |
 |---|---|---|
-| `env-guard.cjs` | PreToolUse | any tool call naming a guarded secret file. Deny-all; exceptions are dated entries in `env.openCarveOuts` that re-arm on expiry |
-| `phase-guard.cjs` | PreToolUse | D1 a bare move into the archive · D2 a hand-flipped `status:` or typed receipt · D3 a gate figure written into a governed doc |
-| `phase-guard.cjs` | PreToolUse | D4 an MCP payload it cannot read is ASKED · D5 a missing shared predicate is ASKED |
-| `commit-hygiene.cjs --gate` | PreToolUse | a commit or push carrying strays, secrets, ignore gaps or root clutter. A modified tracked file is not a finding |
-| `skill-verify.cjs --hook`, `env-guard.cjs --rearm-check`, `docs-lint.cjs --memory-check`, `scripts/harness/branch-sync.js --hook` | SessionStart | nothing. They report, and always exit 0 |
+| `env-guard.cjs` | pre-tool | any tool call naming a guarded secret file. Deny-all; exceptions are dated entries in `env.openCarveOuts` that re-arm on expiry |
+| `commit-hygiene.cjs` | pre-tool | a commit or push carrying strays, secrets, ignore gaps or root clutter. A modified tracked file is not a finding |
+| `phase-guard.cjs` | pre-tool | D1 a bare move into the archive · D2 a hand-flipped `status:` or typed receipt · D3 a gate figure written into a governed doc |
+| `phase-guard.cjs` | pre-tool | D4 an MCP payload it cannot read is ASKED · D5 a missing shared predicate is ASKED |
+| `skill-verify.cjs`, `env-guard.cjs`, `docs-lint.cjs`, `scripts/harness/branch-sync.js` | session-start | nothing. They report, and the session starts whatever they found |
 
-`skill-verify.cjs` also has a `--gate` mode that denies a read of a drifted skill. It is not
-wired by default; skill drift is reported, not blocked ([07](07-skill-supply-chain.md)).
+`skill-verify.cjs` also has a `--gate` mode that denies a read of a drifted skill, in the wire
+format the guards printed before the one entry existed. It is not a handler and nothing
+registers it; skill drift is reported, not blocked ([07](07-skill-supply-chain.md)).
 The commit gate has its own doc ([12](12-commit-hygiene.md)), as does the branch report
 ([13](13-one-harness-on-every-branch.md)).
 
@@ -57,25 +61,26 @@ prints one line for the person at the keyboard and puts nothing into agent conte
 **The rules every hook here obeys.** Each is a failure that happened.
 
 - **A file, never an inline one-liner.** The form is
-  `node "$CLAUDE_PROJECT_DIR/scripts/harness/guards/x.cjs"`. A one-liner handed to a shell is
-  word-split and its arrows become redirects.
-- **Every PreToolUse matcher includes `mcp__.*`.** A verb list or a named set of servers is
-  silent about every server added later.
+  `node "$CLAUDE_PROJECT_DIR/scripts/harness/hook.js" --tool <id> --event <event>`. A one-liner
+  handed to a shell is word-split and its arrows become redirects.
+- **The default tool's pre-tool matcher includes `mcp__.*`.** A verb list or a named set of
+  servers is silent about every server added later.
 - **An unparseable payload is an ask, never a silent allow.** The ask names the payload's keys
   and never its values, because the reason string is written into the transcript.
 - **Decide against the disk, not a pattern alone.** Rewriting a doc with its status unchanged is
   normal work; flipping it is the thing caught. The prior value is read from the file.
-- **Load the config softly.** A PreToolUse hook that throws takes the session down. With no
+- **Load the config softly.** A handler that throws is a deny, with the handler named. With no
   readable config a guard falls back to the strictest documented stance, which produces a
   visible refusal. It never falls back to allow.
-- **A SessionStart hook always exits 0** and is silent while clean.
-- **The decision rides in the JSON**, not the exit code.
+- **A session-start reporter never refuses** and is silent while clean.
+- **A deny is the JSON AND exit code 2.** Several tools are documented to pass a call on any
+  other exit code. Exit 2 is the entry's; a guard run by hand prints its verdict and exits 0.
 - **One predicate, imported twice.** `doc-frozen.cjs` is loaded by the write guard and by the
   linter, so the write-time and gate-time answers cannot drift.
 - **Every guard has `--self-test`** driving deny cases AND allow cases with literals. A rule
   only ever seen saying yes is indistinguishable from one that cannot say no.
-- **Few hooks.** Each PreToolUse survivor denies something. Each SessionStart survivor is silent
-  while clean. A hook that only logs is deleted.
+- **Few handlers.** Each pre-tool survivor denies something. Each session-start survivor is
+  silent while clean. A hook that only logs is deleted.
 
 ## Why a mechanism and not a rule
 
@@ -98,11 +103,11 @@ prints one line for the person at the keyboard and puts nothing into agent conte
   stay out of.
 - **D4 asking is the guard admitting blindness.** It is not a trust boundary. An MCP call that
   a person approves without reading is allowed.
-- **One runtime's schema.** PreToolUse, the matcher syntax and the JSON decision format belong
-  to one agent runtime. Nothing here emits an equivalent for another tool, and no test proves a
-  rule survives a change of runtime.
+- **One runtime was run.** A dialect module exists per wire format, but every one except the
+  default tool's was read off vendor pages, and most tools get no hook file at all. Under those
+  a rule is a gate, a backstop or prose ([15](15-many-tools-one-policy.md)).
 - **Hooks exist only where the runtime runs.** A plain `git commit` in a terminal passes no
-  PreToolUse hook. The gate suite in CI is the layer that does not depend on the agent.
+  pre-tool hook. The opt-in git hooks and the gate suite in CI do not depend on the agent.
 - **Whether a hook fires is an empirical fact.** Test it the way the host invokes it, on each
   platform you support. A `--self-test` proves the decision function, not the wiring.
 - **Cost:** one Node process per matched tool call, tens of milliseconds each, on every call.

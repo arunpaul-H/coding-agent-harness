@@ -31,5 +31,6 @@ order: the failure, the mechanism, why a mechanism and not a rule, the cost and 
 | A commit or push was denied; waiving a finding | [12-commit-hygiene](12-commit-hygiene.md) |
 | Why a long-lived branch is compared to the default one | [13-one-harness-on-every-branch](13-one-harness-on-every-branch.md) |
 | Why one config file, why a copy and not a dependency | [14-the-config-seam-and-the-installer](14-the-config-seam-and-the-installer.md) |
+| Running under another coding agent, adding a tool, or what enforces a rule under one | [15-many-tools-one-policy](15-many-tools-one-policy.md) |
 
 The enforced shapes are in `docs/reference/DOC-STANDARD.md`. These docs explain; that one binds.

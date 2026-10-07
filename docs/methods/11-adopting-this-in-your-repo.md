@@ -19,7 +19,9 @@ runtime dependencies; nothing here needs an install step.
 `node <harness-checkout>/bin/harness.js init --into <your-repo>` does this copy, writes a
 `harness.config.json` from what it detects, and never overwrites an existing file without
 `--force`. `--dry-run` prints the plan and writes nothing. With no test command detected it
-writes no test gate and says so ([14](14-the-config-seam-and-the-installer.md)). Of `templates/`
+writes no test gate and says so ([14](14-the-config-seam-and-the-installer.md)). `--tools <ids>`
+names the coding agents to wire and `--git-hooks` adds the opt-in backstop
+([15](15-many-tools-one-policy.md)). Of `templates/`
 it installs the track skeleton and renders `AGENTS.md` (the policy), its `CLAUDE.md` stub and
 `docs/reference/routing/README.md`; the subtree and doc-standard skeletons stay in the package. It writes no
 `.gitattributes`: pin your line endings yourself (`* text=auto eol=lf`). By hand:
@@ -27,7 +29,7 @@ it installs the track skeleton and renders `AGENTS.md` (the policy), its `CLAUDE
 | Copy | Why |
 |---|---|
 | `scripts/harness/` | the gate runner, the config loader, the lifecycle and doc scripts |
-| `scripts/harness/guards/` and `.claude/settings.json` | the guards and their wiring. Merge the settings file if you already have one |
+| `scripts/harness/guards/` and `.claude/settings.json` | the guards, and the default tool's registration of the one hook entry. Merge the settings file if you already have one |
 | `.claude/agents/`, `.claude/skills/` | the four agent briefs and four skills. Optional |
 | `schema/harness.config.schema.json` | documents every config key |
 | `templates/` | skeletons: `AGENTS.md`, the `CLAUDE.md` stub, the routing doc, a subtree `AGENTS.md`, a track folder, the doc standard |

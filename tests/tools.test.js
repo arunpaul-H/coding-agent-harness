@@ -482,17 +482,19 @@ describe('the shipped registry — what it claims, and on what evidence', () => 
     }
   });
 
-  test('no row is marked `ran`: no tool has been run against the policy route its row records', () => {
+  test('ONE row is marked `ran`, the default tool\'s, and it records the command; every other is `docs`', () => {
     // Every other tool's cells came through a summarising fetch of a vendor's page. The default
-    // tool WAS run, but before its route became the import stub, so the cell this harness leans on
-    // was never observed. A row promoted by typing is a paraphrase reported as a measurement:
-    // promote one here only together with the command that was run against the route as it is.
+    // tool was run against its route as it is, the import stub, from a fresh session and from a
+    // spawned subagent. A row promoted by typing is a paraphrase reported as a measurement:
+    // promote another here only together with the command that was run.
     for (const r of reg.tools) {
       if (r.evidence === 'ran') { assert.ok(String(r.command || '').trim().length > 0, r.id + ' is `ran` with no command'); continue; }
       assert.strictEqual(r.evidence, 'docs', r.id + ' is not `docs`');
       assert.ok(!('command' in r), r.id + ' records a command nobody ran');
     }
-    assert.strictEqual(byId('claude-code').evidence, 'docs', 'the default tool is `ran` — was the import route really run, subagent included?');
+    assert.deepStrictEqual(reg.tools.filter((r) => r.evidence === 'ran').map((r) => r.id), ['claude-code'], 'a row was promoted or demoted: was the tool really run, and is the command in the row?');
+    assert.match(byId('claude-code').command, /^claude -p "/);
+    assert.match(byId('claude-code').command, /spawn a subagent/);
   });
 
   test('a model with no agent inherits its tier and has no dialect', () => {
@@ -562,10 +564,10 @@ describe('the shipped registry — what it claims, and on what evidence', () => 
 
   test('the default tool\'s row says what the one run observed and what it did not', () => {
     const r = byId('claude-code');
-    assert.match(r.notes, /THE POLICY ROUTE WAS NEVER RUN/);
-    assert.match(r.notes, /observed two things only/);
-    assert.match(r.notes, /To promote this row to `ran`/);
-    assert.match(r.notes, /`nested` and `sessionStart` were not observed/);
+    assert.match(r.notes, /WHAT THE RUNS OBSERVED/);
+    assert.match(r.notes, /it reaches a subagent/);
+    assert.match(r.notes, /the one hook entry refused a shell call/);
+    assert.match(r.notes, /NOT OBSERVED, resting on the two sources: `nested` and `sessionStart`/);
   });
 
   test('a tool whose default file the sources disagree on gets a row that claims only what they agree on', () => {

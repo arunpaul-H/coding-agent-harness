@@ -5,7 +5,7 @@ status: open
 read_when: "asking why the harness has one config file, why it is copied in and not imported, or what init and doctor do"
 paths: ["scripts/harness/config.js", "harness.config.json", "schema/harness.config.schema.json", "bin/harness.js"]
 verify: "node scripts/harness/config.js --self-test && node bin/harness.js --self-test"
-last_verified: 2026-10-05
+last_verified: 2026-10-07
 max_age_days: 90
 ---
 
@@ -59,7 +59,9 @@ max_age_days: 90
 | Command | Does |
 |---|---|
 | `harness init [--into <dir>]` | copies the harness in and generates a config from what it detects. `--dry-run` prints the plan. `--force`, with `--only <path-prefix>`, is the only way to overwrite |
-| `harness doctor [--root <dir>]` | every piece as OK, MISSING or DRIFTED, each with the one command that fixes it. GATE line last |
+| `harness init --tools <ids>` | wires the coding agents named, by registry id: a hook file is MERGED into and never overwritten, and a tool the harness cannot wire is named with the reason ([15](15-many-tools-one-policy.md)) |
+| `harness init --git-hooks` | writes the opt-in git `pre-commit` and `pre-push`. Without it `init` prints the two commands and writes nothing |
+| `harness doctor [--root <dir>]` | every piece as OK, MISSING or DRIFTED, each with the one command that fixes it; per enabled tool its tier, its evidence and each missing wire. A NOTE is a gap no command closes. GATE line last |
 | `harness gates` | runs `gates.js`, passing the skips the repo has DECLARED. `--print-allow-skip` prints them and runs nothing |
 | `harness docs` | the doc gate; with `--index`, the index generator |
 | `harness host` | prints the inputs a verdict rests on that the repo does not contain. Always exits 0 |

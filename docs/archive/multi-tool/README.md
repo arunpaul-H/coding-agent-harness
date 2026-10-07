@@ -1,18 +1,18 @@
 ---
 id: multi-tool
 kind: track
-status: open
+status: complete
 read_when: "making the harness work under a coding agent other than Claude Code, or adding support for a new one"
 trap_prefix: MT
 paths: ["AGENTS.md", "CLAUDE.md", ".claude/**", "scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "harness.config.json", "tests/**", "docs/methods/**"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js multi-tool"
 last_verified: 2026-10-06
 max_age_days: 30
-closed_phase: 4
+closed_phase: 6
 closed_at: 2026-10-07
-gates_sha: e269fb7b4d3620de17a7205b5399661538ca1d1e273e2728ddfa952507aae48e
-block_sha: 062ac4fb1fadd9ff4e4ef2d481bc6ce537f9f2c36eda89836c037e5fa7e3482f
-receipt: 936d57dde90d3853bdaefa52094e6a67a3a9352b2131714b9f77f52f1e5b8d42
+gates_sha: 6451bd40aaf9eb60811b79151b65949c5f20b4005ed823f82b972d92388011f4
+block_sha: 7b6b97051d9b55dde088f66b96835614a3507358a3681df264c7758ad72ca05e
+receipt: 469beab886d40a1763dc9dff24c76c345f61658e43fc641b5854590e9d035f01
 ---
 
 # Multi-tool: one policy, one guard core, a thin adapter per agent
@@ -25,7 +25,7 @@ receipt: 936d57dde90d3853bdaefa52094e6a67a3a9352b2131714b9f77f52f1e5b8d42
 > | Why the scope is this and not more | **Locked decisions** |
 > | What must not move | **Invariants** |
 > | The phases and their exit commands | `plan.md` |
-> | Adding a tool nobody listed | **The method**, then the registry once phase 0 lands |
+> | Adding a tool nobody listed | **The method**, then "Add a tool" in the root `CONTRIBUTING.md` |
 
 > **Self-evolving tracker. Current truth only, not a changelog.** Rewrite in place when a phase
 > lands. A cold session reads THIS plus `handoff.md` and continues with no memory of the last one.
@@ -130,8 +130,8 @@ A second session is opening a track for run modes. These are settled, so neither
 | 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, committed, not closed | open |
 | 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
 | 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, committed, closed by `close-phase.js` on 2026-10-07 (the receipt is in this file's frontmatter) | open |
-| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, not closed | open |
-| 6 | The method doc and the contributor path for adding a tool | open |
+| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, closed by `close-phase.js` on 2026-10-07 | open |
+| 6 | The method doc `docs/methods/15-many-tools-one-policy.md`, "Add a tool" in `CONTRIBUTING.md`, the tool list in the root README. Landed, committed, closed by `close-phase.js` on 2026-10-07 | open |
 
 ## How to work
 

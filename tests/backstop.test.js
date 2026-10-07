@@ -198,6 +198,19 @@ describe('the `tools` gate', () => {
   });
 });
 
+describe('the supported tools in the root README', () => {
+  test('are a PASTE of `tools.js --list`, byte for byte: a table nobody typed cannot drift', () => {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'harness', 'tools.js'), '--list'], { cwd: ROOT, encoding: 'utf8', env: cleanEnv() });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8').replace(/\r\n/g, '\n');
+    const m = /<!-- tools-list:start -->\n {2}```\n([\s\S]*?)\n {2}```\n {2}<!-- tools-list:end -->/.exec(readme);
+    assert.ok(m, 'the README has no tools-list block');
+    const pasted = m[1].split('\n').map((l) => l.replace(/^ {2}/, '')).join('\n');
+    assert.strictEqual(pasted, r.stdout.replace(/\r\n/g, '\n').trimEnd(), 'the README block is not what `node scripts/harness/tools.js --list` prints: paste it again');
+    assert.doesNotMatch(pasted, /\bverified\b/i);
+  });
+});
+
 describe('tools.js --matrix', () => {
   test('the rule table has one row per hard rule of the policy file, and names only handlers that exist', () => {
     const policy = fs.readFileSync(path.join(ROOT, TOOLS.POLICY_FILE), 'utf8').replace(/\r\n/g, '\n');

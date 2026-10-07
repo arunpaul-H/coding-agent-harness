@@ -68,7 +68,7 @@ one gives you none of those as its main product. It gives you the checks around 
 - You want a framework for building or orchestrating agents. This calls no model.
 - You want a prompt or skill library to drop in.
 - You cannot run Node 20 on your machine and in CI.
-- You want blocking hooks on a tool other than Claude Code today (see [Your stack](#your-stack)).
+- You want blocking hooks on a coding agent the harness does not wire yet (see [Your stack](#your-stack)).
 
 ## When to use it
 
@@ -171,12 +171,39 @@ its cost and its limits.
   `GATE <name> pass=<n> fail=<n> skipped=<n>` the counts are read exactly; otherwise the
   `exit-code` adapter grades it as one pass or one fail. `init` detects Node, Go, Rust and Python
   test commands.
-- **The blocking hooks are wired for Claude Code.** So are the agent and skill files and the
-  status line. Support for other tools is in progress and not finished.
+- **The blocking hooks are wired for few tools.** `harness init --tools <ids>` names the coding
+  agents to wire. A hook file is written for Claude Code and, for shell calls and file reads only,
+  for Cursor. Every other tool below gets the policy, the skills and a stated gap. The agent files
+  and the status line are Claude Code's only.
+- **Which tools, and on what evidence.** `ran` means the tool was run here and the row records
+  the command. `docs` means the row was read off the vendor's pages and the tool was never run. Printed by `node scripts/harness/tools.js --list`, 2026-10-07:
+
+  <!-- tools-list:start -->
+  ```
+  id              tier        evidence  enabled
+  claude-code     full        ran       yes
+  codex-cli       full        docs
+  gemini-cli      full        docs
+  antigravity     guard-only  docs
+  cursor          full        docs
+  kimi-code       guard-only  docs
+  deepseek        inherits    docs
+  github-copilot  backstop    docs
+  windsurf        backstop    docs
+  cline           backstop    docs
+  aider           backstop    docs
+  opencode        backstop    docs
+  qwen-code       backstop    docs
+  ```
+  <!-- tools-list:end -->
+
+- **What enforces each rule under your tools.** `node scripts/harness/tools.js --matrix` prints
+  it per enabled tool: a deny at the tool call, a report, a gate, a git-hook backstop, or prose.
 - **The policy is not tied to one tool.** It lives in `AGENTS.md`, which most coding agents load;
   `CLAUDE.md` is a one-line pointer to it.
-- **What works anywhere today:** `gates.js --check` in CI, and `commit-hygiene.cjs --report` in a
-  git pre-commit hook or a CI step.
+- **What works anywhere today:** `gates.js --check` in CI, and the opt-in git hooks:
+  `harness init --git-hooks` writes a pre-commit that runs `commit-hygiene.cjs --report` and a
+  pre-push that runs the gate suite. A backstop after the work, not a deny.
 
 ## What it does not do
 
