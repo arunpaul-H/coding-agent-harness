@@ -62,4 +62,36 @@ function emit(verdict, ev) {
   return QUIET;
 }
 
-module.exports = { parse, emit };
+/**
+ * THE SHAPE OF THE HOOK CONFIG FILE, from the same research cell:
+ * `{"version":1,"hooks":{event:[{command,matcher,timeout,failClosed}]}}`.
+ *
+ * EVIDENCE: `docs`. No file rendered from this was ever loaded by the tool.
+ *
+ * ONLY THE TWO EVENTS THIS FILE CAN READ ARE REGISTERED (see the header): the shell event and
+ * the file-read event. `failClosed` is set on both, because the cell says any exit but 2 fails
+ * open without it. No `matcher` and no `timeout` are written: the cell names the keys and gives
+ * neither a value nor a unit.
+ *
+ * WHAT THE CELL DOES NOT ESTABLISH, said in `gaps` so the installer and doctor repeat it:
+ *   - the directory a hook command runs in. The command names the entry by a path relative to
+ *     the repo root, which is right only if that is where the tool starts it.
+ */
+const HOOK = (id, ev) => 'node scripts/harness/hook.js --tool ' + id + ' --event ' + ev;
+const wiring = {
+  file: '.cursor/hooks.json',
+  evidence: 'docs: read from the vendor page, never loaded by the tool',
+  base: { version: 1 },
+  gaps: [
+    'the general pre-tool event and the MCP event are NOT registered: this dialect cannot read their fields, so every such call would be refused (trap MT-16). A file WRITE and an MCP call therefore reach no guard under this tool',
+    'the hook command names the entry relative to the repo root; that the tool runs a hook from there is not established',
+  ],
+  entries(row) {
+    const guard = { command: HOOK(row.id, 'pre-tool'), failClosed: true };
+    const out = Object.keys(ACTION_OF).map((name) => ({ at: ['hooks', name], event: 'pre-tool', entry: Object.assign({}, guard) }));
+    if (row.sessionStart === true) out.push({ at: ['hooks', 'sessionStart'], event: 'session-start', entry: { command: HOOK(row.id, 'session-start') } });
+    return out;
+  },
+};
+
+module.exports = { parse, emit, wiring };

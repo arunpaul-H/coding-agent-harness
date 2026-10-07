@@ -51,6 +51,7 @@
     ".claude/skills/plan/",
     ".claude/skills/research/",
     ".claude/skills/implement/",
+    ".claude/skills/guide/",
     "scripts/harness/*.js",
     "scripts/harness/guards/*.cjs",
     "scripts/harness/dialects/*.js",

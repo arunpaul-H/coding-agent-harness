@@ -4,26 +4,26 @@
     "which refuses unless the suite is green. A re-baseline is a deliberate act, so its",
     "commit subject must start `gates:` — enforced at commit time, not here."
   ],
-  "generatedAt": "2026-10-05T17:44:59.155Z",
-  "commit": null,
-  "dirty": true,
-  "node": "v24.11.1",
+  "generatedAt": "2026-10-07T17:40:38.833Z",
+  "commit": "c7ca0ab08999c81e2d60723bd2d03358d6aef617",
+  "dirty": false,
+  "node": "v24.19.0",
   "gates": {
     "test": {
-      "pass": 390,
+      "pass": 598,
       "fail": 0,
       "skipped": 0,
-      "total": 390,
+      "total": 598,
       "exit": 0,
-      "ms": 127859
+      "ms": 601851
     },
     "docs": {
-      "pass": 319,
+      "pass": 562,
       "fail": 0,
-      "skipped": 0,
-      "total": 319,
+      "skipped": 1,
+      "total": 563,
       "exit": 0,
-      "ms": 1066
+      "ms": 3537
     },
     "context": {
       "pass": 6,
@@ -31,7 +31,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 725
+      "ms": 936
     },
     "hygiene": {
       "pass": 7,
@@ -39,7 +39,7 @@
       "skipped": 0,
       "total": 7,
       "exit": 0,
-      "ms": 268
+      "ms": 982
     },
     "skills": {
       "pass": 2,
@@ -47,7 +47,7 @@
       "skipped": 0,
       "total": 2,
       "exit": 0,
-      "ms": 173
+      "ms": 577
     },
     "reproducible-build": {
       "pass": 0,
@@ -56,7 +56,7 @@
       "note": "not applicable — 0 artifacts configured, 0 graded. Declare it: --allow-skip reproducible-build=1",
       "total": 1,
       "exit": 0,
-      "ms": 0
+      "ms": 1
     }
   }
 }

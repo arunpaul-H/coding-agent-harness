@@ -2,15 +2,20 @@
 id: founder-guide
 kind: track
 status: open
-read_when: "any work on the non-technical on-ramp: the guide skill, its install by init, or the founder section of the root README"
+read_when: "any work on the non-technical on-ramp: the guide skill, its install by init, or the start-here section of the root README"
 trap_prefix: FG
 paths: [".claude/skills/guide/**", "bin/harness.js", "package.json", "scripts/harness/common.json", "tests/cli.test.js", "README.md", "CHANGELOG.md", "docs/methods/**", "docs/reference/branches/README.md"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js founder-guide"
 last_verified: 2026-10-07
 max_age_days: 30
+closed_phase: 2
+closed_at: 2026-10-07
+gates_sha: 25a6a56d65a864a84543d29fe997b17ecac944a1a98ab48d4ad5e79756cbf9e6
+block_sha: 8b7cf18dbbf937f1bc763cddbfbb93664ea5ac5beba7b8083642eb21e9506785
+receipt: 57f491812d6a398630f98a9b9efa3d74ccb6f2fda7ddcd626398dcd81560734c
 ---
 
-# Founder guide: a plain-English on-ramp that changes no check
+# Non-tech guide: a plain-English on-ramp that changes no check
 
 > ### Read which section, do not read it whole.
 > | Your task | Read |
@@ -26,13 +31,14 @@ max_age_days: 30
 
 ## What this is
 
-Many new repository owners are founders who do not write code and drive a coding agent themselves.
-This repo speaks to developers only: its README assumes a reader who knows what a gate, a hook and
-a baseline are. This track adds an on-ramp for that founder and nothing else:
+Many new repository owners are not tech experts: they do not write code, and they drive a coding
+agent themselves. A founder is one such reader, not the only one. The track id keeps its first
+name, `founder-guide`; the reader it serves is anyone who is not a tech expert. This repo speaks to developers only: its README assumes a reader who knows what a gate, a hook and
+a baseline are. This track adds an on-ramp for that reader and nothing else:
 
 - one skill, `guide`, that walks a non-technical person through setup and says in plain words
   what a red or green result means and what to ask the agent next;
-- that skill installed by `harness init`, so the founder has it in their own repo;
+- that skill installed by `harness init`, so that reader has it in their own repo;
 - one short, visual section near the top of the root `README.md` that points to it.
 
 The evidence for what shipping a skill touches is `research/2026-10-07-guide-skill-ship-surface.md`.
@@ -44,13 +50,14 @@ for: it stays a developer's tool with a side door.
 Decisions 1 to 3 were made by the owner on 2026-10-07. Decisions 4 to 8 are the lead's, taken from
 the research file, and stand until the owner says otherwise.
 
-1. **The reader is a solo founder driving the agent themselves**, in their own repo. Not a founder
-   overseeing a developer or an agency: that reader needs a different guide.
+1. **The reader is a person who is not a tech expert, driving the agent themselves**, in their
+   own repo. The owner widened this from "a solo founder" on 2026-10-07. Not someone overseeing
+   a developer or an agency: that reader needs a different guide.
 2. **The guide covers this harness only.** Setup, reading a result, what to ask next, and what a
    green result does not prove. No coaching on whether the idea is good: nothing here can check
    that advice, and the README says this repo is not a prompt library.
 3. **`init` installs it.** A guide that exists only in a clone of this repo never reaches the
-   founder's project.
+   reader's project.
 4. **A skill, not an agent.** An agent is a worker the lead spawns; it cannot hold a conversation
    with a person. A new agent file would also add a row to the generated registry and a line to
    the context budget for no gain.
@@ -58,7 +65,7 @@ the research file, and stand until the owner says otherwise.
    skill runs in the background and cannot ask a question (FG-05).
 6. **The skill stays unpinned in `skills-lock.json`**, like the three already shipped. A pin does
    not travel through `init`, and pinning one of four would be inconsistent.
-7. **The guide never weakens a check on the founder's behalf.** It may run the gates and explain
+7. **The guide never weakens a check on the reader's behalf.** It may run the gates and explain
    them. It does not re-baseline, waive a hygiene finding or allow a skip without first saying in
    plain words what that gives up and getting a yes.
 8. **Diagrams are Mermaid blocks in the README.** GitHub draws them; no image file is committed
@@ -72,7 +79,7 @@ the research file, and stand until the owner says otherwise.
 4. Every name in `SHIPPED_SKILLS` (`bin/harness.js`) has an entry in `package.json` `files`. From
    phase 2 a test holds this; before it, it is prose.
 5. `package.json` `dependencies` and `devDependencies` stay empty.
-6. The founder section of the root `README.md` carries no gate figure, and every developer
+6. The start-here section of the root `README.md` carries no gate figure, and every developer
    section below it stays.
 7. No gate is removed, reordered or loosened, and `harness.config.json` `gates` is untouched.
 
@@ -80,9 +87,9 @@ the research file, and stand until the owner says otherwise.
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | open |
-| 2 | `init` installs it; a test ties the installer's list to the package file list | open |
-| 3 | The visual founder section in the root README; every prose count of skills corrected | open |
+| 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed and closed |
+| 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed once `closed_phase` above reads 2 or more |
+| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed; NOT closed: a person has not yet looked at the page on GitHub (FG-06) |
 
 ## How to work
 

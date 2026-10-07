@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A plain-English on-ramp.** A fourth skill, `guide`, walks a person who is not a tech expert
+  through setup, reading a red or green result, and turning a goal into a request that can be
+  checked. It runs as a conversation, and it will not re-baseline, waive a finding or allow a
+  skip without explaining what that gives up and getting a yes. `harness init` installs it, and
+  the README opens with a "Not a developer? Start here" section. No gate, guard or threshold
+  changed.
+
 ## [0.1.0] - 2026-10-05
 
 First public release: the harness as a project-agnostic package, with everything project-specific

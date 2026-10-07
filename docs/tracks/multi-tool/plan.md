@@ -122,7 +122,7 @@ tool: tier, evidence, and each missing wire. A `guard-only` tool lists what it d
 **Do NOT.** Render agent-definition files (locked decision 6). Probe the machine for installed tools.
 **First commit:** `multi-tool: init renders per-tool wiring, doctor reports the tier`
 **Exit:** `node --test && node bin/harness.js doctor && node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
-**Delivered.** not started
+**Delivered.** 2026-10-07, uncommitted; NOT closed. `scripts/harness/wire.js` holds the merges; a hook file's shape is a dialect's `wiring` export, used only for the row whose `hookConfig` is that file. Deviations: (a) TWO rows are wired, the default tool and Cursor (shell and read events only); the research gives no file shape for the Codex or Antigravity hook file and the Gemini row cannot read a call, so those get no hook file and a NOTE (MT-20). (b) Rows carry an optional `skills` cell; rendered copies are pinned in the lock as `sourceType: rendered` with no review date, and checked against their source (RENDER-DRIFT). (c) A config that exists is never rewritten: `--tools` against one that differs is refused with the edit to make. (d) Doctor has a fourth status, NOTE, uncounted. (e) Without the default tool, its hook config, helpers, stub and skill root are not installed; agent files still are. Tests in `tests/wire.test.js`. Not run: any tool; Node 20. Owed: the re-baseline; the unregistered `--gate` mode of `skill-verify.cjs` (left as it was).
 
 ## Phase 5: a backstop for every tier, and the matrix that admits the gaps
 

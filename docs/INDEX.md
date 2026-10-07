@@ -19,7 +19,7 @@
 | [autonomy-modes-traps](tracks/autonomy-modes/traps.md) | something behaves oddly while working on autonomy-modes | open |
 | [founder-guide-handoff](tracks/founder-guide/handoff.md) | starting or resuming founder-guide | open |
 | [founder-guide-plan](tracks/founder-guide/plan.md) | founder-guide: the three phases, each with its exit command and first commit | open |
-| [founder-guide](tracks/founder-guide/README.md) | any work on the non-technical on-ramp: the guide skill, its install by init, or the founder section of the root README | open |
+| [founder-guide](tracks/founder-guide/README.md) | any work on the non-technical on-ramp: the guide skill, its install by init, or the start-here section of the root README | open |
 | [founder-guide-research-guide-skill-ship-surface](tracks/founder-guide/research/2026-10-07-guide-skill-ship-surface.md) | planning or reviewing the addition of a first-party skill to .claude/skills/ and to what `harness init` installs, and you need every file that names or counts the shipped skills | frozen |
 | [founder-guide-traps](tracks/founder-guide/traps.md) | something behaves oddly while working on founder-guide, or before editing a file another track claims | open |
 | [multi-tool-handoff](tracks/multi-tool/handoff.md) | starting or resuming multi-tool | open |

@@ -54,7 +54,7 @@ const REGISTRY_REL = 'scripts/harness/tools.json';
 
 const REQUIRED = ['id', 'policy', 'nested', 'hookConfig', 'dialect', 'sessionStart', 'projectHooks',
   'tier', 'evidence', 'asOf', 'source'];
-const OPTIONAL = ['name', 'command', 'notes'];
+const OPTIONAL = ['name', 'command', 'notes', 'skills'];
 const POLICY_MODES = ['native', 'import', 'config'];
 const POLICY_KEYS = ['mode', 'file', 'setting'];
 const NESTED = ['on-touch', 'startup', 'yes', 'unknown'];
@@ -115,6 +115,11 @@ function checkRow(row, dialects) {
     bad('nested', 'unknown value ' + show(row.nested) + ' (one of ' + oneOf(NESTED) + ', or null)');
   }
   if (has('hookConfig') && row.hookConfig !== null && !isStr(row.hookConfig)) bad('hookConfig', 'must be a path or null (got ' + show(row.hookConfig) + ')');
+  // The installer WRITES under this directory, so it has to stay inside the repo: no absolute
+  // path, no home, no climbing out, and no trailing slash that would name it twice.
+  if (has('skills') && (!isStr(row.skills) || !/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(row.skills) || row.skills.split('/').includes('..'))) {
+    bad('skills', 'must be a repo-relative directory with forward slashes (got ' + show(row.skills) + ') — leave the key out when it is not established');
+  }
   if (has('dialect') && row.dialect !== null && dialects && !dialects.includes(row.dialect)) {
     bad('dialect', 'unknown value ' + show(row.dialect) + ' (one of ' + oneOf(dialects) + ', or null)');
   }
@@ -302,6 +307,21 @@ function enabledStubFiles(reg, enabled) {
     const p = isPlain(row) ? row.policy : null;
     if (isPlain(p) && p.mode === 'import' && isStr(p.file) && !out.includes(p.file)) out.push(p.file);
   }
+  return out;
+}
+
+/** The rows the config enables, in the config's order. An id with no row is left out here and
+ *  refused by enabledFindings(), so a caller that checked that first holds every row. */
+function enabledRows(reg, enabled) {
+  const rows = rowsOf(reg);
+  return (Array.isArray(enabled) ? enabled : []).map((id) => rows.find((r) => r.id === id)).filter(Boolean);
+}
+
+/** The skill directories the ENABLED tools load from, once each, in first-seen order. A row with
+ *  no `skills` cell adds nothing: where a tool looks was not established, so nothing is put there. */
+function skillRoots(reg, enabled) {
+  const out = [];
+  for (const row of enabledRows(reg, enabled)) if (isStr(row.skills) && !out.includes(row.skills)) out.push(row.skills);
   return out;
 }
 
@@ -519,6 +539,19 @@ function selfTest() {
   eq('enabled findings: clean is empty', enabledFindings(reg([nativePolicy]), ['tool-n']), []);
   eq('enabled findings: an id with no row, named', enabledFindings(reg([nativePolicy]), ['tool-z']).map((m) => m.split(':')[0]), ['tools.enabled.tool-z']);
   eq('enabled findings: a broken ROW is not one of them', enabledFindings(reg([good({ id: 'tool-n', policy: { mode: 'native', file: POLICY_FILE }, tier: 'partial' })]), ['tool-n']), []);
+  // Where a tool loads skills from. Optional: absent is "not established", and writes nothing.
+  eq('skills: a repo-relative directory is clean', rowFields(good({ skills: '.shared/skills' })), []);
+  for (const v of ['/abs/skills', '~/.tool/skills', '../skills', 'a/../b', 'a\\b', 'skills/', '', null, 7]) {
+    eq('skills: ' + show(v) + ' is refused', rowFields(good({ skills: v })), ['skills']);
+  }
+  const sharedA = good({ id: 'tool-s', skills: '.shared/skills' });
+  const sharedB = good({ id: 'tool-t', skills: '.shared/skills' });
+  const ownRoot = good({ id: 'tool-u', skills: '.tool-u/skills' });
+  eq('skill roots: only the ENABLED rows, once each, in the config\'s order',
+    skillRoots(reg([sharedA, sharedB, ownRoot, good()]), ['tool-u', 'tool-t', 'tool-s', 'tool-a']), ['.tool-u/skills', '.shared/skills']);
+  eq('skill roots: a row with no cell adds nothing', skillRoots(reg([good()]), ['tool-a']), []);
+  eq('enabled rows: in the config\'s order, an id with no row left out',
+    enabledRows(reg([sharedA, ownRoot]), ['tool-u', 'tool-z', 'tool-s']).map((r) => r.id), ['tool-u', 'tool-s']);
   eq('body: text is a body', hasPolicyBody('# Policy\n'), true);
   eq('body: an empty file is not', hasPolicyBody(''), false);
   eq('body: whitespace and comments are not', hasPolicyBody('\n<!-- soon -->\n  \n'), false);
@@ -560,7 +593,7 @@ function selfTest() {
 
 module.exports = { validate, checkRow, listLines, REQUIRED, TIERS, EVIDENCE, NESTED, POLICY_MODES,
   POLICY_FILE, IMPORT_LINE, policyFilesOf, injectedFiles, stubFiles, enabledStubFiles, enabledFindings,
-  hasPolicyBody, importTokens, stubFindings, readRegistry, REGISTRY_REL };
+  hasPolicyBody, importTokens, stubFindings, readRegistry, REGISTRY_REL, enabledRows, skillRoots };
 
 /* ---------- main ---------- */
 if (require.main === module) {

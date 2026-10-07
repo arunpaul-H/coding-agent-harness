@@ -3,51 +3,59 @@ id: founder-guide-handoff
 kind: handoff
 status: open
 read_when: "starting or resuming founder-guide"
-phase_next: 1
+phase_next: 3
 ---
 
-# Founder guide: the next phase
+# Non-tech guide: the next phase
 
 ## ▶ THE NEXT SESSION: paste this into a new chat
 
 ```
-PHASE 1: the guide skill exists and a person has used it
+PHASE 3, CLOSE-OUT: the README section has landed; a person still has to look at it on GitHub
 
 Read, in this order:
-  docs/tracks/founder-guide/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/founder-guide/plan.md     (Phase 1 only)
-  docs/tracks/founder-guide/traps.md    (before touching anything)
-  .claude/skills/plan/SKILL.md          (the one shipped skill that runs inline: copy its shape)
-  docs/reference/skill-safety/03-the-checklist.md   (run it against the new skill)
+  docs/tracks/founder-guide/README.md   (State, Invariants, How to work, and the receipt in the frontmatter)
+  docs/tracks/founder-guide/plan.md     (Phase 3, with its "Delivered")
+  docs/tracks/founder-guide/traps.md    (FG-04 and FG-06 above all)
 Nothing else unless a line below cites it.
 
-SCOPE: in — write .claude/skills/guide/SKILL.md, run the skill-safety checklist against it, and
-have a person invoke it once. Out — the installer, package.json, every test, the root README, any
-agent file, and any advice about whether a business idea is good.
+SCOPE: in — get the owner's word that the start-here section of the root README draws correctly
+on GitHub in light and dark mode, record it in plan.md Phase 3 "Delivered", fix only what that
+look finds, close phase 3, and archive the track if the owner says so. Out — the skill body, the
+installer, the tests, and every developer section of the root README.
 
 Do NOT re-derive, re-measure or re-open: what shipping a skill touches is frozen in
 docs/tracks/founder-guide/research/2026-10-07-guide-skill-ship-surface.md — do not repeat that
-sweep. The eight locked decisions in README.md stand; do not re-litigate skill versus agent, inline
-versus fork, the reader, the scope or the lock.
+sweep. Do not rewrite the section, the skill or the phase 2 edits: all three are committed. The
+eight locked decisions in README.md stand.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Nothing of this track is built. The track folder holds its four files and one research file.
-  The tree is committed and pushed on main and CI is green there; work from a clean tree.
-  Two other tracks are open, multi-tool and autonomy-modes. Phase 1 creates one new directory and
-  edits no file either of them has written, but multi-tool claims .claude/** — see traps.md FG-01.
-  The frontmatter is name, description and argument-hint only. No context key and no agent key:
-  a forked skill cannot ask a question — see traps.md FG-05.
-  Whether a skill with no context key really runs inline has not been observed, only stated by
-  this repo's authors. The one live invocation in this phase is what settles it; record the result.
-  The guide must never re-baseline, waive a finding or allow a skip for the person without a plain
-  explanation and a yes (README.md, locked decision 7).
-  Do not add tests here. They arrive in phase 2 with one re-baseline, not two.
+  All three phases are committed on main. The receipt in README.md's frontmatter names the last
+  phase closed; trust it over any sentence, this one included.
+  Phase 3 is NOT closed and must not be until a person has looked at the page: no command can
+  check that a Mermaid diagram draws (FG-06). The look needs main pushed first. Pushing is the
+  owner's call: ask, do not assume.
+  NOT RUN anywhere yet: the suite on the two older supported Node versions (FG-03). This machine
+  has one Node only. The first CI run after the push settles it; read that run before closing.
+  The owner approved one skip on this machine: the docs gate's memory-index rule cannot run here.
+  It is now in the committed baseline as a declared skip. Pass --allow-skip docs=1 beside the
+  reproducible-build skip, on the check and on the close.
+  A close needs a green verdict recorded at HEAD on a clean tree, and the block above must have
+  changed since the last receipt. The full suite takes five to ten minutes: run it in the
+  background and edit nothing meanwhile, or the verdict goes stale.
+  Left alone on purpose: docs/methods/09-the-phase-lifecycle.md still counts three working
+  skills, which is true of the three that walk a phase.
+  The audience statement the autonomy-modes track reserved in the root README is still unwritten
+  (FG-04). The start-here section does not make it; leave it room.
+  A commit here needs an author passed on the command line: git has no identity configured.
+  Other tracks may be live in this working tree (FG-01). Stage by path only; never stash or reset.
+  Archiving is close-phase.js with --archive, and only when the owner asks for it.
 
-First commit: `founder-guide: the guide skill, inline and in plain English`
-Exit: `node scripts/harness/guards/skill-verify.cjs --check && node scripts/harness/measure-context.js --check && node scripts/harness/guards/commit-hygiene.cjs --report`
+First commit: `founder-guide: a visual start-here section in the README`
+Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check && node scripts/harness/gates.js --check --allow-skip docs=1,reproducible-build=1`
 
 How to work: follow "How to work" in docs/tracks/founder-guide/README.md. One phase, then stop
 and hand off.

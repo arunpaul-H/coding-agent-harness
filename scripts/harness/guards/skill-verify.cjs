@@ -123,21 +123,77 @@ function normalise(bytes) {
   return Buffer.from(bytes.toString('binary').replace(/\r\n/g, '\n'), 'binary');
 }
 
-/** Fold an entire skill directory into one sha256. null if the directory is absent. */
-function hashSkillDir(dir) {
-  if (!fs.existsSync(dir)) return null;
-  const files = walkFiles(dir)
-    .map((abs) => ({ abs, rel: relPosix(dir, abs) }))
-    .sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
-
+/** The sha256-dir-v2 fold over `{ rel: bytes }`, wherever the bytes came from. */
+function hashFileMap(map) {
   const h = crypto.createHash('sha256');
-  for (const f of files) {
-    h.update(f.rel, 'utf8');
+  for (const rel of Object.keys(map).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    h.update(rel, 'utf8');
     h.update('\0');
-    h.update(normalise(fs.readFileSync(f.abs)));
+    h.update(normalise(map[rel]));
     h.update('\0');
   }
   return h.digest('hex');
+}
+
+/** Fold an entire skill directory into one sha256. null if the directory is absent. */
+function hashSkillDir(dir) {
+  if (!fs.existsSync(dir)) return null;
+  const map = {};
+  for (const abs of walkFiles(dir)) map[relPosix(dir, abs)] = fs.readFileSync(abs);
+  return hashFileMap(map);
+}
+
+// ---------------------------------------------------------------- rendering
+
+/* A RENDERED COPY: this repo's own skill, written a second time for the tools that load skills
+   from the shared root and not from the live one. It is the same body with a shorter
+   frontmatter, because a key only one runtime reads (a fork, a named subagent, an invocation
+   switch) means nothing to the others, or something else. The two keys kept are the two every
+   tool reading that root documents (the multi-tool research file, section C: `docs` evidence,
+   no tool was run). Rendering is a pure function of the source, so the copy can be CHECKED
+   against it instead of trusted: see verifyMirrors. */
+const PORTABLE_KEYS = ['name', 'description'];
+const SKILL_FILE = 'SKILL.md';
+
+/** A skill file with only the portable frontmatter keys. A continuation line (indented, or a
+ *  list item) stays with the key above it. Text with no frontmatter block is returned as is. */
+function renderSkillText(text) {
+  const lines = String(text).replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n');
+  if (lines[0] !== '---') return lines.join('\n');
+  const end = lines.indexOf('---', 1);
+  if (end < 0) return lines.join('\n');
+  const kept = [];
+  let keep = false;
+  for (const l of lines.slice(1, end)) {
+    const m = /^([A-Za-z0-9_-]+)\s*:/.exec(l);
+    if (m) keep = PORTABLE_KEYS.includes(m[1]);
+    if (keep) kept.push(l);
+  }
+  return ['---'].concat(kept, lines.slice(end)).join('\n');
+}
+
+/** What a skill directory renders to, as `{ rel: bytes }`. null if the directory is absent. */
+function renderSkillFiles(dir) {
+  if (!fs.existsSync(dir)) return null;
+  const map = {};
+  for (const abs of walkFiles(dir)) {
+    const rel = relPosix(dir, abs);
+    const bytes = fs.readFileSync(abs);
+    map[rel] = rel === SKILL_FILE ? Buffer.from(renderSkillText(bytes.toString('utf8')), 'utf8') : bytes;
+  }
+  return map;
+}
+
+/** The lock entry for a rendered copy. It carries NO reviewedAt: a date there says a person read
+ *  the skill that day, and an installer is not a person. What the entry pins is narrower and
+ *  true: these are the bytes the source rendered to. */
+function renderedLockEntry(sourceRel, destRel, map) {
+  const digests = {};
+  for (const rel of Object.keys(map)) digests[rel] = crypto.createHash('sha256').update(normalise(map[rel])).digest('hex');
+  return {
+    source: 'local', sourceType: 'rendered', renderedFrom: sourceRel, skillDir: destRel,
+    computedHash: hashFileMap(map), fileDigests: digests, hashAlgo: HASH_ALGO,
+  };
 }
 
 /** Per-file digests. These are what let a drift report NAME the changed file. */
@@ -255,6 +311,27 @@ function verifyMirrors(lock, rep, only) {
   for (const [name, entry] of Object.entries((lock && lock.skills) || {})) {
     if (only && name !== only) continue;
     const canonical = resolveSkillDir(name, entry);
+    /* A RENDERED copy is never byte-identical to its source, so equality is the wrong question.
+       The right one is whether the copy is still what the source renders to: an edit to either
+       side that the other did not follow is two tools following two different instructions. */
+    if (entry && typeof entry.renderedFrom === 'string' && entry.renderedFrom) {
+      const rendered = renderSkillFiles(path.join(ROOT, entry.renderedFrom));
+      if (rendered === null || !fs.existsSync(canonical)) continue; // no source here, or MISSING above
+      if (hashFileMap(rendered) !== hashSkillDir(canonical)) {
+        const want = {};
+        for (const rel of Object.keys(rendered)) want[rel] = crypto.createHash('sha256').update(normalise(rendered[rel])).digest('hex');
+        finding(rep, {
+          kind: 'skill', name, severity: 'error',
+          message: 'RENDER-DRIFT — ' + fromRoot(canonical) + ' is not what ' + entry.renderedFrom +
+            ' renders to; two tools would follow two different skills. Re-run `harness init` after reading the diff',
+          changed: diffFiles(want, fileDigests(canonical)),
+        });
+        grade(rep, 'mirror:' + name, 'fail');
+        continue;
+      }
+      grade(rep, 'mirror:' + name, 'pass');
+      continue;
+    }
     const live = path.join(LIVE_ROOT, name);
     if (path.resolve(canonical) === path.resolve(live)) continue; // the lock points at the live copy
     let st;
@@ -1010,11 +1087,24 @@ function selfTest() {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
+  /* rendering: the portable frontmatter, and nothing a single runtime reads */
+  const SRC = '---\nname: a\ndescription: Does a.\n  Over two lines.\ncontext: fork\nagent: a\nargument-hint: <x>\n---\n# a\n\ncontext: stays in the body\n';
+  must('render: only the portable keys survive, a continuation line with its key',
+    renderSkillText(SRC), '---\nname: a\ndescription: Does a.\n  Over two lines.\n---\n# a\n\ncontext: stays in the body\n');
+  must('render: rendering twice changes nothing', renderSkillText(renderSkillText(SRC)), renderSkillText(SRC));
+  must('render: CRLF in, LF out', renderSkillText(SRC.replace(/\n/g, '\r\n')), renderSkillText(SRC));
+  must('render: a file with no frontmatter is left alone', renderSkillText('# a\n\nbody\n'), '# a\n\nbody\n');
+  must('render: an unclosed block is not a frontmatter', renderSkillText('---\nname: a\n# a\n'), '---\nname: a\n# a\n');
+  const entry = renderedLockEntry('.live/a', '.shared/a', { 'SKILL.md': Buffer.from('# a\n') });
+  must('a rendered entry names its source and its copy, and claims no review',
+    [entry.sourceType, entry.renderedFrom, entry.skillDir, 'reviewedAt' in entry], ['rendered', '.live/a', '.shared/a', false]);
+  must('...and its digest is the directory digest of the same bytes', entry.computedHash, hashFileMap({ 'SKILL.md': Buffer.from('# a\r\n') }));
+
   for (const f of fails) console.log('  x ' + f);
   console.log(fails.length
     ? 'FAIL — skill-verify self-test: ' + fails.length + ' of ' + n + ' assertion(s)'
     : 'PASS — skill-verify self-test (' + n + ' assertions: drift diff, tool scope, payload parsing, ' +
-      'plugin verdicts, review dates, GATE arithmetic, directory digest)');
+      'plugin verdicts, review dates, GATE arithmetic, directory digest, rendering)');
   process.exit(fails.length ? 1 : 0);
 }
 
@@ -1109,6 +1199,7 @@ module.exports = {
   hashSkillDir, fileDigests, diffFiles, tally, isPathTool, targetSkill,
   pluginFindings, nextReviewedAt, verifyAll, GATE_NAME, HASH_ALGO,
   decideSessionStart, gatherSessionStart,
+  renderSkillText, renderSkillFiles, renderedLockEntry, hashFileMap, PORTABLE_KEYS,
 };
 
 if (require.main === module) {

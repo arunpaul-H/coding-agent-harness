@@ -62,7 +62,7 @@ not a comparison that passed.
 
 | Common: identical to the source, compared byte for byte | Per-branch: authored on each branch |
 |---|---|
-| `.claude/helpers/`, `.claude/agents/`, the three skills | `AGENTS.md` §1 "What this is"; the rest of that file is common |
+| `.claude/helpers/`, `.claude/agents/`, the four skills | `AGENTS.md` §1 "What this is"; the rest of that file is common |
 | `.claude/settings.json`, `CLAUDE.md` (the import stub), `skills-lock.json` | `harness.config.json`: the gate registry and every project-specific setting |
 | `scripts/harness/`, except its per-branch files | `scripts/harness/context-budget.json`: this branch's context ceilings |
 | `tests/`, `schema/`, `templates/`, `.github/workflows/ci.yml`, `.gitattributes` | `scripts/harness/gates.baseline.json`, `harness-baseline.json`: measured here |

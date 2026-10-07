@@ -9,6 +9,41 @@ just a written rule is labelled as one.
 
 Node 20 or newer, built-ins only, zero dependencies. This repo is checked by the harness it ships.
 
+## Not a developer? Start here
+
+You do not need to read code to use this. You tell an AI what to build, and the harness checks
+the AI's work for you.
+
+```mermaid
+flowchart LR
+    A[You describe what you want] --> B[The AI writes it]
+    B --> C{The harness checks it}
+    C -->|Green| D[Keep going]
+    C -->|Red| E[The AI is told why and fixes it]
+    E --> C
+```
+
+**What the colours mean**
+
+| Result | In plain words |
+|---|---|
+| 🟢 Green | Every check the project has was run, and none failed or went missing. |
+| 🔴 Red | A check failed or disappeared. Nothing is broken for good: the AI is told exactly what to fix. |
+| ⚪ Skipped | A check did not run. It proved nothing, so ask why before you rely on the result. |
+
+**Your first hour**
+
+1. Open your project in Claude Code, the AI coding tool this guide is built for.
+2. Ask it to copy this harness into your project. It shows you the list of files first.
+3. Ask it to check that every piece is in place.
+4. Type `/guide`. It walks you through the rest in plain English, one step at a time.
+
+> **What green does not mean.** Green does not mean the idea is good, that customers want it, or
+> that the product is secure. It means the checks your project has all ran and passed. A project
+> with few checks goes green easily.
+
+Everything below this line is written for developers.
+
 ## Why this is different
 
 Most agent harness repos give you prompts, agent definitions or an orchestration framework. This
@@ -26,6 +61,7 @@ one gives you none of those as its main product. It gives you the checks around 
 - You run a coding agent on a real repo, across many sessions.
 - You have seen an agent skip a rule, quote a stale test count or call unfinished work done.
 - You want that caught by CI and hooks instead of by review.
+- You are not a tech expert and you drive a coding agent yourself: [start here](#not-a-developer-start-here).
 
 ## Who it is not for
 
@@ -163,7 +199,7 @@ its cost and its limits.
 bin/                     harness.js: the installer and CLI (init, doctor, gates, docs, host, selftest)
 scripts/harness/         the gate runner, config loader, lifecycle and doc scripts, baselines
 scripts/harness/guards/  the guards, the doc linter, the skill verifier
-.claude/                 hook wiring, four agent briefs, three skills, the status line
+.claude/                 hook wiring, four agent briefs, four skills, the status line
 schema/                  the JSON schema for harness.config.json
 templates/               starting files for AGENTS.md, CLAUDE.md, the routing doc and a track
 docs/methods/            one page per mechanism
