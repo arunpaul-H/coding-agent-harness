@@ -84,7 +84,7 @@ the research file, and stand until the owner says otherwise.
 |---|---|---|
 | 1 | The `guide` skill, written, checked against the skill-safety checklist, and tried once by a person | landed; closed only if this file's frontmatter carries its receipt |
 | 2 | `init` installs it; a test ties the installer's list to the package file list | landed; closed only if this file's frontmatter carries its receipt |
-| 3 | The visual start-here section in the root README; every prose count of skills corrected | open |
+| 3 | The visual start-here section in the root README; every prose count of skills corrected | landed, not yet looked at on GitHub; closed only by a receipt above |
 
 ## How to work
 

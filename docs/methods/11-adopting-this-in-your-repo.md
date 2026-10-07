@@ -28,7 +28,7 @@ it installs the track skeleton and renders `AGENTS.md` (the policy), its `CLAUDE
 |---|---|
 | `scripts/harness/` | the gate runner, the config loader, the lifecycle and doc scripts |
 | `scripts/harness/guards/` and `.claude/settings.json` | the guards and their wiring. Merge the settings file if you already have one |
-| `.claude/agents/`, `.claude/skills/` | the four agent briefs and three working skills. Optional |
+| `.claude/agents/`, `.claude/skills/` | the four agent briefs and four skills. Optional |
 | `schema/harness.config.schema.json` | documents every config key |
 | `templates/` | skeletons: `AGENTS.md`, the `CLAUDE.md` stub, the routing doc, a subtree `AGENTS.md`, a track folder, the doc standard |
 

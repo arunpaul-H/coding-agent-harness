@@ -59,9 +59,8 @@ in `skills-lock.json` (locked decision 6).
 
 - `.claude/skills/guide/SKILL.md` exists. Frontmatter is `name`, `description`, `argument-hint`.
   The exit command ran green; `guide` reports as UNLOCKED, a warning, like the other three.
-- Deviation: the plan names `node bin/harness.js doctor`. `init` does not copy `bin/` into a
-  target repo, so the skill uses that command only where the file exists and otherwise runs the
-  person's own copy of the harness with `--root .`.
+- Deviation: `init` does not copy `bin/` into a target repo, so the skill runs the planned
+  `doctor` command only where that file exists, else the person's own copy with `--root .`.
 - The skill-safety checklist, gate by gate:
   1. Prose: written and read whole by the lead. Zero-width and comment/blob greps: no hit.
   2. and 3. Bundled files: none, the directory holds `SKILL.md` only. Network: no URL.
@@ -73,11 +72,10 @@ in `skills-lock.json` (locked decision 6).
      shipped skill uses; the body's refusals (locked decision 7) are prose, not a mechanism.
   6. Provenance: first-party, tracked in this repo; duplicates no installed skill.
   7. and 8. Record: not pinned, by locked decision 6, so no lock change to commit with it.
-- The live try: the owner ran `/guide` in a session of their own on 2026-10-07 and reported that
-  it answered in the chat and waited for an answer, and that nothing it said was confusing or
-  wrong. That is one person's report of one run, in Claude Code only; no transcript is kept. It
-  settles that a skill with no `context` key runs inline there (research file, "Not
-  established", item 2). Which of the four jobs the run exercised was not recorded.
+- The live try: the owner ran `/guide` in their own session on 2026-10-07 and reported that it
+  answered in the chat, waited for an answer, and said nothing confusing or wrong. One person's
+  report of one run, in Claude Code only, no transcript kept. It settles that a skill with no
+  `context` key runs inline there. Which of the four jobs the run exercised was not recorded.
 - After that try the owner widened the reader from "a solo founder" to anyone who is not a tech
   expert. Three sentences of the skill were reworded to match (the description's trigger words,
   the reader paragraph, one line of job three). The reworded text has NOT been tried by a person.
@@ -147,4 +145,6 @@ image file or a diagram tool (locked decision 8).
 **First commit:** `founder-guide: a visual start-here section in the README`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check && node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
 
-**Delivered.** not started
+**Delivered.** Landed on 2026-10-07: the section, the "Who it is for" line, three counts and the
+changelog entry. Left alone: `docs/methods/09-the-phase-lifecycle.md` (its three working skills
+still walk a phase). NOT DONE: nobody has looked at the page on GitHub (FG-06); not pushed.
