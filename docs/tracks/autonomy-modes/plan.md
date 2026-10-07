@@ -62,6 +62,9 @@ terminal when no mode is given, map the mode onto that tool's native flags from 
 tool. This is the whole reason the selector works — it is a parent process, so the model never sees the
 decision and cannot skip it.
 
+Delivered with one addition the plan did not name: the registry row gained an optional `bin` cell,
+because the launcher may name no tool and the row recorded flags but not the program to start.
+
 **First commit:** `autonomy-modes: the launcher owns the mode`
 **Exit:** `node scripts/harness/run.js --self-test`
 

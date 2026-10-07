@@ -374,6 +374,21 @@ describe('tools.js --check — what it refuses, by row and field', () => {
     });
   });
 
+  test('a `bin` cell is the bare name of a program, never a path or a command line', () => {
+    withFixture(registry([row({ bin: 'tool-a' }), row({ id: 'tool-b' })]), enabling(['tool-a']), (run) => {
+      assert.strictEqual(run('tools.js', ['--check']).status, 0, 'a bare program name, and a row with none, were refused');
+    });
+    for (const bin of ['tool-a --fast', 'bin/tool-a', '../tool-a', 'tool;x', '']) {
+      withFixture(registry([row({ bin: bin })]), enabling(['tool-a']), (run) => {
+        refuses(run('tools.js', ['--check']), 'tool-a.bin', /must be the bare name of the tool's program/);
+      });
+    }
+    const model = row({ id: 'model-a', tier: 'inherits', policy: null, nested: null, hookConfig: null, dialect: null, sessionStart: null, projectHooks: null, bin: 'model-a' });
+    withFixture(registry([row(), model]), enabling(['tool-a']), (run) => {
+      refuses(run('tools.js', ['--check']), 'model-a.bin', /no program of its own to start/);
+    });
+  });
+
   test('a registry that cannot be read is a stop, never an empty registry', () => {
     for (const reg of [null, '{ "tools": [ }']) {
       withFixture(reg, enabling(['tool-a']), (run) => {
@@ -616,6 +631,10 @@ describe('the shipped registry — what it claims, and on what evidence', () => 
     assert.match(r.notes, /No session was started under any of them/);
     // Every other row came from pages that name no flag. A `modes` cell there is a recalled one.
     assert.deepStrictEqual(reg.tools.filter((x) => 'modes' in x).map((x) => x.id), ['claude-code']);
+    // The program is the first word of the command that row's own evidence ran, and no other row
+    // ran one.
+    assert.strictEqual(r.bin, r.command.split(' ')[0]);
+    assert.deepStrictEqual(reg.tools.filter((x) => 'bin' in x).map((x) => x.id), ['claude-code']);
   });
 
   test('a tool whose default file the sources disagree on gets a row that claims only what they agree on', () => {

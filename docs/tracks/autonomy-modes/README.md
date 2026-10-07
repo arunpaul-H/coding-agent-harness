@@ -34,7 +34,8 @@ compliance framing, and dollar-cost accounting.
 | Carve-out ratchet | `scripts/harness/carveouts.js` | written, self-tested, not gated, no baseline recorded |
 | Cross-session claims | `scripts/harness/peers.js` | written, self-tested, hook NOT wired, not gated |
 | Mode flags per tool | `scripts/harness/tools.json` `modes` | validated by the `tools` gate; one row filled, its `fully-auto` null pending the owner |
-| The launcher | `scripts/harness/run.js` | not written |
+| The program per tool | `scripts/harness/tools.json` `bin` | validated by the `tools` gate; one row filled, from the command its own evidence ran |
+| The launcher | `scripts/harness/run.js`, `harness run` | written, self-tested, tested as a process against a planted program; no real tool started through it; writes no receipt |
 | Audience statement | `README.md`, `docs/methods/00-overview.md` | written |
 | Mode config section | `harness.config.json`, `schema/` | not written |
 

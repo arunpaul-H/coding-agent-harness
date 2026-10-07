@@ -62,7 +62,7 @@ const REGISTRY_REL = 'scripts/harness/tools.json';
 
 const REQUIRED = ['id', 'policy', 'nested', 'hookConfig', 'dialect', 'sessionStart', 'projectHooks',
   'tier', 'evidence', 'asOf', 'source'];
-const OPTIONAL = ['name', 'command', 'notes', 'skills', 'modes'];
+const OPTIONAL = ['name', 'command', 'notes', 'skills', 'modes', 'bin'];
 /* The harness's run modes, most to least autonomous. They are the keys of MODES in mode.js, which
    this script cannot load: it is copied beside the config loader alone into places that carry no
    other harness file. tests/tools.test.js holds the two lists to each other. */
@@ -152,6 +152,10 @@ function checkRow(row, dialects) {
       if (HARNESS_MODES.every((k) => m[k] === null)) bad('modes', 'every mode is null, so the cell establishes nothing — leave the key out');
     }
   }
+  // The program a launcher starts, found on PATH. A name, never a path: a path is one machine's.
+  if (has('bin') && (typeof row.bin !== 'string' || !/^[A-Za-z0-9._-]+$/.test(row.bin))) {
+    bad('bin', 'must be the bare name of the tool\'s program as typed on a command line (got ' + show(row.bin) + ') — leave the key out when it is not established');
+  }
   for (const k of ['sessionStart', 'projectHooks']) {
     if (has(k) && row[k] !== null && typeof row[k] !== 'boolean') bad(k, 'must be true, false or null (got ' + show(row[k]) + ')');
   }
@@ -176,6 +180,7 @@ function checkRow(row, dialects) {
       if (has(k) && row[k] !== null) bad(k, 'tier `inherits` is a model, not an agent: it has no ' + k + ' of its own, so this must be null');
     }
     if (has('modes')) bad('modes', 'tier `inherits` is a model, not an agent: it has no command line to pass a flag to, so leave the key out');
+    if (has('bin')) bad('bin', 'tier `inherits` is a model, not an agent: it has no program of its own to start, so leave the key out');
   } else if (TIERS.includes(row.tier)) {
     if (has('policy') && row.policy === null) bad('policy', 'only tier `inherits` may have no policy route');
   }
@@ -750,6 +755,12 @@ function selfTest() {
   eq('modes: four nulls establish nothing', rowFields(good({ modes: { 'fully-auto': null, 'auto-edit': null, hitl: null, manual: null } })), ['modes']);
   eq('modes: an `inherits` row has no command line', rowFields(good(Object.assign({}, inherits, { modes: modes() }))), ['modes']);
   eq('modes: the list is four kebab-case ids, once each', [HARNESS_MODES.every(isId), new Set(HARNESS_MODES).size], [true, 4]);
+  // The program a launcher starts. Optional; a bare name, never a path or a command line.
+  eq('bin: a bare program name is clean', rowFields(good({ bin: 'tool-a' })), []);
+  for (const v of ['tool-a --fast', 'bin/tool-a', 'C:\\tool-a', '../tool-a', 'tool;x', '', null, 7, ['tool-a']]) {
+    eq('bin: ' + show(v) + ' is refused', rowFields(good({ bin: v })), ['bin']);
+  }
+  eq('bin: an `inherits` row has no program', rowFields(good(Object.assign({}, inherits, { bin: 'tool-a' }))), ['bin']);
   eq('enabled rows: in the config\'s order, an id with no row left out',
     enabledRows(reg([sharedA, ownRoot]), ['tool-u', 'tool-z', 'tool-s']).map((r) => r.id), ['tool-u', 'tool-s']);
   eq('body: text is a body', hasPolicyBody('# Policy\n'), true);

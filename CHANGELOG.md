@@ -28,7 +28,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   changed.
 - **An optional `modes` cell in the tool registry**: each harness run mode mapped to the tool's own
   command-line flags, or null where none is established. `tools.js --check` validates it. One row
-  carries it, read off that tool's help and not run; nothing launches a tool with these flags yet.
+  carries it, read off that tool's help and not run.
+- **A launcher: `harness run [<mode>] [--tool <id>]`** (`scripts/harness/run.js`). The run mode is
+  chosen by a person before the agent exists: with no mode it asks on the terminal, and with no
+  terminal it refuses. It starts the tool with the flags its registry row records for that mode,
+  and the program named by the row's new optional `bin` cell. A tool with no `modes` cell or no
+  `bin`, and a mode whose cell is null, are refused and never started bare. `--dry-run` starts
+  nothing. No session of any tool was started under a mode through it.
 
 ### Changed
 

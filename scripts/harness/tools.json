@@ -44,6 +44,8 @@
     "              is established for it. Present, it answers all four. It records what a launcher",
     "              would PASS, never that the tool then behaves that way: `notes` says what was",
     "              run. Left out, nothing is established and a launcher has nothing to pass.",
+    "bin           OPTIONAL. The bare name of the tool's program, as typed on a command line and",
+    "              found on PATH. It is what the launcher starts. Left out, the launcher refuses.",
     "tier          full       deny-capable hook + session-start + checked-in project config",
     "              guard-only deny-capable hook, but no session-start or no project-level config",
     "              backstop   no hook the harness can wire: instructions, git hook and CI gate.",
@@ -76,6 +78,7 @@
         "hitl": ["--permission-mode", "acceptEdits"],
         "manual": ["--permission-mode", "manual"]
       },
+      "bin": "claude",
       "tier": "full",
       "evidence": "ran",
       "command": "claude -p \"Without reading any file, quote the hard rule beginning 'This file is the only policy body' and name its file; then spawn a subagent to do the same without file tools. Label LEAD and SUBAGENT.\"",
