@@ -64,10 +64,10 @@
    under-counting a waiver is the failure that cannot be seen. The mitigation is the per-file
    map in the census (`files`) and in `--accept` output: the figure is only readable WITH it.
 
-   NOT WIRED, and saying so here rather than letting the line above imply otherwise: this
-   script is not in `harness.config.json`'s `gates` array and has no `tests/` entry, so
-   `gates.js --check` never calls it and its GATE line is a verdict nobody collects yet.
-   Both files are frozen for this change; wiring is a separate edit.
+   WIRED IN THIS REPO since 2026-10-07: `harness.config.json` lists a `carveouts` gate running
+   `--check`, and tests/mode-gates.test.js runs this file's self-test. The config `harness init`
+   writes for another repo does NOT list it: a census has to be bootstrapped on that repo's own
+   clean tree first, and until it is this gate would only declare a skip.
    ============================================================ */
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');

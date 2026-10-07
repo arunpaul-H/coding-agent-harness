@@ -3,56 +3,63 @@ id: autonomy-modes-handoff
 kind: handoff
 status: open
 read_when: "starting or resuming autonomy-modes"
-phase_next: 6
+phase_next: 7
 ---
 
-# Autonomy modes: the next phase
+# Autonomy modes: closed and archived
 
 ## ▶ THE NEXT SESSION: paste this into a new chat
 
 ```
-PHASE 6: gate the four mode scripts, then stop
+TRACK ARCHIVED: every phase of the plan has landed, and the owner asked for it to be completed.
 
 Read, in this order:
-  docs/tracks/autonomy-modes/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/autonomy-modes/plan.md     (Phase 6 only)
-  docs/tracks/autonomy-modes/traps.md    (before touching anything; AM-09 decides the order)
-  harness.config.json                    (the `gates` array and its `_readme`)
-  scripts/harness/mode.js, actions.js, carveouts.js, peers.js
-                                         (each file's header and its main block only: what it
-                                          prints last, and which command line grades the tree)
-Nothing else unless a line below cites it.
+  docs/tracks/autonomy-modes/README.md   (State, Locked decisions, Invariants, the receipt)
+  docs/tracks/autonomy-modes/traps.md    (before touching anything)
+Run, and read the output instead of the code:
+  node bin/harness.js --help
+  node scripts/harness/run.js --modes
+Nothing else unless a line below cites it. Find every other reference by Grep, not by reading.
+After the archive this folder sits under the docs root's archive directory, same file names.
 
-SCOPE: in: one entry in the `gates` array for each of the four scripts, each command ending in a
-GATE line the runner can parse; the first carve-out baseline, recorded on a whole, committed
-tree; and the re-baseline that follows. Out: wiring the peers hook, registering mode.js on any
-hook event, filling a null mode, and any change to what the four scripts decide.
+SCOPE: in: nothing. Out: the launcher, the registry cells it reads, the config section, the
+receipt, the guard rule and the four gates: all are committed. A new idea is a new track.
 
-Do NOT re-derive, re-measure or re-open: the research sweeps are frozen under
-docs/tracks/autonomy-modes/research/. The locked decisions in README.md were settled by the owner
-on 2026-10-06. The launcher, the config section and the receipt are settled and pinned by tests.
+Do NOT re-research the tools or edit this folder's research files: frozen evidence.
+Do NOT fill the unattended mode's cell in the registry: which flag it takes is the owner's
+decision and risk (locked decision 5). Ask; do not pick.
+Do NOT wire the peers hook, or register mode.js on a hook event, without the owner.
+Do NOT add a mode cell or a program name to a registry row from memory: read it off the tool.
+Do NOT quote a green `mode`, `effects` or `peers` gate as proof a mode is enforced (AM-12).
+Do NOT add a field to the receipt to make it trustworthy (AM-10, invariant 1).
+Do NOT commit, push, stash, restore, reset or flip a status: line unless the owner asks.
+No inline node -e: write a script file in the scratchpad.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phases 1 to 5 are closed. The config has a closed `mode` section; `harness run --track <id>`
-  writes the receipt `<track>/.phase` from a terminal only; the phase guard refuses a write to
-  it by path (D6) and says a shell redirect is not caught; the file is git-ignored and `doctor`
-  checks that. Nothing reads the receipt: mode.js is registered on no hook event.
-  A GATE WHOSE COMMAND PRINTS NO GATE LINE IS A HARD FAILURE, so a script that only prints a
-  PASS line needs one before it can be listed. Two of the four already name a gate of their own.
-  The suite total rises in this phase, so the re-baseline is the point and its commit subject
-  starts `gates:`.
-  The owner has still not chosen the unattended flag, and the peers hook is still NOT wired.
-  On a machine with no auto-memory index the docs gate reports one declared skip, so the gate
-  command is `node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1`.
-  This is the last phase: after it closes, the track is archived by
-  `node scripts/harness/close-phase.js autonomy-modes --archive`.
+  The receipt in README.md's frontmatter names the last phase closed. Trust it over any
+  sentence, this one included.
+  Every phase was closed by close-phase.js.
+  WHAT IS MECHANISM: the mode is chosen by a person at a terminal, in a parent process, before
+  the agent exists; the tool is started with the flags its registry row records; a null mode, a
+  row with no cell and a missing terminal are refused. A write to a track's receipt is refused
+  by the phase guard, under a tool whose hook is wired.
+  WHAT IS STILL PROSE: no hook reads the receipt, so no mode is ENFORCED on a running agent. The
+  verdicts exist in mode.js and are self-tested; nothing calls them. A shell redirect into the
+  receipt is not caught. A terminal is detected, a person is not proven.
+  The unattended mode is null in the one filled row, so the launcher refuses it by name.
+  The carve-out gate counts mentions and moves with ordinary edits (AM-11).
+  The four gates are in this repo's suite only, not in the config the installer writes.
+  The suite needs two declared skips on a machine with no auto-memory index; the committed
+  baseline records them.
+  Never run: a real coding agent through the launcher (its tests plant a throwaway program), the
+  receipt being written from a real terminal, the four new gates on the CI runner or on the
+  oldest supported Node, and a session under any mode flag.
 
-First commit: `gates: the mode, effects, carveouts and peers gates`
-Exit: `node scripts/harness/gates.js --check --allow-skip reproducible-build=1`
+First commit: none; no work is owed.
+Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
-How to work: follow "How to work" in docs/tracks/autonomy-modes/README.md. One phase, then stop
-and hand off.
+How to work: there is no next phase. A new need is a new track.
 ```

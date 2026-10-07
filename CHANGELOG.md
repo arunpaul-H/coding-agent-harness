@@ -41,6 +41,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   terminal. The phase guard refuses the agent's own write to that file (D6) by the path of a
   write call; a shell redirect into it is not caught, and the guard says so. `init` and `doctor`
   now require the receipt to be git-ignored. Nothing reads the receipt yet.
+- **Four gates in this repo's suite: `mode`, `effects`, `carveouts`, `peers`.** Three run a
+  script's self-test and read its exit status; they grade the script, not the tree. `carveouts`
+  compares the waivers in the git index, per kind, with a committed census
+  (`scripts/harness/carveouts.baseline.json`): a count of mentions, so an edit that spells a
+  waiver moves it. The config `harness init` writes does not list them.
 
 ### Changed
 

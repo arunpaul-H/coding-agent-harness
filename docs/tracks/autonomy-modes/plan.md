@@ -94,5 +94,11 @@ nowhere earlier: a census measured against a half-edited tree is a fixture that 
 
 A re-baseline commit's subject starts `gates:`.
 
+Delivered narrower than "each gets an entry" reads. `mode`, `effects` and `peers` gate the
+script's own self-test through the exit status, because none of the three prints a verdict about
+this tree: `mode.js` is registered on no hook, there is no ledger for `actions.js` to grade, and
+the peers hook is not wired. Only `carveouts` grades the tree. The gates are in this repo's suite
+and not in the config `harness init` writes, since a census must be bootstrapped per repo.
+
 **First commit:** `gates: the mode, effects, carveouts and peers gates`
 **Exit:** `node scripts/harness/gates.js --check --allow-skip reproducible-build=1`

@@ -29,10 +29,10 @@ compliance framing, and dollar-cost accounting.
 
 | Piece | Where | State |
 |---|---|---|
-| The four-mode verdict | `scripts/harness/mode.js` | written, self-tested, registered nowhere |
-| Duplicate-effect ledger | `scripts/harness/actions.js` | written, self-tested, not gated |
-| Carve-out ratchet | `scripts/harness/carveouts.js` | written, self-tested, not gated, no baseline recorded |
-| Cross-session claims | `scripts/harness/peers.js` | written, self-tested, hook NOT wired, not gated |
+| The four-mode verdict | `scripts/harness/mode.js` | written; its self-test is the `mode` gate; registered on NO hook event, so no mode is enforced |
+| Duplicate-effect ledger | `scripts/harness/actions.js` | written; its self-test is the `effects` gate; no ledger exists in this repo and nothing grades one |
+| Carve-out ratchet | `scripts/harness/carveouts.js` | written; the `carveouts` gate compares the index with the committed census `scripts/harness/carveouts.baseline.json` (traps AM-11) |
+| Cross-session claims | `scripts/harness/peers.js` | written; its self-test is the `peers` gate; hook NOT wired |
 | Mode flags per tool | `scripts/harness/tools.json` `modes` | validated by the `tools` gate; one row filled, its `fully-auto` null pending the owner |
 | The program per tool | `scripts/harness/tools.json` `bin` | validated by the `tools` gate; one row filled, from the command its own evidence ran |
 | The launcher | `scripts/harness/run.js`, `harness run` | written, self-tested, tested as a process against a planted program; no real tool started through it |
