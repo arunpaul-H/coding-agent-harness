@@ -130,7 +130,7 @@ A second session is opening a track for run modes. These are settled, so neither
 | 2 | Guards live in `scripts/harness/guards/`, verdicts identical. Landed, committed, not closed | open |
 | 3 | A neutral guard event, one hook entry point, a dialect per wire format. Landed, committed, not closed | open |
 | 4 | `harness init --tools` renders each tool's wiring; `doctor` prints its tier. Landed, committed, closed by `close-phase.js` on 2026-10-07 (the receipt is in this file's frontmatter) | open |
-| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, uncommitted, not closed | open |
+| 5 | The opt-in git hooks, `tools.js --matrix`, and a `tools` gate. Landed, committed, not closed | open |
 | 6 | The method doc and the contributor path for adding a tool | open |
 
 ## How to work

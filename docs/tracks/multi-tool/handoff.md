@@ -73,7 +73,7 @@ scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
   Phases 0 to 4 are committed; phase 4 is closed by close-phase.js, its receipt in the track
-  README's frontmatter. Phase 5 landed uncommitted and is not closed.
+  README's frontmatter. Phase 5 is committed and is not closed.
   The git hooks: `harness init --git-hooks` writes a pre-commit that runs the commit gate's
   report and a pre-push that runs the suite with the skips the config declares. Without the flag
   init prints the two commands and writes nothing. A hook that exists is never replaced, --force
@@ -99,7 +99,7 @@ Inherited state:
   prompt; the entry-shape note in skills-lock.json for a rendered entry.
   Neighbour, reported and not ours to fix: the mode.js self-test passes a tool's own name as the
   action; peers.js documents its own pre-tool hook, which belongs in the HANDLERS table.
-  Owed by the lead: committing phase 5 and the phase 4 receipt; the re-baseline in its own
+  Owed by the lead: closing phase 5; the re-baseline in its own
   gates: commit, since phase 5 added a gate and a test file; promoting the default tool's row to
   ran (MT-11); deciding whether the Codex and Antigravity hook files are researched and run,
   which is what wires them.
