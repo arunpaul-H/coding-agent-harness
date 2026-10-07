@@ -1,26 +1,49 @@
 # Agent Harness
 
-A project-agnostic harness for agentic coding: a set of scripts and hooks you copy into a repo so
-that the rules you give a coding agent are checked by code instead of by memory.
+Scripts and hooks you copy into a repo so the rules you give a coding agent are checked by code,
+not left to the agent's memory.
 
-An agent follows a written rule until it does not. The rule was out of context, or contradicted by
-a nearer instruction, or simply inconvenient, and nothing announces the moment it stops being
-followed. So every rule that matters here is a **mechanism that fails loudly**, with an exit code
-for a verdict, and not a sentence somebody has to remember. Concretely, the repo gives you: a gate
-runner that compares every check's *total* against a committed baseline, so a check that vanishes
-is red; three guards that deny a tool call before it runs; a linter for the docs an agent reads; a
-byte ceiling on always-on context; a track and handoff format for work that spans sessions, closed
-by a script that refuses unless the evidence is current; and a lock that reports when a vendored
-skill changed since someone read it. What is still prose is labelled as prose.
+An agent follows a written rule until it doesn't, and nothing tells you when it stopped. Here,
+every rule that matters is a check that fails loudly with an exit code. Anything that is still
+just a written rule is labelled as one.
 
-Node 20 or newer, built-ins only, zero dependencies. It runs on itself: this repository is graded
-by the harness it ships.
+Node 20 or newer, built-ins only, zero dependencies. This repo is checked by the harness it ships.
+
+## Why this is different
+
+Most agent harness repos give you prompts, agent definitions or an orchestration framework. This
+one gives you none of those as its main product. It gives you the checks around them:
+
+- **A missing check is a failure.** Each gate's total is compared with a committed baseline, so a
+  test that was deleted or silently skipped turns the run red.
+- **Bad actions are blocked before they run**, by hooks, not asked for politely in a prompt.
+- **"Done" is a script.** A phase closes only when the script sees current evidence.
+- **It says what it cannot do.** See [What it does not do](#what-it-does-not-do).
+- **Nothing to install.** No dependencies, no build, no service, no model calls.
+
+## Who it is for
+
+- You run a coding agent on a real repo, across many sessions.
+- You have seen an agent skip a rule, quote a stale test count or call unfinished work done.
+- You want that caught by CI and hooks instead of by review.
+
+## Who it is not for
+
+- You want a framework for building or orchestrating agents. This calls no model.
+- You want a prompt or skill library to drop in.
+- You cannot run Node 20 on your machine and in CI.
+- You want blocking hooks on a tool other than Claude Code today (see [Your stack](#your-stack)).
+
+## When to use it
+
+Use it once the same rule has been broken silently more than once, or when work spans sessions
+and each new session re-learns what the last one knew. For a one-off script or a weekend
+prototype it is more process than you need.
 
 ## Install
 
-There is no published package. Installing is copying, because the hooks are read from your repo's
-own settings file and the baseline is committed beside the code it measures. You need Node >= 20,
-git, and a POSIX shell (on Windows, the one Git provides).
+There is no published package. Installing is copying. You need Node >= 20, git and a POSIX shell
+(on Windows, the one Git provides).
 
 ```bash
 git clone <this-repository> agent-harness
@@ -29,12 +52,10 @@ node agent-harness/bin/harness.js init --into <your-repo> --dry-run   # the plan
 node agent-harness/bin/harness.js init --into <your-repo>
 ```
 
-`init` never overwrites an existing file without `--force`. It installs no figures measured on
-another tree: the gate baseline and the context report arrive empty, and the context budget is
-marked `placeholder` until you measure your own files. It writes no `.gitattributes`; pin your
-line endings yourself.
+`init` never overwrites a file without `--force`, and it copies no numbers measured on another
+repo: your baseline starts empty. It writes no `.gitattributes`; pin your line endings yourself.
 
-To look before you copy, run it here. Nothing to install, nothing to build:
+To try it here first:
 
 ```bash
 node bin/harness.js selftest    # every --self-test in the repo
@@ -43,133 +64,40 @@ npm run gates                   # every gate against the committed baseline
 node bin/harness.js doctor      # every piece: OK / MISSING / DRIFTED, each with its fix
 ```
 
-On a machine with no agent-memory index for the checkout (any fresh clone, any CI runner) the
-`docs` gate declares one skip and prints why, and an undeclared skip is red by design. Tolerate it
-by name: `node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1`.
+On a fresh clone or a CI runner the `docs` gate reports one skip and says why. An undeclared skip
+is red on purpose, so allow it by name:
 
-## What you get
-
-| Mechanism | Implemented in | The failure it buys you out of |
-|---|---|---|
-| The GATE line protocol and its baseline | `scripts/harness/gates.js`, `gates.baseline.json` | Docs quoting stale totals; a check that vanished and left the suite green |
-| Reproducible-build check | `scripts/harness/gates.js`, `artifacts` in the config | A source edit committed without the rebuild, when the committed bundle is the deploy |
-| Secret-file guard | `scripts/harness/guards/env-guard.cjs` | A credential file read into a transcript that leaves the machine |
-| Phase guard | `scripts/harness/guards/phase-guard.cjs` | A status flipped by hand, a typed receipt, a gate figure written into a doc |
-| Commit hygiene | `scripts/harness/guards/commit-hygiene.cjs` | Shell debris, a pasted token and root clutter riding into a commit |
-| The doc contract | `scripts/harness/guards/docs-lint.cjs`, `doc-frozen.cjs`, `scripts/harness/docs-index.js`, `split-doc.js` | Line caps that were prose; a hand-kept read-map that drifted from the docs |
-| The context budget | `scripts/harness/measure-context.js`, `context-budget.json` | An always-on cost nobody is billed for and everybody pays |
-| Tracks and handoffs | `scripts/harness/handoff-lint.js`, `findings-check.js`, `templates/track/` | A cold session re-deriving what the last one knew; a finding closed by assertion |
-| The phase lifecycle | `scripts/harness/close-phase.js` | A phase closed on a verdict about a different tree |
-| The spawn contract and agent registry | `docs/reference/routing/README.md`, `.claude/agents/`, `docs-index.js --agents` | A registry table that drifted from the agent files. The contract itself is prose |
-| Skill supply-chain lock | `scripts/harness/guards/skill-verify.cjs`, `skills-lock.json` | An instruction file from a stranger changing with no diff anyone read |
-| One harness on every branch | `scripts/harness/branch-sync.js`, `common.json` | A long-lived branch running the harness of the day it was cut |
-| The config seam | `scripts/harness/config.js`, `harness.config.json`, `schema/` | A harness that invents a suite when it cannot read one |
-| Installer and doctor | `bin/harness.js` | An install nobody verified; a piece silently missing |
+```bash
+node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1
+```
 
 ## Quickstart
 
-Everything below was run against a throwaway repo named `acme-api` holding a `package.json` and
-one `node:test` file. The output is pasted from that run on Windows, hence the backslashes. Only
-the absolute path of the target is replaced, and `[...]` marks lines cut for length.
+1. **Init**, as above. It detects your package manager, test command, docs folder and default
+   branch, and lists the placeholders it left for you to fill in `AGENTS.md`.
+2. **Read `harness.config.json`.** It is the only place the harness learns about your project.
+   Add your own checks to its `gates` array. With no config file, every script stops; there is
+   no default suite.
+3. **Run the gates.** `git add` first, because the context gate reads tracked files only.
 
-**1. Init.**
+   ```
+   $ node scripts/harness/gates.js --check --allow-skip reproducible-build=1
+   GATES RED — 1 violation(s) against scripts\harness\gates.baseline.json:
+     x docs: skipped=1 and no --allow-skip docs=n was given
+   ```
 
-```
-$ node agent-harness/bin/harness.js init --into .
-harness init -> <your-repo>
+   The first run is red, and should be. Read the reason, allow the skip, record the baseline:
 
-DETECTED
-  project name      acme-api   <- package.json `name`
-  package manager   npm   <- package.json with no lockfile
-  test command      node --test   [node-test]   <- package.json `scripts.test`
-  docs root         docs   <- the default (no docs directory yet)
-  default branch    main   <- a local `main` branch
+   ```
+   $ node scripts/harness/gates.js --accept --allow-skip reproducible-build=1,docs=1
+   $ node scripts/harness/gates.js --check  --allow-skip reproducible-build=1,docs=1
+   GATES GREEN — test 1/1 . docs 147/148 (1 skipped, declared) . context 6/6 . hygiene 7/7 . skills 2/2 . reproducible-build 0/1 (1 skipped, declared)
+   ```
 
-WROTE (41)
-  .claude/settings.json
-  [...]
-  harness.config.json   — generated from what was detected
-  skills-lock.json   — empty — a lock inherited from another machine pins another machine's review
-  .gitignore   — the ignore rules the harness depends on
-  AGENTS.md   — rendered for `acme-api`
-  CLAUDE.md   — a pointer: it imports AGENTS.md and holds no rule
-  docs/reference/routing/README.md   — rendered for `acme-api`
-  scripts/harness/context-budget.json   — placeholder ceilings for AGENTS.md, CLAUDE.md and the routing doc as written — no figure is inherited
+4. **Commit** (a commit that changes the baseline needs a subject starting `gates:`), run
+   `node agent-harness/bin/harness.js doctor`, and put the same `--check` command in CI.
 
-LEFT FOR YOU TO FILL (8) — init cannot detect these, so the token stays visible:
-  AGENTS.md: <WHAT_THIS_IS>
-  [...]
-```
-
-**2. Read `harness.config.json`.** `init` wrote it; it is the only place the harness learns
-anything about your project. The gate registry it generated here:
-
-```json
-"gates": [
-  { "name": "test",    "command": "node --test", "adapter": "node-test" },
-  { "name": "docs",    "command": "node scripts/harness/guards/docs-lint.cjs" },
-  { "name": "context", "command": "node scripts/harness/measure-context.js --check" },
-  { "name": "hygiene", "command": "node scripts/harness/guards/commit-hygiene.cjs --report" },
-  { "name": "skills",  "command": "node scripts/harness/guards/skill-verify.cjs --check" }
-],
-"artifacts": []
-```
-
-Add your own checks to that array. `node scripts/harness/config.js` prints the resolved config.
-With the file absent there is no default suite; every script stops:
-
-```
-FATAL — no readable harness.config.json at <your-repo>\harness.config.json (ENOENT)
-   fix: write harness.config.json at the repo root — see schema/harness.config.schema.json for the shape. The harness has no default suite.
-```
-
-**3. Scaffold a track** (only for work that will span several sessions).
-
-```
-$ mkdir -p docs/tracks && cp -r templates/track docs/tracks/login-rate-limit
-$ node scripts/harness/handoff-lint.js login-rate-limit
-handoff-lint: docs/tracks/login-rate-limit/handoff.md — the block is self-contained for a cold session
-$ node scripts/harness/docs-index.js
-wrote docs/INDEX.md — 4 live docs
-```
-
-The lint passes on the unfilled template, which tells you what it checks: the shape of the block,
-not whether you wrote anything useful in it. Fill every `<PLACEHOLDER>`.
-
-**4. Run the gate.** `git add` what was written first: the context gate grades only tracked files.
-The first run is red, and should be. Two checks could not run, and only one skip was allowed:
-
-```
-$ git add .
-$ node scripts/harness/gates.js --check --allow-skip reproducible-build=1
-> test ... pass=1 fail=0 skipped=0 exit=0  (0.3s)
-> docs ... pass=147 fail=0 skipped=1 exit=0  (0.2s)
-> context ... pass=6 fail=0 skipped=0 exit=0  (0.3s)
-> hygiene ... pass=7 fail=0 skipped=0 exit=0  (0.2s)
-> skills ... pass=2 fail=0 skipped=0 exit=0  (0.1s)
-> reproducible-build ... pass=0 fail=0 skipped=1 exit=0  (0s)
-    note: not applicable — 0 artifacts configured, 0 graded. Declare it: --allow-skip reproducible-build=1
-[...]
-GATES RED — 1 violation(s) against scripts\harness\gates.baseline.json:
-  x docs: skipped=1 and no --allow-skip docs=n was given
-```
-
-Read why it skipped (this machine holds no agent-memory index for the repo), allow it by name,
-record the baseline, and check against it:
-
-```
-$ node scripts/harness/gates.js --accept --allow-skip reproducible-build=1,docs=1
-[...]
-wrote scripts\harness\gates.baseline.json — this is a deliberate RE-BASELINE.
-! its commit subject must start `gates:` so the change is legible in `git log --oneline`.
-
-$ node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1
-[...]
-GATES GREEN — test 1/1 . docs 147/148 (1 skipped, declared) . context 6/6 . hygiene 7/7 . skills 2/2 . reproducible-build 0/1 (1 skipped, declared)
-```
-
-What the baseline is for. A second test was added and accepted, then removed. Nothing fails; a
-check is simply gone, and the exit code is 1:
+What the baseline buys you: delete a test later and nothing fails, yet the run is red.
 
 ```
 GATES RED — 2 violation(s) against scripts\harness\gates.baseline.json:
@@ -177,110 +105,80 @@ GATES RED — 2 violation(s) against scripts\harness\gates.baseline.json:
   x test: 1 checks in the total, baseline had 2 — a check DISAPPEARED (pass-by-absence)
 ```
 
-Then `node agent-harness/bin/harness.js doctor` (it ended `HEALTHY — ok=49 missing=0 drifted=0`
-on this run), commit, and put the same `--check` command in CI. The full walk-through, including
-how to confirm the hooks actually fire, is
+Full walk-through, including how to confirm the hooks fire:
 [docs/methods/11-adopting-this-in-your-repo.md](docs/methods/11-adopting-this-in-your-repo.md).
 
-## Does this work with my stack?
+## What you get
 
-Mostly, with two honest qualifications.
+| Piece | What it stops | Where |
+|---|---|---|
+| Gates and a baseline | Stale totals in docs; a check that vanished while the suite stayed green | `scripts/harness/gates.js` |
+| Reproducible-build check | A source edit committed without its rebuilt bundle | `scripts/harness/gates.js` |
+| Secret-file guard | A credential file read into a transcript | `scripts/harness/guards/env-guard.cjs` |
+| Phase guard | A status flipped by hand; a gate figure typed into a doc | `scripts/harness/guards/phase-guard.cjs` |
+| Commit hygiene | Stray files, pasted tokens and root clutter in a commit | `scripts/harness/guards/commit-hygiene.cjs` |
+| Doc contract | Docs over their line cap; an index that drifted from the docs | `scripts/harness/guards/docs-lint.cjs` |
+| Context budget | Always-loaded instruction files growing unnoticed | `scripts/harness/measure-context.js` |
+| Tracks and handoffs | A new session re-deriving what the last one knew | `templates/track/` |
+| Phase lifecycle | A phase closed on evidence from a different tree | `scripts/harness/close-phase.js` |
+| Skill lock | A third-party skill changing with no diff anyone read | `scripts/harness/guards/skill-verify.cjs` |
+| Branch sync | A long-lived branch running an old copy of the harness | `scripts/harness/branch-sync.js` |
+| Installer and doctor | An install nobody verified | `bin/harness.js` |
 
-**The harness itself is Node.** Your project need not be, but Node >= 20 must be on the machine
-and in CI, because every script and every hook is a Node file.
+Each piece has a page under [docs/methods/](docs/methods/README.md): the failure, the mechanism,
+its cost and its limits.
 
-**What is language-agnostic.** The gate runner runs any shell command: one that ends its stdout
-with `GATE <name> pass=<n> fail=<n> skipped=<n>` is read exactly, and anything else can use the
-`exit-code` adapter, which grades it as one pass or one fail. That is coarse; wrap your runner to
-print a GATE line when the count matters. `init` detects `go.mod`, `Cargo.toml` and a Python
-project with a tests directory and writes `go test ./...`, `cargo test` or `python -m pytest`
-under that adapter; for anything else it writes no test gate and says so. The doc contract, the
-track lifecycle, the context budget, commit hygiene and the skill lock read files and git, not
-your code.
+## Your stack
 
-**What is Claude Code-specific.** The blocking layer: `.claude/settings.json` wires the three
-guards to `PreToolUse` and four reports to `SessionStart`, and the guards parse that runtime's
-hook payload. So are the `.claude/agents/` and `.claude/skills/` files, the status line, the
-`permissions.deny` entries, and the doc gate's sweep of the agent-memory index. The policy itself
-is not: it lives in `AGENTS.md`, which most coding agents load, and `CLAUDE.md` is a one-line stub
-that imports it. The doc caps and the context budget key on those two names.
+- **The harness is Node.** Your project need not be, but Node >= 20 must be on the machine and in CI.
+- **Any language can be gated.** A gate is any shell command. If its last stdout line is
+  `GATE <name> pass=<n> fail=<n> skipped=<n>` the counts are read exactly; otherwise the
+  `exit-code` adapter grades it as one pass or one fail. `init` detects Node, Go, Rust and Python
+  test commands.
+- **The blocking hooks are wired for Claude Code.** So are the agent and skill files and the
+  status line. Support for other tools is in progress and not finished.
+- **The policy is not tied to one tool.** It lives in `AGENTS.md`, which most coding agents load;
+  `CLAUDE.md` is a one-line pointer to it.
+- **What works anywhere today:** `gates.js --check` in CI, and `commit-hygiene.cjs --report` in a
+  git pre-commit hook or a CI step.
 
-**The equivalent elsewhere.** No adapter for another agent runtime ships here. What ports as it
-stands: `gates.js --check` in CI, and `commit-hygiene.cjs --report` (exit 1 on findings) in a
-git pre-commit hook or a CI step. The pre-action deny has to be rebuilt on whatever hook your
-runtime offers; if it offers none, the guards are not available to you and the remaining checks
-run after the fact. Section 7 of the adoption doc lists the ideas that port without the code.
-
-## What this does NOT do
+## What it does not do
 
 - **A green gate does not prove the code is correct.** It proves the declared checks ran, none
-  failed and none vanished. A test that asserts the wrong thing is green forever.
-- **Nobody has measured that it improves output.** There is no control arm: the same work has not
-  been run with the harness off. Its costs are measured; its benefit is argued from the failures
-  it ended.
-- **The guards deny a shape, never a scope.** Each is a pattern match over one tool call. A
-  different spelling of the same action can pass. They stop accidents and reflexes, not an
-  adversary, and not an agent that is determined.
-- **The skill lock cannot secure what is outside the repo.** Marketplace plugin caches, user-level
-  skills and MCP servers load into every session and no file in this tree can pin their bytes. An
-  enabled plugin with no pin is reported as uncovered; that is naming it, not securing it. MCP
-  tool descriptions are not hashed at all. Invoking a drifted skill is reported at session start
-  and not blocked.
-- **The context budget measures bytes, not what the model does with them.** It grades the
-  instruction files you declared, at bytes over four as a token estimate. Tool schemas, skill
-  listings and the system prompt are usually the larger share and are not graded. A green
-  `context` gate says the declared files stayed inside their sizes, not that a session is cheap.
-- **The lints check shape.** The handoff lint passes an unfilled template, as shown above. Whether
-  a handoff is any good, and what a spawn prompt says, stay judgement.
-- **On one machine it is an honour system.** `.github/workflows/ci.yml` ships with this repo, but a
-  workflow file is not a run: until the suite has run on a pushed commit, in this repo or yours,
-  every guarantee is local. Its Semgrep step is marked in the file as not yet calibrated against
-  this tree.
-- **It is not a framework for building agents.** It orchestrates nothing and calls no model.
-
-## Design principles
-
-- **Promote a rule to code once it has been broken silently, and not before.**
-  [00-overview](docs/methods/00-overview.md)
-- **Compare the total, not the pass count.** A vanished check must be red.
-  [04-gates-and-the-gate-line-protocol](docs/methods/04-gates-and-the-gate-line-protocol.md)
-- **A check may declare a skip; only the invocation may tolerate one.** Same doc.
-- **Deny at the action, and ask when blind.** An unreadable payload is a question, never a
-  permission. [05-hooks-as-mechanism](docs/methods/05-hooks-as-mechanism.md)
-- **A threshold no tool writes.** A budget a script can update records what happened, not what was
-  agreed. [08-the-context-budget](docs/methods/08-the-context-budget.md)
-- **"Done" is something a script does, and it can refuse.**
-  [09-the-phase-lifecycle](docs/methods/09-the-phase-lifecycle.md)
-- **One config seam, and an absent config is a stop, never a default.**
-  [14-the-config-seam-and-the-installer](docs/methods/14-the-config-seam-and-the-installer.md)
+  failed and none vanished.
+- **Nobody has measured that it improves output.** There is no run with the harness off to
+  compare against.
+- **The guards match patterns.** A different spelling of the same action can get through. They
+  stop accidents, not a determined agent or an attacker.
+- **The skill lock cannot cover what lives outside the repo:** plugin caches, user-level skills
+  and MCP servers. It reports them as uncovered; it does not secure them.
+- **The context budget counts bytes of the files you declare.** Tool schemas and the system
+  prompt are usually larger and are not counted.
+- **The lints check shape, not quality.** An unfilled handoff template passes.
+- **It is not an agent framework.** It orchestrates nothing and calls no model.
 
 ## Repo layout
 
 ```
-bin/                 harness.js: the installer and the one CLI (init, doctor, gates, docs, host, selftest)
-scripts/harness/     the gate runner, config loader, context measurement, lifecycle and doc scripts, baselines
-scripts/harness/guards/  the three guards, the doc linter, the skill verifier
-.claude/helpers/     the status line
-.claude/agents/      four agent briefs: explore, implement, research, review
-.claude/skills/      three working skills: plan, research, implement
-.claude/             settings.json, the hook wiring
-schema/              the JSON schema for harness.config.json
-templates/           skeletons: AGENTS.md, its CLAUDE.md stub, the routing doc, a subtree AGENTS.md, a track folder, the doc standard
-docs/methods/        one page per mechanism: the failure, the mechanism, why not a rule, the cost and limits
-docs/reference/      the enforced shapes: the doc standard, routing (lead-only), skill safety, branches
-docs/INDEX.md        generated by scripts/harness/docs-index.js; never edited by hand
-tests/               node:test; every script driven as a real process in a throwaway repo
-.github/             the CI workflow, Dependabot, and the two scanner configs
+bin/                     harness.js: the installer and CLI (init, doctor, gates, docs, host, selftest)
+scripts/harness/         the gate runner, config loader, lifecycle and doc scripts, baselines
+scripts/harness/guards/  the guards, the doc linter, the skill verifier
+.claude/                 hook wiring, four agent briefs, three skills, the status line
+schema/                  the JSON schema for harness.config.json
+templates/               starting files for AGENTS.md, CLAUDE.md, the routing doc and a track
+docs/methods/            one page per mechanism
+docs/reference/          the enforced shapes: doc standard, routing, skill safety, branches
+docs/tracks/             open work on this repo
+tests/                   node:test; every script run as a real process in a throwaway repo
+.github/                 the CI workflow, Dependabot and scanner configs
 ```
 
-At the root: `harness.config.json` (everything project-specific), `skills-lock.json` (shipped
-empty), and `AGENTS.md`, which is this repository's own policy and the reference a new repo starts
-from, with `CLAUDE.md` beside it as the stub that imports it. Tracks go under `docs/tracks/<id>/`; none ships.
+`harness.config.json` holds everything project-specific. `AGENTS.md` is this repo's own policy
+and the starting point for yours.
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) covers the zero-dependency rule and how to add a gate, a guard
-or a doc. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
