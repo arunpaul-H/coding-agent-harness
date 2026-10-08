@@ -144,7 +144,7 @@ node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1
    ```
    $ node scripts/harness/gates.js --accept --allow-skip reproducible-build=1,docs=1
    $ node scripts/harness/gates.js --check  --allow-skip reproducible-build=1,docs=1
-   GATES GREEN — test 1/1 . docs 147/148 (1 skipped, declared) . context 6/6 . hygiene 7/7 . skills 2/2 . reproducible-build 0/1 (1 skipped, declared)
+   GATES GREEN — test 1/1 . docs 147/148 (1 skipped, declared) . context 6/6 . hygiene 7/7 . skills 6/6 . reproducible-build 0/1 (1 skipped, declared)
    ```
 
 4. **Commit** (a commit that changes the baseline needs a subject starting `gates:`), run
@@ -183,11 +183,13 @@ Full walk-through, including how to confirm the hooks fire:
 | Secret-file guard | A credential file read into a transcript | `scripts/harness/guards/env-guard.cjs` |
 | Phase guard | A status flipped by hand; a gate figure typed into a doc | `scripts/harness/guards/phase-guard.cjs` |
 | Commit hygiene | Stray files, pasted tokens and root clutter in a commit | `scripts/harness/guards/commit-hygiene.cjs` |
+| Spawn guard | A subagent of yours spawned with no OUTCOME, READ-SET, RETURN or BOUNDS | `scripts/harness/guards/spawn-guard.cjs` |
+| Stop report | A turn that ends on edits no gate run has seen (it tells you; `stop.block` forces a turn) | `scripts/harness/close-phase.js` |
 | Doc contract | Docs over their line cap; an index that drifted from the docs | `scripts/harness/guards/docs-lint.cjs` |
 | Context budget | Always-loaded instruction files growing unnoticed | `scripts/harness/measure-context.js` |
 | Tracks and handoffs | A new session re-deriving what the last one knew | `templates/track/` |
 | Phase lifecycle | A phase closed on evidence from a different tree | `scripts/harness/close-phase.js` |
-| Skill lock | A third-party skill changing with no diff anyone read | `scripts/harness/guards/skill-verify.cjs` |
+| Skill lock | A skill changing with no diff anyone read: a third-party one, or one the harness shipped | `scripts/harness/guards/skill-verify.cjs` |
 | Branch sync | A long-lived branch running an old copy of the harness | `scripts/harness/branch-sync.js` |
 | Installer and doctor | An install nobody verified | `bin/harness.js` |
 
