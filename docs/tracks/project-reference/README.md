@@ -8,6 +8,7 @@ paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
+blocked_on: "the owner: whether to reconsider an interview skill (decision 6), then whether to archive"
 closed_phase: 2
 closed_at: 2026-10-08
 gates_sha: 3ab8dd620797a2009f55e524efcc1c9f74eac0239a67be3bd2e5515470cf6900
@@ -74,13 +75,16 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 | 0 | The track opened: research frozen, plan and handoff written | closed |
 | 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | closed |
 | 2 | A paths-against-history drift warning, and a warning for an unreadable date | closed |
-| 3 | One measured task with and without a reference doc, and the adopter guidance it supports | open |
+| 3 | One measured task with and without a reference doc, and the adopter guidance it supports | built |
 
-Branch `project-reference`, commits only: no push, no PR. `harness reference new` and its template
-are in the tree, and the doc gate now warns when a commit touches an open doc's `paths` after its
-`last_verified` day, or when that date does not parse. Both warn and exit 0. This repo's own docs
-draw drift warnings and were left as they are: re-verifying them is the owner's call, not a re-date.
-No reference doc was created in this repo.
+Branch `project-reference`, commits only: no push, no PR. All three pieces are in the tree: the
+command and its template, the two warnings, and one measurement with the adopter section in the
+root `README.md` that rests on it (`research/2026-10-08-one-task-with-and-without-a-reference-doc.md`). The experiment's doc was
+deleted; this repo holds no reference doc made by the command. This repo's own docs draw drift
+warnings and were left as they are: re-verifying them is the owner's call, not a re-date.
+
+**Waiting on the owner.** Decision 6: reconsider an interview skill, or not. The measurement
+neither supports nor undercuts one, because none was run. The track is not archived.
 
 ## How to work
 

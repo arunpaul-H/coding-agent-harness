@@ -21,6 +21,7 @@
 | [project-reference-plan](tracks/project-reference/plan.md) | project-reference: the phases, each with its exit command and first commit | open |
 | [project-reference](tracks/project-reference/README.md) | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs | open |
 | [project-reference-research-project-reference-docs](tracks/project-reference/research/2026-10-07-project-reference-docs.md) | planning how the harness helps an adopter create project reference docs, or adding a paths-based drift check to the doc gate | frozen |
+| [project-reference-research-one-task-with-and-without-a-reference-doc](tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md) | deciding whether a reference doc saves an agent anything, or what to tell an adopter about harness reference new | frozen |
 | [project-reference-traps](tracks/project-reference/traps.md) | something behaves oddly while working on project-reference | open |
 
 ## Methods
@@ -52,6 +53,8 @@
 
 ## Blocked: waiting on someone outside the code
 
-Nothing is blocked.
+| id | blocked on | read when |
+|---|---|---|
+| [project-reference](tracks/project-reference/README.md) | the owner: whether to reconsider an interview skill (decision 6), then whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
 
-<!-- 16 live docs -->
+<!-- 17 live docs -->

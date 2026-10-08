@@ -164,6 +164,38 @@ Full walk-through, including how to confirm the hooks fire:
 Each piece has a page under [docs/methods/](docs/methods/README.md): the failure, the mechanism,
 its cost and its limits.
 
+## Reference docs for your own project
+
+The harness writes no doc about your code. `init` installs a template and nothing else, because a
+doc generated from code repeats what a search already finds. When a subsystem has rules that live
+in someone's head, ask for one doc, by name:
+
+```
+node agent-harness/bin/harness.js reference new billing-export \
+  --read-when "changing what the nightly export writes" --paths "src/billing/**,tests/billing/**"
+node scripts/harness/docs-index.js
+```
+
+That writes `docs/reference/billing-export/README.md` with the frontmatter filled and the body
+left for you. It never overwrites, and both flags are required: `--read-when` is the one line an
+agent sees in the index, and `--paths` is what the doc gate compares against history.
+
+- **Run it when** the same question about a subsystem keeps being re-answered from the code, or
+  the answer is not in the code at all.
+- **Put in it** invariants and why they hold, decisions and what was turned down, what runs
+  where, and limits set outside the repo. Leave out anything a search returns.
+- **Afterwards** the doc gate warns, and never fails, when a commit touches those paths after the
+  doc's `last_verified` day. Re-check the doc, then change the date. Changing only the date
+  defeats the warning.
+
+What we measured, once: the same read-only question put to two fresh agents on the same model,
+one tree with a hand-filled doc and one without. Both answered every part correctly. The run with
+the doc used `65083` tokens against `78068`, the same `18` tool uses, and one fewer file; it still
+read the code, because the question asked for line numbers. One pair is an observation, not
+proof, and it does not count the time spent writing the doc. Expect a modest saving at best, and
+write a doc for what the code cannot say, not to save tokens. The write-up is
+[here](docs/tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md).
+
 ## Your stack
 
 - **The harness is Node.** Your project need not be, but Node >= 20 must be on the machine and in CI.

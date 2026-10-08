@@ -132,4 +132,11 @@ study tests files injected into each session. Whether this mechanism saves token
 **First commit:** `project-reference: measure one task with and without a reference doc`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
-**Delivered.** not started
+**Delivered.** `research/2026-10-08-one-task-with-and-without-a-reference-doc.md`, and the section
+"Reference docs for your own project" in the root `README.md`. Both runs were correct; the run
+with the doc used somewhat fewer tokens and the same number of tool calls. Deviations:
+- The two runs were subagents of one session, not two cold sessions, on the owner's instruction.
+- The task was a read-only question with a checkable answer, not an edit.
+- The doc was written by the session that had just worked on that subsystem, which flatters it.
+- Item 4 is put in the track README and the research file; the owner has not answered it.
+- No phase follows, so the frontmatter `first_commit` stays this phase's.
