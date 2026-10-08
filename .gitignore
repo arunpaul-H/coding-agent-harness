@@ -83,6 +83,11 @@ coverage/
 # on purpose, since they hold intermediate states that are in no commit, and never versioned.
 .claude/settings.json.*
 !.claude/settings.json
+# Where the agent's own worktree flag puts a folder when no hook routes it: INSIDE the repo. The
+# tracked settings route that flag to scripts/harness/worktree.js, which never lands here. This
+# rule is for the checkout that has not wired the hook (or a subagent's isolation folder): an
+# unignored folder there is a whole second tree, listed as a stray by the hygiene check.
+.claude/worktrees/
 
 # ── Commit-hygiene waiver (local, per tree state) ─────────────────
 # Written by `commit-hygiene.cjs --clear` to waive a deliberate finding. Bound to a hash of the

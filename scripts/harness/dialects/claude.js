@@ -121,8 +121,19 @@ const permissions = {
  * the union of the names ACTION_OF maps, plus the server-defined tools: a name outside it never
  * reaches the entry, and a match-all would turn every other call into an ask (trap MT-17).
  * `entries` takes the row's id and never spells one.
+ *
+ * THE PROJECT-DIRECTORY VARIABLE IS SPELLED WITH BRACES. The tool launches hook commands under
+ * a POSIX shell or under PowerShell, and the bare dollar form is an undefined PowerShell
+ * variable: the command then runs `/scripts/harness/hook.js` off the drive root, fails with a
+ * module-not-found, and every guard is absent with no refusal anywhere. Measured 2026-10-08 in
+ * a throwaway repo: one session, both spellings registered side by side, the brace form ran
+ * and the bare form died (trap WT-01 of the workspaces track).
+ *
+ * THE WORKSPACE ENTRY is added only for a row whose `worktreeCreate` cell is true. It answers
+ * the tool's own worktree flag with a folder path, so its timeout is the setup command's, not
+ * a guard's.
  */
-const HOOK = (id, ev) => 'node "$CLAUDE_PROJECT_DIR/scripts/harness/hook.js" --tool ' + id + ' --event ' + ev;
+const HOOK = (id, ev) => 'node "${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js" --tool ' + id + ' --event ' + ev;
 const wiring = {
   file: '.claude/settings.json',
   evidence: 'the registration this repo\'s own sessions start under; the registry row says what was and was not observed',
@@ -133,6 +144,7 @@ const wiring = {
     const one = (ev) => ({ type: 'command', command: HOOK(row.id, ev), timeout: 30 });
     const out = [{ at: ['hooks', 'PreToolUse'], event: 'pre-tool', entry: { matcher: Object.keys(ACTION_OF).concat('mcp__.*').join('|'), hooks: [one('pre-tool')] } }];
     if (row.sessionStart === true) out.push({ at: ['hooks', 'SessionStart'], event: 'session-start', entry: { hooks: [one('session-start')] } });
+    if (row.worktreeCreate === true) out.push({ at: ['hooks', 'WorktreeCreate'], event: 'worktree-create', entry: { hooks: [Object.assign(one('worktree-create'), { timeout: 600 })] } });
     return out;
   },
 };

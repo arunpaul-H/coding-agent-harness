@@ -305,6 +305,18 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9._/-]*$",
           "default": ""
+        },
+        "carry": {
+          "description": "Paths copied from the main checkout into every new workspace. Only a path that exists there AND that git ignores is copied: a tracked file is already in the new folder. Each is relative to the checkout, with no `..` and no leading slash or drive. A path the secret guard's `env.guarded` patterns match is refused unless a live dated entry in `env.openCarveOuts` covers it. Empty means a new folder holds the tracked files and nothing else.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "setup": {
+          "description": "One command line run in a new workspace folder after it is created and its carried files are in place (an install step, for example), or null to run nothing. Its output goes to stderr. A command that fails is reported and the folder is kept.",
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null
         }
       }
     }

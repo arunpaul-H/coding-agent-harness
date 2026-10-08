@@ -74,16 +74,19 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 |---|---|---|
 | 0 | the research file: what the agent's flag does on this machine | closed |
 | 1 | `worktree.js --new`, `--list`, `--self-test`; config keys with defaults | closed |
-| 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | open |
+| 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | landed |
 | 3 | the announce note, the generated overview, the overlap warning, a session-start line | open |
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | open |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | open |
 
 Nothing is pushed. `node scripts/harness/worktree.js --list` shows every checkout today.
+A new folder now gets `worktrees.carry` copied in and `worktrees.setup` run, and the agent's own
+worktree flag is routed to the same script by a `WorktreeCreate` hook entry. Both keys default to
+nothing, so a workspace starts without the ignored local settings file until a repo lists it.
 
 ## How to work
 
-One phase per session. Start from `handoff.md`, read only what its `Read` list names, do the
+One phase per session, unless the owner says otherwise for a session. Start from `handoff.md`, read only what its `Read` list names, do the
 phase, run its `Exit:` command in the foreground and paste the output. Then rewrite this file to
 current truth, replace `handoff.md` wholesale, and close with
 `node scripts/harness/close-phase.js worktrees`. A phase that cannot close says so and stops.

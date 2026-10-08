@@ -3,19 +3,15 @@ id: worktrees-plan
 kind: plan
 status: open
 read_when: "worktrees: the phases, each with its exit command and first commit"
-first_commit: "worktrees: make a new workspace ready and route the agent's own flag to it"
+first_commit: "worktrees: an overview read from git, with an early overlap warning"
 ---
 
 # Workspaces: the phases
 
-One phase per session. Each ends with its exit command run in the foreground and its output
-pasted. A phase that cannot close says so and stops. Read `README.md` **How to work** before
-starting any of them, and `traps.md` before touching anything.
-
-The order follows dependence. Creation comes first because every later phase needs a folder to
-act on. Readiness comes before the overview because an unready folder is where a first run
-fails. Landing comes after the overview because it reuses the overview's reading of each branch.
-Packaging is last so an adopter receives only what was proven here.
+Each phase ends with its exit command run and its output pasted; one that cannot close says so
+and stops. Read `README.md` **How to work** first, and `traps.md` before touching anything.
+The order follows dependence: creation, readiness, the overview, landing (it reuses the
+overview's reading of each branch), and packaging last so an adopter gets only what was proven.
 
 ## Phase 0: evidence for what the agent's own flag does
 
@@ -29,9 +25,8 @@ Packaging is last so an adopter receives only what was proven here.
 **First commit:** `worktrees: open the track with measured evidence`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check && node scripts/harness/handoff-lint.js worktrees`
 
-**Delivered.** `research/2026-10-08-what-claude-worktree-does-here.md`, written and uncommitted.
-Deviations: the docs lookup was delegated to a read-only agent, and the lead ran the measurements
-itself because the research agent has no shell. Closed by `close-phase.js` on 2026-10-08.
+**Delivered.** `research/2026-10-08-what-claude-worktree-does-here.md`. Deviations: the docs
+lookup went to a read-only agent; the lead ran the measurements, as that agent has no shell.
 
 ## Phase 1: create and list workspaces with one command
 
@@ -57,12 +52,10 @@ whichever ref was nearest (WT-05).
 
 **Delivered.** `scripts/harness/worktree.js` (`--new`, `--track`, `--from`, `--list`, `--self-test`),
 the `worktrees` config section with both keys defaulted, its schema, `harness worktree new|list`
-and `tests/worktree.test.js`. Deviations: the source ref is found with `decideSource` and
-`CANDIDATES` imported from `branch-sync.js` plus a repeated local-or-remote pick, because that
-file's own resolver is bound to its own root; a root inside ANY checkout is refused, which the
-work list did not ask for; a bare repo reads as the parent layout but only as a pure decision,
-no bare repo was built; the "start an agent" line names no program; this repo's own config
-file gained no section, since the defaults are the point.
+and `tests/worktree.test.js`. Deviations: the source ref repeats `branch-sync.js`'s pick with
+its imported `decideSource`, as that file's resolver is bound to its own root; a root inside ANY
+checkout is refused, unasked; the bare-repo layout is a pure decision, no bare repo was built;
+the "start an agent" line names no program; this repo's own config gained no section.
 
 ## Phase 2: a new folder is ready to work in
 
@@ -83,7 +76,15 @@ needs an install step, and the agent's own flag lands somewhere else (WT-02, WT-
 **First commit:** `worktrees: make a new workspace ready and route the agent's own flag to it`
 **Exit:** `node scripts/harness/worktree.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** `worktrees.carry` and `worktrees.setup` (loader, schema, both empty by default);
+`decideCarry()` and `fromHook()` in `worktree.js`; the `worktree-create` route in `hook.js`; the
+`worktreeCreate` registry cell, true for one row; the entry in the dialect's wiring and in
+`.claude/settings.json`; the brace spelling in every hook command; the ignore rule. Deviations:
+a guarded carry path refuses the whole `--new` instead of being skipped; a failing setup keeps
+the folder (`--new` exits 1, the hook route still answers with the path); the route is a fifth
+event with no handler list and a longer timeout; it cuts from the source branch, not `HEAD`
+(WT-08); the local settings file is NOT carried by default (WT-03); the brace form was measured
+under PowerShell first (WT-01); no live session ran the flag through this repo's own entry.
 
 ## Phase 3: workspaces announce themselves and the overview warns of overlap
 

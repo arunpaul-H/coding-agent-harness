@@ -1,5 +1,5 @@
 {
-  "_comment": "Every hook command here is a FILE run by `node`, and none is wrapped in anything. NEVER wrap a hook in `cmd /c` on Windows. Hook commands run under Git Bash there, and MSYS path conversion rewrites the `/c` switch into a filesystem path before cmd ever sees it. cmd then starts INTERACTIVE instead of running one command: it echoes its banner into the session context and executes the hook's stdin payload as a command line, so every `>` inside a tool call or its output (each `=>` and `->`) becomes a redirect that writes a 0-byte file into the repo root, named after a fragment of whatever was being run. The debris looks like a quoting bug in your own code and is not one. This was measured, not guessed, and it is the reason commit-hygiene.cjs treats a 0-byte untracked file as a BLOCK. `node \"$CLAUDE_PROJECT_DIR/...\"` works unwrapped in Git Bash, macOS and Linux alike. THE HOOKS ARE ONE FILE: scripts/harness/hook.js is the single entry, registered once per event. It looks `--tool` up in scripts/harness/tools.json, has that row's dialect module (scripts/harness/dialects/) parse the payload into a neutral event, runs the event's ordered handler list, and has the dialect spell the verdict. A DENY IS THE JSON ON STDOUT AND EXIT CODE 2, both, because a tool that fails open on any other code would read the JSON alone as a pass. An ask and an allow exit 0. A guard that throws, a payload that does not parse and a registration that names the wrong event are each a deny with a reason, never a silent allow. At session start nothing can be refused, so the exit is 0 whatever was found and a report that could not run is named in the context. Each guard under scripts/harness/guards/ still has its own CLI for the gates and for a person (--self-test, --report, --check and so on); run that way it exits 0 and the decision rides in the JSON it prints.",
+  "_comment": "Every hook command here is a FILE run by `node`, and none is wrapped in anything. NEVER wrap a hook in `cmd /c` on Windows. Hook commands run under Git Bash there, and MSYS path conversion rewrites the `/c` switch into a filesystem path before cmd ever sees it. cmd then starts INTERACTIVE instead of running one command: it echoes its banner into the session context and executes the hook's stdin payload as a command line, so every `>` inside a tool call or its output (each `=>` and `->`) becomes a redirect that writes a 0-byte file into the repo root, named after a fragment of whatever was being run. The debris looks like a quoting bug in your own code and is not one. This was measured, not guessed, and it is the reason commit-hygiene.cjs treats a 0-byte untracked file as a BLOCK. `node \"${CLAUDE_PROJECT_DIR}/...\"` works unwrapped in Git Bash, macOS and Linux alike, AND under PowerShell: the variable is spelled WITH BRACES because the bare dollar form is an undefined PowerShell variable, so the command runs a script off the drive root, dies with a module-not-found, and every guard is absent with no refusal anywhere (measured 2026-10-08, both spellings side by side in one session). THE HOOKS ARE ONE FILE: scripts/harness/hook.js is the single entry, registered once per event. It looks `--tool` up in scripts/harness/tools.json, has that row's dialect module (scripts/harness/dialects/) parse the payload into a neutral event, runs the event's ordered handler list, and has the dialect spell the verdict. A DENY IS THE JSON ON STDOUT AND EXIT CODE 2, both, because a tool that fails open on any other code would read the JSON alone as a pass. An ask and an allow exit 0. A guard that throws, a payload that does not parse and a registration that names the wrong event are each a deny with a reason, never a silent allow. At session start nothing can be refused, so the exit is 0 whatever was found and a report that could not run is named in the context. Each guard under scripts/harness/guards/ still has its own CLI for the gates and for a person (--self-test, --report, --check and so on); run that way it exits 0 and the decision rides in the JSON it prints.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/harness/hook.js\" --tool claude-code --event pre-tool",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js\" --tool claude-code --event pre-tool",
             "timeout": 30
           }
         ]
@@ -20,8 +20,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/harness/hook.js\" --tool claude-code --event session-start",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js\" --tool claude-code --event session-start",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "_comment": "The agent's own worktree flag, routed. This hook REPLACES how the flag makes its folder: the entry hands the payload (`name`, `cwd`) to scripts/harness/worktree.js, which creates the workspace exactly as `harness worktree new <name>` does (outside every checkout, cut from the source branch, with `worktrees.carry` copied in and `worktrees.setup` run) and prints the folder path ALONE on stdout. Everything else it says, and all setup output, goes to stderr, because the agent reads every byte of stdout as the path. A bad name or an existing one is exit 2 with the reason on stderr and no folder. The agent stops copying the ignored local settings file once this hook exists: list it in `worktrees.carry` if a workspace should start with it. The timeout is the setup command's, not a guard's.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js\" --tool claude-code --event worktree-create",
+            "timeout": 600
           }
         ]
       }
