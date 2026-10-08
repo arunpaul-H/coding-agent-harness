@@ -39,9 +39,10 @@ Provenance: every figure comes from `node scripts/harness/gates.js --check`, and
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phase 0 wrote the research file and this track folder. NOTHING IS COMMITTED on this branch,
-  so phase 0 is not closed: close-phase.js needs a commit and a verdict at HEAD first. Owed to
-  the owner: the go-ahead to commit phase 0.
+  Phase 0 wrote the research file and this track folder, is committed, and was closed by
+  close-phase.js on 2026-10-08: the receipt is in README.md's frontmatter. Nothing is pushed.
+  A session started OUTSIDE this folder has its commit guard read the other folder (WT-07):
+  start the session here.
   The branch was cut from origin/main; the local source branch was stale (WT-05).
   Measured, and safe to build on: a session started in a workspace resolves its OWN folder in
   hooks; a WorktreeCreate hook can place the folder anywhere. Both are phase 2's business.

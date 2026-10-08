@@ -8,6 +8,11 @@ paths: ["scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "ha
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees"
 last_verified: 2026-10-08
 max_age_days: 30
+closed_phase: 0
+closed_at: 2026-10-08
+gates_sha: 55f7091810c3e10160b5aec608b139ac70d2824a8e23fae6e6f793f759c3c719
+block_sha: fa4bbfd4dc3af38a3262567b526018e7baea5fc9727f63792180e63acb7a4b60
+receipt: c454d98c049825931139a4949cbbcd6b91f567aa2334228e13e0135d6735719f
 ---
 
 # Workspaces: several agents in one project on one computer, without collisions
@@ -67,14 +72,14 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 0 | the research file: what the agent's flag does on this machine | open |
+| 0 | the research file: what the agent's flag does on this machine | closed |
 | 1 | `worktree.js --new`, `--list`, `--self-test`; config keys with defaults | open |
 | 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | open |
 | 3 | the announce note, the generated overview, the overlap warning, a session-start line | open |
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | open |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | open |
 
-Phase 0's file is written and uncommitted. Nothing is committed on this branch yet.
+Phase 0 is committed and closed. Nothing is pushed. Phase 1 has not started.
 
 ## How to work
 

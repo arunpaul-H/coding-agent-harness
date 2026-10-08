@@ -31,7 +31,7 @@ Packaging is last so an adopter receives only what was proven here.
 
 **Delivered.** `research/2026-10-08-what-claude-worktree-does-here.md`, written and uncommitted.
 Deviations: the docs lookup was delegated to a read-only agent, and the lead ran the measurements
-itself because the research agent has no shell. Not closed: nothing is committed.
+itself because the research agent has no shell. Closed by `close-phase.js` on 2026-10-08.
 
 ## Phase 1: create and list workspaces with one command
 
