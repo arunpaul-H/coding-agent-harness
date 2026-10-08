@@ -282,6 +282,31 @@
           "default": null
         }
       }
+    },
+
+    "worktrees": {
+      "description": "Where a workspace folder goes and what its branch is called (`harness worktree new`). A workspace is a linked git worktree: one folder per agent, each on its own branch over one shared history. Absent, both keys are derived, so a fresh clone needs no edit here.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "root": {
+          "description": "The folder new workspaces are created in, resolved against the main checkout, or null to derive it: the parent folder when the main checkout is a folder named `main` inside one, else a sibling `<repo>.worktrees`. It may not be inside any checkout; that is refused when a workspace is created.",
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null
+        },
+        "branchPrefix": {
+          "description": "Prepended to a workspace name to make its branch name. Empty means the branch is the name.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]*$",
+          "default": ""
+        }
+      }
     }
   },
 

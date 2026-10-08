@@ -3,7 +3,7 @@ id: worktrees-plan
 kind: plan
 status: open
 read_when: "worktrees: the phases, each with its exit command and first commit"
-first_commit: "worktrees: create and list workspaces with one command"
+first_commit: "worktrees: make a new workspace ready and route the agent's own flag to it"
 ---
 
 # Workspaces: the phases
@@ -55,7 +55,14 @@ whichever ref was nearest (WT-05).
 **First commit:** `worktrees: create and list workspaces with one command`
 **Exit:** `node scripts/harness/worktree.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** `scripts/harness/worktree.js` (`--new`, `--track`, `--from`, `--list`, `--self-test`),
+the `worktrees` config section with both keys defaulted, its schema, `harness worktree new|list`
+and `tests/worktree.test.js`. Deviations: the source ref is found with `decideSource` and
+`CANDIDATES` imported from `branch-sync.js` plus a repeated local-or-remote pick, because that
+file's own resolver is bound to its own root; a root inside ANY checkout is refused, which the
+work list did not ask for; a bare repo reads as the parent layout but only as a pure decision,
+no bare repo was built; the "start an agent" line names no program; this repo's own config
+file gained no section, since the defaults are the point.
 
 ## Phase 2: a new folder is ready to work in
 

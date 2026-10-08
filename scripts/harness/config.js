@@ -117,6 +117,10 @@ const DEFAULTS = {
   // person still has to accept at a terminal, never a mode in force: this file is one the agent
   // can edit, and a file the agent can edit cannot approve anything for the agent.
   mode: { default: null },
+  // Where a workspace folder goes and what its branch is called (worktree.js). root: null means
+  // DERIVED from where the main checkout sits, so a fresh clone needs no edit here; a string is
+  // a path resolved against the main checkout, and it may not land inside any checkout.
+  worktrees: { root: null, branchPrefix: '' },
 };
 
 /* The run modes, most to least autonomous: the keys of MODES in mode.js. Spelled here because
@@ -138,9 +142,10 @@ const routingDoc = (cfg) => String(cfg.project.docsRoot).replace(/\\/g, '/').rep
 // its default instead of your setting. `_readme` is a key, not a comment, because
 // JSON has no comments and the explanations have to live somewhere.
 const TOP_LEVEL = ['$schema', '_readme', 'project', 'gates', 'artifacts', 'env',
-  'commitHygiene', 'docs', 'context', 'tools', 'mode'];
+  'commitHygiene', 'docs', 'context', 'tools', 'mode', 'worktrees'];
 const TOOLS_KEYS = ['_readme', 'enabled'];
 const MODE_KEYS = ['_readme', 'default'];
+const WORKTREES_KEYS = ['_readme', 'root', 'branchPrefix'];
 const GATE_KEYS = ['_readme', 'name', 'command', 'adapter', 'optional', 'gateLine'];
 
 /* ---------- deep merge ----------
@@ -322,6 +327,21 @@ function validate(cfg) {
     const d = cfg.mode.default;
     if (d !== null && !RUN_MODES.includes(d)) {
       errs.push('mode.default must be one of ' + RUN_MODES.join(', ') + ', or null (got ' + JSON.stringify(d) + ')');
+    }
+  }
+
+  if (!isPlain(cfg.worktrees)) errs.push('`worktrees` must be an object { root, branchPrefix } — omit the key and both are derived');
+  else {
+    // Closed like `tools`: `rooot` would otherwise leave the derived root in force while the
+    // file reads as if it had named one.
+    for (const k of Object.keys(cfg.worktrees)) {
+      if (!WORKTREES_KEYS.includes(k)) errs.push('worktrees: unknown key `' + k + '` (allowed: ' + WORKTREES_KEYS.join(', ') + ')');
+    }
+    const r = cfg.worktrees.root;
+    if (r !== null && !isStr(r)) errs.push('worktrees.root must be a path, or null to derive it (got ' + JSON.stringify(r) + ')');
+    const bp = cfg.worktrees.branchPrefix;
+    if (typeof bp !== 'string' || !/^[A-Za-z0-9._/-]*$/.test(bp)) {
+      errs.push('worktrees.branchPrefix must be a string of letters, digits, dot, underscore, hyphen and slash (got ' + JSON.stringify(bp) + ')');
     }
   }
 
@@ -577,7 +597,7 @@ function selfTest() {
   process.exit(fails.length ? 1 : 0);
 }
 
-module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, MODE_KEYS, RUN_MODES, ROUTING_DOC, routingDoc };
+module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, MODE_KEYS, WORKTREES_KEYS, RUN_MODES, ROUTING_DOC, routingDoc };
 
 if (require.main === module) {
   if (process.argv.slice(2).includes('--self-test')) selfTest();

@@ -32,6 +32,7 @@
          harness doctor [--root <dir>] [--no-self-tests]
          harness gates [--check] [--print-allow-skip [--with <gate>=<n>]] [...flags for gates.js]
          harness docs [--index] [...flags for the doc scripts]
+         harness worktree new <name> [--track] [--from <ref>] | list
          harness host
          harness selftest
          harness --help | --self-test
@@ -1448,6 +1449,19 @@ function cmdRun(argv) {
   return r.status === null ? 1 : r.status;
 }
 
+/** Workspaces: one folder per agent. The script owns every decision and refusal; this only
+ *  finds it and spells `new` and `list` as its flags. It runs in the CALLER'S directory, not
+ *  the root, because which checkout the caller stands in is one of its inputs. */
+function cmdWorktree(argv) {
+  const root = findRoot(process.cwd());
+  const script = path.join(root, 'scripts', 'harness', 'worktree.js');
+  if (!isFile(script)) return stop('no scripts/harness/worktree.js under ' + root, selfInvocation(root) + ' init');
+  const verbs = { new: '--new', list: '--list' };
+  const args = argv.length && verbs[argv[0]] ? [verbs[argv[0]]].concat(argv.slice(1)) : argv;
+  const r = spawnSync(process.execPath, [script].concat(args), { cwd: process.cwd(), stdio: 'inherit' });
+  return r.status === null ? 1 : r.status;
+}
+
 /** THE INPUTS A GATE'S VERDICT DEPENDS ON THAT THE REPO DOES NOT CONTAIN. Each one
  *  is supplied implicitly by a developer's machine and each can move a figure, so
  *  they are printed rather than assumed: a run whose environment drifted is then
@@ -1538,6 +1552,14 @@ const HELP = [
   '      a tool with nothing recorded is refused, never started bare. --dry-run starts nothing.',
   '      --track records which phase of that track was approved, in a receipt beside its handoff.',
   '      A receipt is an approval, so it is written only from a terminal.',
+  '',
+  '  harness worktree new <name> [--track] [--from <ref>]',
+  '  harness worktree list',
+  '      One folder per agent, each on its own branch over one shared history, so several agents',
+  '      can work in one project on one computer. `new` makes the folder and a branch of the same',
+  '      name, cut from the source branch, OUTSIDE every checkout; --track also scaffolds a track.',
+  '      `list` prints every checkout and where the next one would go. Start the agent inside the',
+  '      new folder. It never merges, pushes, removes a folder or deletes a branch.',
   '',
   '  harness host           Print the host-dependent inputs a gate verdict rests on. Always exits 0.',
   '  harness selftest       Run every --self-test in the repo; exit 1 if any fails.',
@@ -1879,6 +1901,7 @@ if (require.main === module) {
   else if (cmd === 'gates') code = cmdGates(rest);
   else if (cmd === 'docs') code = cmdDocs(rest);
   else if (cmd === 'run') code = cmdRun(rest);
+  else if (cmd === 'worktree') code = cmdWorktree(rest);
   else if (cmd === 'host') { for (const l of hostReport(findRoot(process.cwd()))) console.log(l); code = 0; }
   else if (cmd === 'selftest' || cmd === 'self-test') code = cmdSelftest();
   else code = stop('unknown command `' + cmd + '`', 'harness --help');

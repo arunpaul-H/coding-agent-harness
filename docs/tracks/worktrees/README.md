@@ -79,7 +79,7 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | open |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | open |
 
-Phase 0 is committed and closed. Nothing is pushed. Phase 1 has not started.
+Nothing is pushed. `node scripts/harness/worktree.js --list` shows every checkout today.
 
 ## How to work
 
