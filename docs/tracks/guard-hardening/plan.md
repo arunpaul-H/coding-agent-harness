@@ -3,7 +3,7 @@ id: guard-hardening-plan
 kind: plan
 status: open
 read_when: "guard-hardening: the phases, each with its exit command and first commit"
-first_commit: "guards: a spawn of a registered agent carries the contract"
+first_commit: "guards: measure where the test gate's time goes"
 ---
 
 # Guard hardening: the phases
@@ -132,8 +132,7 @@ in the tool's agent directory defines is denied unless its prompt carries the fo
 each with a colon, in any case. Every other agent type passes, and no field's content is read.
 The `claude` dialect maps the tool name to a new neutral action `spawn`, hands on the agent and
 the prompt, names the agent directory, and renders the tool name into the matcher. Deviations:
-the other three guards are not offered a spawn; one line was added to both routing docs; an
-install made before this phase keeps its old matcher (GH-12).
+the older guards are not offered a spawn; an earlier install keeps its old matcher (GH-12).
 
 ## Phase 7: where the test gate's minutes go
 
@@ -146,4 +145,6 @@ change only if one file or one cause owns most of the time.
 **First commit:** `guards: measure where the test gate's time goes`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
-**Delivered.** not started
+**Delivered.** `research/2026-10-08-test-gate-time.md`: each test file timed alone, the
+slowest tests, the cost of one child process. No file or single cause was shown to own most
+of the time, so no change is planned. Deviations: one machine; no Linux box was reachable.

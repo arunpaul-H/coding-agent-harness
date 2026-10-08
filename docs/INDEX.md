@@ -17,6 +17,7 @@
 | [guard-hardening-research-guard-probe](tracks/guard-hardening/research/2026-10-08-guard-probe.md) | planning or reviewing what the pre-tool guards stop, or deciding whether a guard gap is worth closing | frozen |
 | [guard-hardening-research-spawn-payload](tracks/guard-hardening/research/2026-10-08-spawn-payload.md) | changing how a spawn is recognised in a pre-tool payload, or what the spawn contract check reads | frozen |
 | [guard-hardening-research-stop-hook](tracks/guard-hardening/research/2026-10-08-stop-hook.md) | changing what the stop handler says, how a forced turn is spelled, or how a first stop is told from a forced one | frozen |
+| [guard-hardening-research-test-gate-time](tracks/guard-hardening/research/2026-10-08-test-gate-time.md) | deciding whether to speed up the test gate, or asking why a gate run takes minutes | frozen |
 | [guard-hardening-traps](tracks/guard-hardening/traps.md) | something behaves oddly while working on guard-hardening | open |
 | [project-reference-handoff](tracks/project-reference/handoff.md) | starting or resuming project-reference | open |
 | [project-reference-plan](tracks/project-reference/plan.md) | project-reference: the phases, each with its exit command and first commit | open |
@@ -66,4 +67,4 @@
 |---|---|---|
 | [project-reference](tracks/project-reference/README.md) | the owner: merge the pull request, then say whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
 
-<!-- 24 live docs -->
+<!-- 25 live docs -->
