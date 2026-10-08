@@ -90,6 +90,7 @@ const phaseGuard = () => require('./guards/phase-guard.cjs');
 const skillVerify = () => require('./guards/skill-verify.cjs');
 const docsLint = () => require('./guards/docs-lint.cjs');
 const branchSync = () => require('./branch-sync.js');
+const worktree = () => require('./worktree.js');
 
 /**
  * The declarative deny list that sits in front of the hooks, for the secret-file guard's
@@ -140,7 +141,7 @@ const HANDLERS = {
   ],
 
   /* Reporters. None can deny; each is silent when it has nothing to say. Same order as the
-     four separate registrations they replace. */
+     four separate registrations they replace; the fifth, the workspace line, came later. */
   'session-start': [
     {
       name: 'skill-verify',
@@ -161,6 +162,12 @@ const HANDLERS = {
       name: 'branch-sync',
       gather: () => ({ ev: branchSync().evaluate(process.env.BRANCH_SYNC_REF || null) }),
       decide: (event, state) => branchSync().decideSessionStart(event, state),
+    },
+    {
+      // Who else has a folder of this repo on this computer. One line, silent with none.
+      name: 'worktree',
+      gather: (event, ctx) => ({ others: worktree().others(ctx.root) }),
+      decide: (event, state) => worktree().decideSessionStart(event, state),
     },
   ],
 
@@ -688,7 +695,7 @@ function selfTest() {
   eq('the table has one list per event and no other key', Object.keys(HANDLERS).sort(), EVENTS.slice().sort());
   eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard']);
   eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write']);
-  eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync']);
+  eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync', 'worktree']);
   eq('prompt-submit and stop are lists, ready for a handler', [Array.isArray(HANDLERS['prompt-submit']), Array.isArray(HANDLERS.stop)], [true, true]);
   eq('every handler is { name, decide } with gather a function where present',
     EVENTS.every((e) => HANDLERS[e].every((x) => typeof x.name === 'string' && typeof x.decide === 'function' && (x.gather === undefined || typeof x.gather === 'function'))), true);

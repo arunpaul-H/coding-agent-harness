@@ -159,6 +159,83 @@ function hookPayload(text) {
   return { ok: true, name: p.name, cwd: typeof p.cwd === 'string' && p.cwd ? p.cwd : null };
 }
 
+/* ---------- the announce note, the overview and the overlap report: pure halves ---------- */
+
+/* WHO IS WORKING WHERE is answered by a COMMITTED file each branch owns alone: a track's
+   handoff.md, or for a plain task one note under `<docsRoot>/workspaces/`, named for the task.
+   No file that two branches write: one shared list conflicts at every merge and leaves a stale
+   line on the source branch. The overview below is generated from those files and never kept. */
+const NOTES_DIR = 'workspaces';
+const notePath = (docsRoot, name) => String(docsRoot).replace(/\\/g, '/').replace(/\/+$/, '') + '/' + NOTES_DIR + '/' + name + '.md';
+const DOING_BLANK = '(say in one line what this workspace is for)';
+
+function noteText(name, doing, today) {
+  return ['---', 'id: workspace-' + name, 'kind: design', 'status: open',
+    'read_when: "checking what the `' + name + '` workspace is doing before changing the same files"',
+    'last_verified: ' + today, '---', '', '# Workspace `' + name + '`', '',
+    String(doing || '').replace(/\s+/g, ' ').trim() || DOING_BLANK, '',
+    'This file is the workspace\'s announce note: `node scripts/harness/worktree.js --list` reads its',
+    'first line from every branch. Commit it first; landing the workspace removes it.', ''].join('\n');
+}
+
+/* Which of a branch's changed files is its note: the handoff of a track it touched (the one
+   named for the branch first), else its plain-task note. `changed` is null when the source ref
+   is unknown, and the two paths named for the branch are then the only candidates. */
+function noteCandidates(name, changed, docsRoot, tracksDir) {
+  const t = String(tracksDir).replace(/\\/g, '/').replace(/\/+$/, '');
+  const own = [t + '/' + name + '/handoff.md', notePath(docsRoot, name)];
+  if (!Array.isArray(changed)) return own;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const handoff = new RegExp('^' + esc(t) + '/[^/]+/handoff\\.md$');
+  const note = new RegExp('^' + esc(notePath(docsRoot, 'X').slice(0, -'X.md'.length)) + '[^/]+\\.md$');
+  const found = changed.filter((f) => handoff.test(f)).concat(changed.filter((f) => note.test(f)));
+  return own.filter((p) => found.includes(p)).concat(found.filter((p) => !own.includes(p)));
+}
+
+/* What a note says, in the two fields the overview prints. A handoff's line is the first line
+   of its fenced block; any other note's is its first line of body prose. */
+function noteSummary(text) {
+  const src = String(text == null ? '' : text).replace(/\r\n/g, '\n');
+  const fm = /^---\n([\s\S]*?)\n---\n?/.exec(src);
+  const field = (k) => { const m = fm && new RegExp('^' + k + ':[ \\t]*(.*)$', 'm').exec(fm[1]); return m ? m[1].trim().replace(/^["']|["']$/g, '') : null; };
+  const body = fm ? src.slice(fm[0].length) : src;
+  const kind = field('kind');
+  let doing = null;
+  if (kind === 'handoff') {
+    const block = /```[^\n]*\n([\s\S]*?)```/.exec(body);
+    doing = block ? (block[1].split('\n').map((l) => l.trim()).find(Boolean) || null) : null;
+  }
+  if (!doing) doing = body.split('\n').map((l) => l.trim()).find((l) => l && !/^(#|>|```|\||<!--|---)/.test(l)) || null;
+  if (doing && doing.length > 110) doing = doing.slice(0, 107) + '...';
+  const next = field('phase_next');
+  return { kind, phaseNext: next === null || next === '' ? null : next, doing: doing === DOING_BLANK ? null : doing };
+}
+
+/* `changed` is { branch: [files] }, each list being what that branch changed against the source
+   branch. A file on two or more lists is where a merge will collide. Reported, never refused. */
+function overlapsOf(changed) {
+  const by = new Map();
+  for (const b of Object.keys(changed || {}).sort()) {
+    for (const f of new Set(changed[b] || [])) { if (!by.has(f)) by.set(f, []); by.get(f).push(b); }
+  }
+  return Array.from(by.entries()).filter(([, bs]) => bs.length > 1).map(([file, branches]) => ({ file, branches })).sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+/* The session-start line: who else has a folder on this computer. `state.others` is every
+   checkout but the session's own. Silent with none; it never denies. */
+function decideSessionStart(event, state) {
+  const others = (state && Array.isArray(state.others)) ? state.others : [];
+  if (!others.length) return { deny: false, reason: '' };
+  const shown = others.slice(0, 6).map((o) => (o.branch || '(detached)') + ' in ' + o.path);
+  return {
+    deny: false,
+    reason: '',
+    context: 'WORKSPACES: ' + others.length + ' other checkout(s) of this repo on this computer, each another session\'s folder: '
+      + shown.join('; ') + (others.length > shown.length ? '; and ' + (others.length - shown.length) + ' more' : '')
+      + '. Edit only this one. What each is doing, and files changed on two branches: node scripts/harness/worktree.js --list',
+  };
+}
+
 const ADVICE = [
   'This checkout is a plain clone, so workspaces go in a sibling folder. It works better as ONE',
   'parent folder holding the project as `' + PARENT_MAIN + '/` with every workspace beside it. To adopt that:',
@@ -283,6 +360,16 @@ function create(cwd, opts) {
     const files = fs.readdirSync(from).filter((f) => f.endsWith('.md')).sort();
     for (const f of files) fs.writeFileSync(path.join(to, f), fillTemplate(fs.readFileSync(path.join(from, f), 'utf8'), o.name, tracksDir, today));
     res.track = { dir: to, rel: tracksDir + '/' + o.name, files };
+  } else if (o.note !== false) {
+    // A plain task announces itself in one file of its own. A track's handoff already does.
+    const inner = readConfig(target);
+    const rel = notePath((inner.ok ? inner.cfg : CONFIG.DEFAULTS).project.docsRoot, o.name);
+    const file = path.join(target, ...rel.split('/'));
+    if (!fs.existsSync(file)) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, noteText(o.name, o.doing, new Date().toISOString().slice(0, 10)));
+      res.note = { rel, doing: String(o.doing || '').trim() || null };
+    }
   }
 
   // Carried files, then the setup command: the command may need what was carried.
@@ -312,6 +399,7 @@ function createdLines(r) {
   out.push('  branch   ' + r.branch + '   cut from ' + r.source.ref + ' (source chosen by: ' + r.source.how + ')');
   if (r.source.how !== 'explicit') out.push('           a ref is only as new as the last fetch: `git fetch` first if the remote may have moved');
   if (r.track) out.push('  track    ' + r.track.rel + '/ (' + r.track.files.join(', ') + ') — fill every <PLACEHOLDER>; the doc gate is red until you do');
+  if (r.note) out.push('  note     ' + r.note.rel + (r.note.doing ? '' : ' — write in one line what this workspace is for') + '; commit it first, so --list shows it from any folder');
   const carry = r.carry || [];
   for (const c of carry) out.push('  ' + (c.action === 'copy' ? 'carried  ' : 'NOT carried  ') + c.path + (c.why ? ' — ' + c.why : ''));
   if (!carry.length) out.push('  nothing was copied in: a file git ignores (local settings, installed packages) is absent from the new folder; list it in worktrees.carry');
@@ -334,7 +422,9 @@ function fromHook(text, opts) {
   const no = (why) => ({ stdout: '', stderr: 'WORKSPACE REFUSED: ' + why + '\n', exitCode: 2 });
   const p = hookPayload(text);
   if (!p.ok) return no(p.why);
-  const r = create(p.cwd || o.cwd || process.cwd(), { name: p.name, quiet: o.quiet });
+  // No note on this route: the flag carries no description, and an uncommitted file would make
+  // a throwaway folder dirty, which changes what the agent does with it at exit.
+  const r = create(p.cwd || o.cwd || process.cwd(), { name: p.name, quiet: o.quiet, note: false });
   if (!r.ok) return no(r.why);
   return { stdout: r.target + '\n', stderr: createdLines(r).join('\n') + '\n', exitCode: 0 };
 }
@@ -354,17 +444,95 @@ function list(cwd) {
     main: !!facts.mainRoot && e.path === facts.mainRoot,
     flags: [e.locked && 'locked', e.prunable && 'prunable (its folder is gone)'].filter(Boolean),
   }));
-  return { ok: true, rows, layout, configProblem: conf.ok ? null : conf.why };
+  const res = { ok: true, rows, layout, configProblem: conf.ok ? null : conf.why, source: null, elsewhere: [], overlap: [] };
+  if (!conf.ok) return res;
+
+  /* THE OVERVIEW. Every branch's note is read out of git (`git show <ref>:<path>`), so a
+     branch nobody has a folder for on this computer is covered too; a note not committed yet
+     is read off its folder and said to be uncommitted. */
+  const proj = conf.cfg.project || CONFIG.DEFAULTS.project;
+  const src = sourceRef(cwd, null, proj.sourceBranch);
+  const srcName = src.ref ? src.ref.replace(/^origin\//, '') : null;
+  res.source = src.ref;
+  const prefix = (layout && layout.branchPrefix) || '';
+  const nameOf = (branch) => (prefix && branch.startsWith(prefix) ? branch.slice(prefix.length) : branch);
+  const refs = (git(cwd, ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes']).stdout || '').split(/\r?\n/).filter(Boolean);
+  const local = refs.filter((r) => r.startsWith('refs/heads/')).map((r) => r.slice('refs/heads/'.length));
+  const remote = refs.filter((r) => r.startsWith('refs/remotes/')).map((r) => r.slice('refs/remotes/'.length))
+    .filter((r) => !/\/HEAD$/.test(r) && !local.includes(r.slice(r.indexOf('/') + 1)));
+  const changedOf = (ref) => {
+    if (!src.ref) return null;
+    const d = git(cwd, ['diff', '--name-only', src.ref + '...' + ref]);
+    return d.status === 0 ? d.stdout.split(/\r?\n/).filter(Boolean) : null;
+  };
+  const noteOf = (ref, name, changed, folder) => {
+    for (const p of noteCandidates(name, changed, proj.docsRoot, proj.tracksDir)) {
+      const show = git(cwd, ['show', ref + ':' + p]);
+      if (show.status === 0) return Object.assign(noteSummary(show.stdout), { path: p, committed: true });
+    }
+    if (folder) {
+      for (const p of noteCandidates(name, null, proj.docsRoot, proj.tracksDir)) {
+        const file = path.join(folder, ...p.split('/'));
+        if (fs.existsSync(file)) return Object.assign(noteSummary(fs.readFileSync(file, 'utf8')), { path: p, committed: false });
+      }
+    }
+    return null;
+  };
+  const changed = {};
+  const isSource = (short) => !!srcName && short === srcName;
+  for (const row of rows) {
+    const e = facts.entries.find((x) => x.path === row.path);
+    if (!e || !e.branch || isSource(e.branch)) continue;
+    const ch = changedOf('refs/heads/' + e.branch);
+    if (ch) changed[e.branch] = ch;
+    row.note = noteOf('refs/heads/' + e.branch, nameOf(e.branch), ch, fs.existsSync(row.path) ? row.path : null);
+  }
+  const held = facts.entries.map((e) => e.branch).filter(Boolean);
+  for (const b of local.filter((x) => !held.includes(x) && !isSource(x)).map((x) => ({ ref: 'refs/heads/' + x, branch: x, short: x }))
+    .concat(remote.filter((r) => !isSource(r.slice(r.indexOf('/') + 1))).map((r) => ({ ref: 'refs/remotes/' + r, branch: r, short: r.slice(r.indexOf('/') + 1) })))) {
+    const ch = changedOf(b.ref);
+    const note = noteOf(b.ref, nameOf(b.short), ch, null);
+    if (!note) continue; // a branch that announces nothing is not a workspace anyone can be told about
+    if (ch) changed[b.branch] = ch;
+    const head = out1(git(cwd, ['rev-parse', '--short=7', b.ref]));
+    res.elsewhere.push({ branch: b.branch, head: head || '-', note });
+  }
+  res.overlap = overlapsOf(changed);
+  return res;
 }
+
+/* Every checkout but the one at `cwd`: what the session-start line names. One git call. */
+function others(cwd) {
+  const facts = repoFacts(cwd);
+  if (!facts.ok) return [];
+  return facts.entries.filter((e) => !e.bare && e.path !== facts.top).map((e) => ({ branch: e.branch, path: e.path }));
+}
+
+const OVERLAP_SHOWN = 20;
+const noteLine = (n) => 'doing: ' + (n.doing || '(the note says nothing yet)') + (n.phaseNext ? '   [next phase ' + n.phaseNext + ']' : '')
+  + '   (' + n.path + (n.committed ? '' : ', NOT committed: other folders cannot see it') + ')';
 
 function printList(r) {
   const w = Math.max(6, ...r.rows.map((x) => String(x.branch).length));
   for (const x of r.rows) {
     console.log((x.here ? '* ' : '  ') + String(x.branch).padEnd(w) + '  ' + x.head + '  ' + x.path
       + (x.main ? '   [main checkout]' : '') + (x.flags.length ? '   [' + x.flags.join(', ') + ']' : ''));
+    if (x.note) console.log('      ' + noteLine(x.note));
   }
   console.log('');
   console.log(r.rows.length + ' checkout(s); `*` is this one.');
+  if (r.elsewhere && r.elsewhere.length) {
+    console.log('');
+    console.log('Announced on a branch with NO folder on this computer:');
+    for (const e of r.elsewhere) { console.log('  ' + e.branch + '  ' + e.head); console.log('      ' + noteLine(e.note)); }
+  }
+  if (r.overlap && r.overlap.length) {
+    console.log('');
+    console.log('OVERLAP: ' + r.overlap.length + ' file(s) changed against ' + r.source + ' on two or more branches. A report, not a refusal:');
+    for (const o of r.overlap.slice(0, OVERLAP_SHOWN)) console.log('  ' + o.file + '   <- ' + o.branches.join(', '));
+    if (r.overlap.length > OVERLAP_SHOWN) console.log('  ... and ' + (r.overlap.length - OVERLAP_SHOWN) + ' more');
+    console.log('  whoever merges second resolves these; say so to the other session now, not at the merge.');
+  }
   if (r.configProblem) console.log('layout: unknown — ' + r.configProblem);
   else if (r.layout.problem) console.log('layout: ' + r.layout.kind + ' — ' + r.layout.problem);
   else console.log('layout: ' + r.layout.kind + ' — a new workspace goes under ' + r.layout.root);
@@ -443,6 +611,31 @@ function selfTest() {
   eq('a payload with no cwd leaves it to the caller', hookPayload('{"name":"fix-a"}').cwd, null);
   eq('junk, a list, and a payload with no name are each refused', [hookPayload('junk').ok, hookPayload('[]').ok, hookPayload('{"cwd":"/r"}').ok, hookPayload('{"name":7}').ok], [false, false, false, false]);
 
+  // the announce note, its summary, and the overlap report
+  const nt = noteText('fix-a', '  mend the  export ', '2026-01-02');
+  ok('a note opens with the four required frontmatter fields', /^---\nid: workspace-fix-a\nkind: design\nstatus: open\nread_when: ".*"\n/.test(nt));
+  eq('a note\'s summary is its one line, whitespace folded', noteSummary(nt), { kind: 'design', phaseNext: null, doing: 'mend the export' });
+  eq('a note nobody filled in says nothing', noteSummary(noteText('fix-a', '', '2026-01-02')).doing, null);
+  eq('a handoff\'s summary is the first line of its block, and its next phase',
+    noteSummary('---\r\nid: x-handoff\r\nkind: handoff\r\nphase_next: 3\r\n---\r\n\r\n# T\r\n\r\n## ▶ NEXT\r\n\r\n```\r\nPHASE 3: do the thing\r\nmore\r\n```\r\n'), { kind: 'handoff', phaseNext: '3', doing: 'PHASE 3: do the thing' });
+  eq('a long line is cut', noteSummary('---\nkind: design\n---\n' + 'x'.repeat(200) + '\n').doing.length, 110);
+  eq('no frontmatter and no body is an empty summary', noteSummary(''), { kind: null, phaseNext: null, doing: null });
+  eq('the note path hangs off the docs root', notePath('prose\\', 'fix-a'), 'prose/workspaces/fix-a.md');
+  eq('with no diff, the candidates are the two paths named for the branch', noteCandidates('pay', null, 'docs', 'docs/tracks'), ['docs/tracks/pay/handoff.md', 'docs/workspaces/pay.md']);
+  eq('a branch that changed a track under another name still has a note',
+    noteCandidates('pay-phases', ['src/a.js', 'docs/tracks/pay/handoff.md', 'docs/tracks/pay/plan.md'], 'docs', 'docs/tracks'), ['docs/tracks/pay/handoff.md']);
+  eq('the track named for the branch comes first, then the plain note',
+    noteCandidates('pay', ['docs/workspaces/pay.md', 'docs/tracks/other/handoff.md', 'docs/tracks/pay/handoff.md'], 'docs', 'docs/tracks'),
+    ['docs/tracks/pay/handoff.md', 'docs/workspaces/pay.md', 'docs/tracks/other/handoff.md']);
+  eq('a branch that changed no note has none', noteCandidates('pay', ['src/a.js', 'docs/tracks/pay/deep/handoff.md'], 'docs', 'docs/tracks'), []);
+  eq('a file on two lists overlaps; one on a single list does not',
+    overlapsOf({ b: ['x.js', 'y.js'], a: ['y.js', 'z.js', 'y.js'], c: ['y.js', 'x.js'] }), [{ file: 'x.js', branches: ['b', 'c'] }, { file: 'y.js', branches: ['a', 'b', 'c'] }]);
+  eq('one branch, or none, overlaps nothing', [overlapsOf({ a: ['x'] }), overlapsOf({}), overlapsOf(null)], [[], [], []]);
+  eq('session start: alone, nothing is said', decideSessionStart(null, { others: [] }), { deny: false, reason: '' });
+  const ss = decideSessionStart(null, { others: [{ branch: 'fix-a', path: P('w', 'fix-a') }, { branch: null, path: P('w', 'd') }] });
+  ok('session start: each other checkout is named on one line, and it never denies', ss.deny === false && !/\n/.test(ss.context) && ss.context.includes('fix-a in ' + P('w', 'fix-a')) && /\(detached\) in /.test(ss.context) && /--list/.test(ss.context));
+  ok('session start: a long list is cut with a count', /and 3 more/.test(decideSessionStart(null, { others: Array.from({ length: 9 }, (_, i) => ({ branch: 'b' + i, path: 'p' })) }).context));
+
   // a throwaway repo: the real git, never this repo
   const tmp = real(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-worktree-self-test-')));
   try {
@@ -500,6 +693,41 @@ function selfTest() {
 
     eq('outside any repo, both commands say so', [create(tmp, { name: 'x' }).ok, list(tmp).ok], [false, false]);
 
+    // the overview, in a repo with a remote: notes read from git, and the overlap report
+    const hub = path.join(tmp, 'hub.git');
+    const one = path.join(tmp, 'ov', 'main');
+    fs.mkdirSync(one, { recursive: true });
+    ok('the overview fixture commits', mk(one, 'main'));
+    const gi = (dir, args) => git(dir, ['-c', 'user.name=self-test', '-c', 'user.email=self-test@example.invalid', '-c', 'commit.gpgsign=false'].concat(args));
+    gi(tmp, ['init', '-q', '--bare', hub]);
+    gi(one, ['remote', 'add', 'origin', hub]); gi(one, ['push', '-q', 'origin', 'main']);
+    const na = create(one, { name: 'task-a', doing: 'mend the export' });
+    eq('a plain task gets one note named for it, under the docs root', [na.ok, na.note && na.note.rel, fs.existsSync(path.join(tmp, 'ov', 'task-a', 'docs', 'workspaces', 'task-a.md'))], [true, 'docs/workspaces/task-a.md', true]);
+    const before = list(one).rows.find((x) => x.branch === 'task-a').note;
+    eq('an uncommitted note is read off its folder and said to be uncommitted', [before && before.doing, before && before.committed], ['mend the export', false]);
+    fs.writeFileSync(path.join(na.target, 'file.txt'), 'a\n');
+    gi(na.target, ['add', '-A']); gi(na.target, ['commit', '-q', '-m', 'a']);
+    const nb = create(one, { name: 'task-b', track: true });
+    eq('a track gets no plain note: its handoff is the note', [nb.ok, nb.note === undefined, fs.existsSync(path.join(nb.target, 'docs', 'workspaces'))], [true, true, false]);
+    fs.writeFileSync(path.join(nb.target, 'docs', 'tracks', 'task-b', 'handoff.md'), '---\nid: task-b-handoff\nkind: handoff\nstatus: open\nread_when: "x"\nphase_next: 1\n---\n\n## ▶ NEXT\n\n```\nPHASE 1: split the importer\n```\n');
+    fs.writeFileSync(path.join(nb.target, 'file.txt'), 'b\n'); fs.writeFileSync(path.join(nb.target, 'only-b.txt'), 'b\n');
+    gi(nb.target, ['add', '-A']); gi(nb.target, ['commit', '-q', '-m', 'b']);
+    // a third branch that exists only on the remote: pushed from a folder, then folder and branch removed
+    const nc = create(one, { name: 'task-c', doing: 'far away work' });
+    fs.writeFileSync(path.join(nc.target, 'only-b.txt'), 'c\n');
+    gi(nc.target, ['add', '-A']); gi(nc.target, ['commit', '-q', '-m', 'c']); gi(nc.target, ['push', '-q', 'origin', 'task-c']);
+    gi(one, ['worktree', 'remove', '--force', nc.target]); gi(one, ['branch', '-D', 'task-c']);
+    const ov = list(na.target);
+    const rowOf = (b) => ov.rows.find((x) => x.branch === b) || {};
+    eq('the overview reads each branch\'s committed note out of git', [rowOf('task-a').note, rowOf('task-b').note].map((n) => n && [n.doing, n.phaseNext, n.committed, n.path]),
+      [['mend the export', null, true, 'docs/workspaces/task-a.md'], ['PHASE 1: split the importer', '1', true, 'docs/tracks/task-b/handoff.md']]);
+    eq('the source branch\'s own checkout carries no note', rowOf('main').note, undefined);
+    eq('a branch with a note and NO folder here is listed from the remote', ov.elsewhere.map((e) => [e.branch, e.note.doing]), [['origin/task-c', 'far away work']]);
+    eq('a file two branches changed is reported, with a branch that has no folder here', ov.overlap, [{ file: 'file.txt', branches: ['task-a', 'task-b'] }, { file: 'only-b.txt', branches: ['origin/task-c', 'task-b'] }]);
+    eq('the overview says what it compared against: the remote ref when it is not behind', ov.source, 'origin/main');
+    eq('every checkout but this one is what the session-start line names', others(na.target).map((o) => o.branch).sort(), ['main', 'task-b']);
+    eq('outside a repo there are no others', others(tmp), []);
+
     // carry and setup, in a repo of their own. The fixture's ignored files are NOT named like a
     // guarded secret file: the secret guard refuses any command that spells one, fixture or not.
     const kit = path.join(tmp, 'kit');
@@ -549,7 +777,7 @@ function selfTest() {
 
   for (const f of fails) console.log('FAIL  ' + f);
   console.log(fails.length ? '\nFAIL — worktree.js self-test: ' + fails.length + ' of ' + n + ' checks'
-    : 'PASS — worktree.js self-test (' + n + ' checks: names, layout, porcelain, --new, --track, --list, config, carry, setup, hook)');
+    : 'PASS — worktree.js self-test (' + n + ' checks: names, layout, porcelain, --new, --track, --list, config, carry, setup, hook, note, overview, overlap)');
   return fails.length ? 1 : 0;
 }
 
@@ -558,13 +786,15 @@ function selfTest() {
 const USAGE = [
   'worktree.js — one folder per agent, on its own branch, over one shared history.',
   '',
-  '  --new <name> [--track] [--from <ref>]',
+  '  --new <name> [--track] [--from <ref>] [--doing "<one line>"]',
   '        Create a workspace folder and a branch of the same name, cut from the source branch',
   '        (the newer of the local and the remote one). --track also copies templates/track/ into',
   '        the tracks directory. --from names the ref to cut from instead. Never inside a checkout.',
   '        Then copies in each ignored path `worktrees.carry` lists and runs `worktrees.setup`.',
+  '        Without --track it writes one announce note for the task (--doing is its first line).',
   '  --list',
-  '        Every checkout of this repo: branch, commit, folder, and where the next one would go.',
+  '        The overview: every checkout of this repo and what its branch says it is doing, read',
+  '        from git; announced branches with no folder here; files changed on two or more branches.',
   '  --self-test',
   '        Check this file against literals and a throwaway repo. Touches no real repo.',
   '',
@@ -577,7 +807,7 @@ function main() {
   const valueOf = (flag) => { const i = argv.indexOf(flag); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : null; };
   if (has('--self-test')) return process.exit(selfTest());
   if (has('--new')) {
-    const r = create(process.cwd(), { name: valueOf('--new'), track: has('--track'), from: valueOf('--from') });
+    const r = create(process.cwd(), { name: valueOf('--new'), track: has('--track'), from: valueOf('--from'), doing: valueOf('--doing') });
     if (!r.ok) { console.error('REFUSED: ' + r.why); return process.exit(1); }
     printCreated(r);
     if (r.setup && !r.setup.ok) { console.error('SETUP FAILED: `' + r.setup.command + '` in ' + r.target + ' — the workspace exists; fix the command and run it there'); return process.exit(1); }
@@ -593,6 +823,10 @@ function main() {
   return process.exit(argv.length && !has('--help') && !has('-h') ? 1 : 0);
 }
 
-module.exports = { nameProblem, decideLayout, decideCarry, hookPayload, parsePorcelain, fillTemplate, isInside, create, fromHook, list, sourceRef, PARENT_MAIN, SIBLING_SUFFIX, NAME_RE };
+module.exports = {
+  nameProblem, decideLayout, decideCarry, hookPayload, parsePorcelain, fillTemplate, isInside, create, fromHook, list, sourceRef,
+  noteText, notePath, noteCandidates, noteSummary, overlapsOf, others, decideSessionStart,
+  PARENT_MAIN, SIBLING_SUFFIX, NAME_RE, NOTES_DIR,
+};
 
 if (require.main === module) main();

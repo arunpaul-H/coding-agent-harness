@@ -75,11 +75,13 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 | 0 | the research file: what the agent's flag does on this machine | closed |
 | 1 | `worktree.js --new`, `--list`, `--self-test`; config keys with defaults | closed |
 | 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | closed |
-| 3 | the announce note, the generated overview, the overlap warning, a session-start line | open |
+| 3 | the announce note, the generated overview, the overlap warning, a session-start line | landed |
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | open |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | open |
 
-Nothing is pushed. `node scripts/harness/worktree.js --list` shows every checkout today.
+Nothing is pushed. `node scripts/harness/worktree.js --list` is the overview: every checkout, what
+each branch's note says it is doing, announced branches with no folder here, and files changed
+on two or more branches. A plain task's note is `<docsRoot>/workspaces/<name>.md`.
 A new folder now gets `worktrees.carry` copied in and `worktrees.setup` run, and the agent's own
 worktree flag is routed to the same script by a `WorktreeCreate` hook entry. Both keys default to
 nothing, so a workspace starts without the ignored local settings file until a repo lists it.

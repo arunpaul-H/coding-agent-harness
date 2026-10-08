@@ -209,6 +209,93 @@ describe('a new workspace is ready to work in, by either route', () => {
   });
 });
 
+describe('workspaces announce themselves, and the overview is read from git', () => {
+  const HOOK = path.join(SRC, 'hook.js');
+  let tmp; let repo;
+  const commit = (dir, msg) => { git(dir, ['add', '-A']); assert.strictEqual(git(dir, ['commit', '-q', '-m', msg]).status, 0, msg); };
+  before(() => {
+    tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-worktree-overview-')));
+    repo = path.join(tmp, 'shop');
+    fs.mkdirSync(repo);
+    fs.writeFileSync(path.join(repo, 'shared.txt'), 'x\n');
+    git(repo, ['init', '-q', '-b', 'main', '.']);
+    commit(repo, 'init');
+  });
+  after(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* the OS may still hold it */ } });
+
+  test('--new writes one note for a plain task, with frontmatter the doc contract accepts', () => {
+    const r = run(repo, ['--new', 'mend-export', '--doing', 'mend the CSV export']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /note {5}docs\/workspaces\/mend-export\.md; commit it first/);
+    const text = fs.readFileSync(path.join(tmp, 'shop.worktrees', 'mend-export', 'docs', 'workspaces', 'mend-export.md'), 'utf8');
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+    assert.ok(fm, 'the note has no frontmatter block');
+    for (const k of ['id', 'kind', 'status', 'read_when']) assert.match(fm[1], new RegExp('^' + k + ': \\S', 'm'), k + ' is missing');
+    assert.match(fm[1], /^id: workspace-mend-export$/m);
+    assert.match(text, /^mend the CSV export$/m);
+    const { parseFrontmatter } = require(path.join(SRC, 'guards', 'doc-frozen.cjs'));
+    assert.strictEqual(parseFrontmatter(text).kind, 'design', 'the harness\'s own frontmatter reader does not read the note');
+  });
+
+  test('the overview shows what each branch says, an uncommitted note as uncommitted, and a file two branches changed', () => {
+    const a = path.join(tmp, 'shop.worktrees', 'mend-export');
+    let r = run(repo, ['--list']);
+    assert.match(r.stdout, /doing: mend the CSV export {3}\(docs\/workspaces\/mend-export\.md, NOT committed: other folders cannot see it\)/);
+    fs.writeFileSync(path.join(a, 'shared.txt'), 'a\n');
+    commit(a, 'a');
+    assert.strictEqual(run(repo, ['--new', 'other-task']).status, 0);
+    const b = path.join(tmp, 'shop.worktrees', 'other-task');
+    fs.writeFileSync(path.join(b, 'shared.txt'), 'b\n');
+    fs.writeFileSync(path.join(b, 'mine.txt'), 'b\n');
+    commit(b, 'b');
+    r = run(repo, ['--list']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^ {2}mend-export\s.*\n {6}doing: mend the CSV export {3}\(docs\/workspaces\/mend-export\.md\)$/m);
+    assert.match(r.stdout, /doing: \(the note says nothing yet\) {3}\(docs\/workspaces\/other-task\.md\)/);
+    assert.match(r.stdout, /OVERLAP: 1 file\(s\) changed against main on two or more branches\. A report, not a refusal:\n {2}shared\.txt {3}<- mend-export, other-task/);
+    assert.doesNotMatch(r.stdout, /mine\.txt/, 'a file one branch changed is not an overlap');
+    assert.match(r.stdout, /3 checkout\(s\)/);
+  });
+
+  test('a branch whose folder is gone from this computer is still in the overview, read from git', () => {
+    const b = path.join(tmp, 'shop.worktrees', 'other-task');
+    fs.writeFileSync(path.join(b, 'docs', 'workspaces', 'other-task.md'), W.noteText('other-task', 'rework the importer', '2026-01-02'));
+    commit(b, 'say what it is');
+    assert.strictEqual(git(repo, ['worktree', 'remove', '--force', b]).status, 0);
+    const r = run(repo, ['--list']);
+    assert.match(r.stdout, /Announced on a branch with NO folder on this computer:\n {2}other-task {2}[0-9a-f]{7}\n {6}doing: rework the importer/);
+    assert.match(r.stdout, /shared\.txt {3}<- mend-export, other-task/, 'the overlap report forgot the branch with no folder');
+    assert.match(r.stdout, /2 checkout\(s\)/);
+  });
+
+  test('the session-start reporter names sibling workspaces on one line, and is silent with none', () => {
+    const start = (root) => spawnSync(process.execPath, [HOOK, '--tool', 'claude-code', '--event', 'session-start'],
+      { cwd: root, encoding: 'utf8', env: Object.assign(cleanEnv(), { CLAUDE_PROJECT_DIR: root }), input: JSON.stringify({ hook_event_name: 'SessionStart', cwd: root }) });
+    const lone = path.join(tmp, 'lone');
+    fs.mkdirSync(lone);
+    fs.writeFileSync(path.join(lone, 'f.txt'), 'x\n');
+    git(lone, ['init', '-q', '-b', 'main', '.']);
+    commit(lone, 'init');
+    const quiet = start(lone);
+    assert.strictEqual(quiet.status, 0, quiet.stdout + quiet.stderr);
+    assert.doesNotMatch(quiet.stdout, /WORKSPACES:/, 'a repo with one checkout was told about workspaces');
+    const r = start(repo);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    const line = ctx.split('\n').filter((l) => l.startsWith('WORKSPACES: '));
+    assert.strictEqual(line.length, 1, ctx);
+    assert.match(line[0], /^WORKSPACES: 1 other checkout\(s\) of this repo on this computer/);
+    assert.ok(line[0].includes('mend-export in ' + path.join(tmp, 'shop.worktrees', 'mend-export')), line[0]);
+    assert.match(line[0], /worktree\.js --list$/);
+  });
+
+  test('the docs index does not route a workspace note, so a plain task never rewrites it', () => {
+    const idx = spawnSync(process.execPath, [path.join(SRC, 'docs-index.js'), '--self-test'], { cwd: ROOT, encoding: 'utf8', env: cleanEnv() });
+    assert.strictEqual(idx.status, 0, idx.stdout + idx.stderr);
+    assert.match(fs.readFileSync(path.join(SRC, 'docs-index.js'), 'utf8'), new RegExp("norm\\(DOCS\\) \\+ '/" + W.NOTES_DIR + "'"));
+  });
+});
+
 describe('the registration this repo runs under', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8'));
   const commands = [];

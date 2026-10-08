@@ -3,7 +3,7 @@ id: worktrees-plan
 kind: plan
 status: open
 read_when: "worktrees: the phases, each with its exit command and first commit"
-first_commit: "worktrees: an overview read from git, with an early overlap warning"
+first_commit: "worktrees: land and prune a workspace, refusing whatever would lose work"
 ---
 
 # Workspaces: the phases
@@ -15,13 +15,7 @@ overview's reading of each branch), and packaging last so an adopter gets only w
 
 ## Phase 0: evidence for what the agent's own flag does
 
-**Problem.** The design assumed where the flag puts a folder and which folder a hook sees.
-`docs/reference/branches/README.md` Traps claimed hooks check the wrong tree.
-
-**Do.** Measure it in a throwaway repo and freeze the result as a research file.
-
-**Do NOT.** Write code, or run a second agent session inside this repo.
-
+Closed. Measured in a throwaway repo and frozen as a research file; no code.
 **First commit:** `worktrees: open the track with measured evidence`
 **Exit:** `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check && node scripts/harness/handoff-lint.js worktrees`
 
@@ -30,23 +24,8 @@ lookup went to a read-only agent; the lead ran the measurements, as that agent h
 
 ## Phase 1: create and list workspaces with one command
 
-**Problem.** A workspace is made by hand today, with a hand-picked path and a branch cut from
-whichever ref was nearest (WT-05).
-
-**Do.**
-- `scripts/harness/worktree.js`: `--new <name> [--track]`, `--list`, `--self-test`.
-- `--new` resolves the root (parent layout when the repo sits in a workspace parent, else the
-  sibling `<repo>.worktrees/`), cuts the branch from the source ref that `branch-sync.js`
-  already detects, refuses an existing name, and prints the folder plus the command to start an
-  agent in it. Under the sibling layout it also prints the one-line parent-layout advice.
-- `--track` copies `templates/track/` into the new folder's tracks directory.
-- `worktrees.root` and `worktrees.branchPrefix` in `harness.config.json`, both optional with
-  derived defaults; the schema; `config.js` validation.
-- `harness worktree` in `bin/harness.js`; tests under `tests/` that build a throwaway repo.
-
-**Do NOT.** Copy ignored files, run a setup command or register a hook: phase 2. Do not touch
-`scripts/harness/peers.js` (README, What this is).
-
+Closed. A workspace was made by hand, with a hand-picked path and a branch cut from whichever
+ref was nearest (WT-05).
 **First commit:** `worktrees: create and list workspaces with one command`
 **Exit:** `node scripts/harness/worktree.js --self-test && node bin/harness.js gates --check`
 
@@ -104,7 +83,14 @@ under PowerShell first (WT-01); no live session ran the flag through this repo's
 **First commit:** `worktrees: an overview read from git, with an early overlap warning`
 **Exit:** `node scripts/harness/worktree.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** `--new` writes `<docsRoot>/workspaces/<name>.md` for a plain task (`--doing` is its
+line); `--list` reads each branch's note with `git show`, lists announced branches with no folder
+here, and reports files changed on two or more branches; a fifth session-start reporter names
+sibling checkouts. Deviations: the note is found among the files a branch CHANGED, so a track
+under another name than its branch is still read; the note is written, not committed (an
+uncommitted one is read off its folder and said so); the hook route writes no note; the docs
+index skips the notes folder, an edit to `docs-index.js` the work list did not name; the note's
+`kind` is `design`, the nearest in the enum; the reporter line does not run the overlap diff.
 
 ## Phase 4: land and remove a workspace safely
 
