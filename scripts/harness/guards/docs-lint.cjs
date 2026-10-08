@@ -12,7 +12,9 @@
    carries anything but the import, or has no policy file beside it · a policy file with no stub
    beside it for an enabled tool that needs one, or one that imports another file (rule 12) · an over-long line
    in the auto-memory index (reported, never a failure of this gate — see rule 10).
-   WARN (exit 0): a stale `last_verified` · a plan whose `first_commit` never landed · slop words
+   WARN (exit 0): a stale `last_verified` · a `last_verified` that is not a date · DRIFT: commits
+   touched a doc's `paths` after its `last_verified` day (one line instead where the clone is
+   shallow; silence outside git) · a plan whose `first_commit` never landed · slop words
    on added lines only. STALENESS NEVER BLOCKS: blocking on it is the exact mechanism behind a
    false-regression history this harness was built to end — a doc going red because a date passed
    tells you nothing about whether the code changed, and the standing fix for a red gate is to
@@ -226,6 +228,72 @@ const declaresExternal = (src) => src != null
   && /\bexternal\b/i.test(Array.isArray(src) ? src.join(' ') : String(src));
 const untrustedBannerMissing = (fm, body) => Boolean(fm) && declaresExternal(fm.source) && !UNTRUSTED_BANNER.test(body);
 
+/* ---------- rule 9's two other warnings: an unreadable date, and DRIFT ----------
+   Staleness asks the clock, and the clock knows nothing about the code. Drift asks git: did a file
+   this doc governs (`paths`) get a commit after the day somebody last checked the doc against it
+   (`last_verified`)? Both are WARN only, for the reason in the header, and both live inside rule
+   9's one application: a warning that moved the gate total would be a date moving the gate.
+
+   The decisions are pure and take the git ANSWERS, not a repo, so --self-test drives every branch
+   with literals; the two git calls are the thin `repoFacts` and `pathLog` inside lint(). */
+/** `last_verified` is there and is not a date. The staleness comparison against NaN is false for
+ *  ever, so a scaffold left with its placeholder used to be silent for ever; now it says so. */
+const notADate = (fm) => {
+  if (!fm || fm.last_verified == null || fm.last_verified === '') return null;
+  return Number.isNaN(Date.parse(fm.last_verified))
+    ? `last_verified "${fm.last_verified}" is not a date, so this doc is never reported stale or drifted: write YYYY-MM-DD`
+    : null;
+};
+/** A scalar `paths: src/**` is one glob, not no globs: the bracket form parses to an array and the
+ *  bare form to a string, and a rule that understood only one would go quiet on the other. */
+const governedPaths = (fm) => (fm && fm.paths ? [].concat(fm.paths).map(String).filter(Boolean) : []);
+/**
+ * The first instant that counts as AFTER `last_verified`, in ms, or NaN: the START OF THE NEXT
+ * LOCAL DAY. A commit made on the verification day itself is therefore never drift. That is a
+ * choice, and the reason is that a date has no time of day: a same-day commit cannot be ordered
+ * against it, the commit that re-dates a doc usually lands beside the change it verified, and a
+ * warning on that pair is false. A false warning here has one cheap fix, which is to re-date the
+ * doc, and that is the habit this whole rule exists to prevent. The cost is stated: a change that
+ * lands later on the verification day is missed until the next commit to those paths.
+ * A bare YYYY-MM-DD is read as a LOCAL calendar day (Date.parse would make it UTC midnight, which
+ * is the previous evening west of Greenwich); anything else parseable is taken at its instant.
+ */
+const verifiedUntil = (lastVerified) => {
+  const s = String(lastVerified == null ? '' : lastVerified).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  const at = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(Date.parse(s));
+  if (Number.isNaN(at.getTime())) return NaN;
+  return new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1).getTime();
+};
+/** Should git be asked about this doc at all? `skip` (say nothing), `shallow` (history is cut, so
+ *  an empty answer would be a guess: counted, and reported ONCE for the run), or `ask`.
+ *  `repo` is { inside, shallow }, computed once per run; `exempt` is frozenEvidence(f, fm): a doc
+ *  under an exempt dir, or research/exploration, records a past state and is not re-verified. */
+const driftPlan = (fm, exempt, repo) => {
+  if (!fm || exempt || fm.status !== 'open') return 'skip';
+  if (!governedPaths(fm).length || Number.isNaN(verifiedUntil(fm.last_verified))) return 'skip';
+  if (!repo || !repo.inside) return 'skip';
+  return repo.shallow ? 'shallow' : 'ask';
+};
+/** The warning, or null. `log` is the stdout of `git log --format=%ct %h -- <paths>`: one
+ *  `<committer seconds> <short hash>` line per commit that touched the governed paths. The filter
+ *  is HERE rather than in a `--since` argument so that the day boundary above is decided by one
+ *  function the self-test can reach, not by git's own date parser. */
+const driftFinding = (fm, log) => {
+  const from = verifiedUntil(fm && fm.last_verified);
+  if (Number.isNaN(from)) return null;
+  const after = String(log || '').split('\n')
+    .map((l) => /^(\d+) ([0-9a-f]+)$/.exec(l.trim()))
+    .filter((m) => m && Number(m[1]) * 1000 >= from)
+    .map((m) => ({ at: Number(m[1]), hash: m[2] }));
+  if (!after.length) return null;
+  // Newest by DATE, not by position: the log is in graph order, and a rebase can put an older
+  // commit date above a newer one.
+  const newest = after.reduce((a, b) => (b.at > a.at ? b : a));
+  return `${after.length} commit(s) touched its paths since last_verified ${fm.last_verified}, newest ${newest.hash}: re-verify it, then re-date it`;
+};
+const shallowNote = (n) => `${n} doc(s) carry \`paths\` and \`last_verified\`, but this clone's history is shallow, so drift since last_verified was NOT checked: \`git fetch --unshallow\`, then run this again`;
+
 /* ---------- rule 10: the auto-memory index ----------
    The agent runtime keeps a per-project memory index outside the repo, under the user's profile.
    It is a POINTER file: one line per memory, and a line that carries the memory instead of
@@ -374,6 +442,31 @@ function lint() {
     // is a second finding there: demanding it here would leave a stub under the docs root with
     // no form that passes both rules.
     && !isStub(f);
+
+  /* Rule 9's drift check, the thin git half. The repo-level facts are asked ONCE, and only when
+     the first doc that could drift is reached, so a tree with no `paths` anywhere spawns nothing.
+     One call answers both: outside a repository (or with no git on the PATH) `rev-parse` fails,
+     and inside one it prints `true` or `false`. */
+  let facts = null;
+  let shallowDocs = 0;
+  const repoFacts = () => {
+    if (!facts) {
+      const r = git('rev-parse', '--is-shallow-repository');
+      facts = { inside: r.status === 0, shallow: r.status === 0 && String(r.stdout).trim() === 'true' };
+    }
+    return facts;
+  };
+  /* Every commit that touched the governed globs, as `<committer seconds> <short hash>` lines.
+     COMMITTER date, not author date: a rebase or a cherry-pick keeps the author date of the day
+     the change was written, and the question is when it arrived in THIS history.
+     `:(glob)` so `**` means what the doc standard says it means; the doc's own file is excluded,
+     or re-dating a doc that governs its own folder would be the drift it reports next run.
+     An array through spawnSync, no shell: a glob is never expanded on the way to git.
+     A failed call (no commits yet, a pathspec git refuses) is an empty answer: silence, not a line. */
+  const pathLog = (f, globs) => {
+    const r = git('log', '--format=%ct %h', '--', ...globs.map((g) => ':(glob)' + g), ':(exclude,literal)' + f);
+    return r.status === 0 ? String(r.stdout) : '';
+  };
 
   for (const f of files) {
     const abs = resolve(f);
@@ -582,6 +675,18 @@ function lint() {
       const age = (Date.now() - Date.parse(fm.last_verified)) / 86400000;
       if (age > Number(fm.max_age_days)) soft(f, `last_verified ${fm.last_verified} is ${Math.round(age)} d old (max_age_days ${fm.max_age_days})`);
     }
+    // Still rule 9, and deliberately no `applied()` of their own: see the block above notADate.
+    const undated = notADate(fm);
+    if (undated) soft(f, undated);
+    // The cheap half of the plan first, so a doc with no `paths` costs no git call at all.
+    if (driftPlan(fm, frozenEvidence(f, fm), { inside: true, shallow: false }) === 'ask') {
+      const plan = driftPlan(fm, frozenEvidence(f, fm), repoFacts());
+      if (plan === 'shallow') shallowDocs += 1;
+      if (plan === 'ask') {
+        const drift = driftFinding(fm, pathLog(f, governedPaths(fm)));
+        if (drift) soft(f, drift);
+      }
+    }
     if (fm && fm.kind === 'plan' && fm.first_commit) {
       // -F: --grep is a BASIC regex, so escaping `(` to `\(` turns a commit subject like
       // `chore(harness): …` INTO a group and the match silently fails. Fixed-string, not escaped.
@@ -589,6 +694,8 @@ function lint() {
       if (found.status === 0 && !found.stdout.trim()) soft(f, `first_commit "${fm.first_commit}" is not in git log yet`);
     }
   }
+  // ONE line for the run, not one per doc: the fact is about the clone, and the fix is one command.
+  if (shallowDocs) soft('docs-lint', shallowNote(shallowDocs));
 
   // 10. the auto-memory index: one line per memory. OUTSIDE the repo, so `outside`, never `fail`.
   //     The sweep itself is one application; a box that cannot make it declares one skip below.
@@ -682,6 +789,37 @@ function selfTest() {
   eq('figure-ok: a one-word reason is too short to count', hasFigureOk('<!-- figure-ok: why -->'), false);
   eq('figure-ok: a tag quoted in a code span is quoting, not claiming', hasFigureOk('tag it `<!-- figure-ok: dated phase record, not current -->` like so'), false);
   eq('figure-ok: and in a fence too', hasFigureOk('```\n<!-- figure-ok: dated phase record, not current -->\n```'), false);
+  // Rule 9's two git-and-date warnings, driven without a repo: the git ANSWERS are literals. The
+  // commit times are built from local calendar parts, as the boundary is, so the cases hold in
+  // every time zone. A hash is hex, so the fixtures' are.
+  const secs = (y, mo, d, h) => Math.floor(new Date(y, mo - 1, d, h).getTime() / 1000);
+  const DOC = { status: 'open', kind: 'reference', paths: ['src/**'], last_verified: '2026-03-10' };
+  const HERE = { inside: true, shallow: false };
+  const withFm = (over) => Object.assign({}, DOC, over);
+  eq('date: a placeholder is not a date', /^last_verified "YYYY-MM-DD" is not a date/.test(notADate({ last_verified: 'YYYY-MM-DD' })), true);
+  eq('date: a real date says nothing', notADate({ last_verified: '2026-03-10' }), null);
+  eq('date: an absent field says nothing', [notADate({}), notADate(null), notADate({ last_verified: '' })], [null, null, null]);
+  eq('date: unreadable with no max_age_days and no paths still warns', typeof notADate({ last_verified: 'soon' }), 'string');
+  eq('boundary: the start of the next local day', verifiedUntil('2026-03-10'), new Date(2026, 2, 11).getTime());
+  eq('boundary: no date, no boundary', Number.isNaN(verifiedUntil('<YYYY-MM-DD>')), true);
+  eq('drift plan: an open doc with paths and a date, in a full repo, is asked', driftPlan(DOC, false, HERE), 'ask');
+  eq('drift plan: no paths', [driftPlan(withFm({ paths: undefined }), false, HERE), driftPlan(withFm({ paths: [] }), false, HERE)], ['skip', 'skip']);
+  eq('drift plan: a scalar path is one glob', driftPlan(withFm({ paths: 'src/**' }), false, HERE), 'ask');
+  eq('drift plan: no last_verified, or one that is not a date', [driftPlan(withFm({ last_verified: undefined }), false, HERE), driftPlan(withFm({ last_verified: 'YYYY-MM-DD' }), false, HERE)], ['skip', 'skip']);
+  eq('drift plan: an exempt doc is skipped', driftPlan(DOC, true, HERE), 'skip');
+  eq('drift plan: a doc that is not open is skipped', [driftPlan(withFm({ status: 'frozen' }), false, HERE), driftPlan(withFm({ status: 'complete' }), false, HERE)], ['skip', 'skip']);
+  eq('drift plan: no frontmatter', driftPlan(null, false, HERE), 'skip');
+  eq('drift plan: no git, or not a repository', [driftPlan(DOC, false, { inside: false, shallow: false }), driftPlan(DOC, false, null)], ['skip', 'skip']);
+  eq('drift plan: a shallow clone is reported, not asked', driftPlan(DOC, false, { inside: true, shallow: true }), 'shallow');
+  eq('drift: two commits after the day, newest named by date and not by position',
+    driftFinding(DOC, secs(2026, 3, 12, 9) + ' aaa1111\n' + secs(2026, 3, 14, 9) + ' bbb2222\n' + secs(2026, 3, 1, 9) + ' ccc3333\n'),
+    '2 commit(s) touched its paths since last_verified 2026-03-10, newest bbb2222: re-verify it, then re-date it');
+  eq('drift: none after the day', driftFinding(DOC, secs(2026, 3, 1, 9) + ' ccc3333\n'), null);
+  eq('drift: a commit ON the verification day is not drift', driftFinding(DOC, secs(2026, 3, 10, 23) + ' ddd4444\n'), null);
+  eq('drift: the first hour of the next day is', /^1 commit\(s\) .* newest eee5555:/.test(driftFinding(DOC, secs(2026, 3, 11, 0) + ' eee5555\n')), true);
+  eq('drift: an empty log, a failed call and a line that is not a commit all say nothing', [driftFinding(DOC, ''), driftFinding(DOC, null), driftFinding(DOC, 'fatal: bad revision\n')], [null, null, null]);
+  eq('drift: no date, no finding', driftFinding(withFm({ last_verified: 'soon' }), secs(2026, 3, 14, 9) + ' bbb2222\n'), null);
+  eq('shallow: one line that counts the docs and names the fix', /^3 doc\(s\) .* shallow.*NOT checked.*git fetch --unshallow/.test(shallowNote(3)), true);
   // Rule 10's decision, driven with literals because its real input lives outside the repo and a
   // test must never write to it.
   const long = '- [x](x.md) ' + 'y'.repeat(200);

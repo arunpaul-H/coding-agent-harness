@@ -3,7 +3,7 @@ id: method-03-tracks-handoffs-and-cross-session-memory
 kind: reference
 status: open
 read_when: "starting work that will outlive one session, or writing a handoff for the next one"
-paths: ["docs/tracks/**", "scripts/harness/handoff-lint.js", "scripts/harness/findings-check.js"]
+paths: ["templates/track/**", "scripts/harness/handoff-lint.js", "scripts/harness/findings-check.js"]
 verify: "node scripts/harness/handoff-lint.js --self-test && node scripts/harness/findings-check.js --self-test"
 last_verified: 2026-10-05
 max_age_days: 90

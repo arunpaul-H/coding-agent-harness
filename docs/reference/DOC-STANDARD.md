@@ -3,7 +3,7 @@ id: doc-standard
 kind: reference
 status: open
 read_when: "creating any .md, opening a track, or closing a phase"
-paths: ["docs/**", "CLAUDE.md", "AGENTS.md"]
+paths: ["scripts/harness/guards/docs-lint.cjs", "scripts/harness/guards/doc-frozen.cjs", "scripts/harness/docs-index.js", "scripts/harness/handoff-lint.js", "scripts/harness/close-phase.js", "harness.config.json"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check"
 last_verified: 2026-10-05
 max_age_days: 90
@@ -37,9 +37,9 @@ id:            # REQUIRED. unique kebab-case slug; the linter refuses a duplicat
 kind:          # REQUIRED. track | plan | handoff | traps | reference | research | exploration | index | design
 status:        # REQUIRED. open | frozen | complete   (complete needs a receipt only close-phase.js writes)
 read_when:     # REQUIRED. ONE line: the trigger phrase that should make someone open this file
-paths:         # globs this doc governs
-verify:        # the command that checks this doc's claims; it must exist in this repo
-last_verified: # date; drives a WARN, never a block
+paths:         # globs this doc governs; a commit to one after the last_verified day is a drift WARN
+verify:        # the command that checks this doc's claims; advisory: a person runs it, no script does
+last_verified: # date, YYYY-MM-DD; drives a WARN, never a block
 max_age_days:  # staleness threshold for last_verified
 blocked_on:    # e.g. "user": surfaces the doc in the index as waiting on a decision
 trap_prefix:   # e.g. AH: required wherever traps exist; ids are then AH-01, AH-02
@@ -108,7 +108,7 @@ Hard failures. Each exits 1 and reds the `docs` gate:
 - **Every rule must have run.** The gate tallies rule applications: a deleted rule is named.
 
 Warnings, exit 0, deliberately. **Staleness**: an expired `last_verified` never blocks, because
-blocking on a date gets a doc re-dated instead of re-verified. A plan whose `first_commit` is not
+blocking on a date gets a doc re-dated instead of re-verified. **Drift**: commits touched an open doc's `paths` after its `last_verified` day (a shallow clone says so once instead). A `last_verified` that is not a date. A plan whose `first_commit` is not
 in `git log`. Slop on added lines (an em-dash, a filler word such as `delve`). An over-long line
 in the auto-memory index, which lives outside the repo: `docs-lint.cjs --memory-check` reports it
 at session start and it never moves the gate figure.
