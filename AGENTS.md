@@ -73,8 +73,8 @@ A rule with no mechanism named is prose, and prose does not hold. Where a line s
 
 ```bash
 node --test                        # zero-dep. No path: a glob fails before Node 21, a bare directory after it
-node scripts/harness/gates.js --check --allow-skip reproducible-build=1    # every gate, one verdict
-node scripts/harness/gates.js --accept --allow-skip reproducible-build=1   # re-baseline; refuses on red
+node scripts/harness/gates.js --check --allow-skip docs=1,reproducible-build=1    # why: no memory index here, no build artifacts
+node scripts/harness/gates.js --accept --allow-skip docs=1,reproducible-build=1   # why: same two skips; re-baselines, refuses on red
 ```
 
 `gates.js` is the gate. Do not quote a total from a doc. A re-baseline commit's subject starts `gates:`. Routing, spawning and the agent registry: `docs/reference/routing/README.md`, opened by the lead agent only.

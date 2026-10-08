@@ -3,7 +3,7 @@ id: method-00-overview
 kind: reference
 status: open
 read_when: "meeting this harness for the first time, or deciding whether any of it is worth adopting"
-paths: ["docs/methods/**", "scripts/harness/**", ".claude/helpers/**"]
+paths: ["docs/methods/**", ".claude/helpers/**"]
 verify: "node scripts/harness/gates.js --self-test && node scripts/harness/guards/docs-lint.cjs"
 last_verified: 2026-10-05
 max_age_days: 90

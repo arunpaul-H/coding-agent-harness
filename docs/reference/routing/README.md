@@ -104,7 +104,7 @@ read-only search), `general-purpose` (open-ended multi-step), `Plan` (implementa
 
 Done means **verified**, not edited:
 
-- `node scripts/harness/gates.js --check --allow-skip reproducible-build=1` green, its output
+- `node scripts/harness/gates.js --check --allow-skip docs=1,reproducible-build=1` green, its output
   pasted. Every gate, one verdict, and the only place a figure exists. `--accept` re-baselines;
   it refuses on a red suite and on an undeclared skip. Its commit subject must start `gates:`.
 - **Behaviour observed** where a surface changed: run the thing and look at it. A green suite

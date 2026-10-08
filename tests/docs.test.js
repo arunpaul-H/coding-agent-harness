@@ -18,6 +18,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const { spawnSync, execFile } = require('node:child_process');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const os = require('node:os');
 const fs = require('node:fs');
 
@@ -126,8 +127,9 @@ async function sandbox(opts) {
   delete env.CLAUDE_PROJECT_DIR;
   /* Asynchronous, so the cases of a suite overlap. `status` is the exit code exactly as spawnSync
      reports it; a process that could not be started at all is -1, which no assertion here accepts. */
-  const spawn = (cmd, args) => new Promise((done) => {
-    execFile(cmd, args, { cwd: root, encoding: 'utf8', env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
+  const spawn = (cmd, args, more) => new Promise((done) => {
+    const o2 = more || {};
+    execFile(cmd, args, { cwd: o2.cwd || root, encoding: 'utf8', env: o2.env ? Object.assign({}, env, o2.env) : env, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
       (err, stdout, stderr) => done({ status: err ? (typeof err.code === 'number' ? err.code : -1) : 0, stdout, stderr }));
   });
   const node = async (script, args) => {
@@ -136,10 +138,13 @@ async function sandbox(opts) {
     return r;
   };
   const git = (...a) => spawn('git', a);
-  const commit = async (msg) => {
+  /* `when` pins BOTH commit dates. The drift warning keys on the committer date, which no flag of
+     `git commit` can set: only the environment can, and the author date is pinned beside it so a
+     fixture never carries two different days. */
+  const commit = async (msg, when) => {
     assert.strictEqual((await git('-c', 'core.autocrlf=false', 'add', '-A')).status, 0, 'the fixture could not be staged');
-    const c = await git('-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false',
-      'commit', '-q', '-m', msg || 'fixture');
+    const c = await spawn('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false',
+      'commit', '-q', '-m', msg || 'fixture'], when ? { env: { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } } : null);
     assert.strictEqual(c.status, 0, 'the fixture could not be committed: ' + c.stderr);
   };
   if (o.git !== false) {
@@ -149,8 +154,10 @@ async function sandbox(opts) {
 
   /** One lint run, with the verdict already taken apart. `last` is the LAST stdout line, which is
    *  the only place the gate protocol allows the verdict to be. */
-  const lint = async (args) => {
-    const r = await node(LINT, args);
+  const lint = async (args, at) => {
+    // `at`: another checkout of the same fixture (a clone), linted by ITS OWN copy of the script.
+    const r = at ? await spawn(process.execPath, [path.join(at, LINT)].concat(args || []), { cwd: at }) : await node(LINT, args);
+    if (at) r.out = String(r.stdout) + String(r.stderr);
     const lines = String(r.stdout).replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
     r.last = lines[lines.length - 1];
     const m = /^GATE docs pass=(\d+) fail=(\d+) skipped=(\d+)$/.exec(r.last || '');
@@ -900,6 +907,121 @@ describe('docs-lint — staleness WARNS and never blocks', SUITE, () => {
       assert.ok(r.warns.some((w) => /first_commit "feat\(alpha\): never landed" is not in git log yet/.test(w)), r.out);
       s.put('docs/tracks/alpha/plan.md', plan('fixture'));
       assert.deepStrictEqual((await s.lint()).warns, []);
+    });
+  });
+
+  /* DRIFT: commits touched the files a doc governs after the day it was last verified. Every
+     commit here is dated through the environment, so nothing depends on the day the suite runs.
+     The dates carry no offset: git reads them as local time, which is how the linter reads the
+     day boundary, and noon is far from any midnight. */
+  const VERIFIED = '2020-01-10';
+  const governed = (extra) => ref('thing', null, Object.assign({ paths: '["lib/**", "docs/reference/**"]', last_verified: VERIFIED }, extra || {}));
+  const DRIFT = /commit\(s\) touched its paths since last_verified/;
+  const drifts = (r) => r.warns.filter((w) => DRIFT.test(w));
+  /** A repo whose every commit is dated: the fixture itself lands BEFORE the verification day. */
+  const dated = async (s) => {
+    assert.strictEqual((await s.git('-c', 'init.defaultBranch=main', 'init', '-q')).status, 0, 'could not init the throwaway repo');
+    await s.commit('fixture', '2020-01-02T12:00:00');
+  };
+  const change = async (s, n, when) => { s.put('lib/a.js', '// change ' + n + '\n'); await s.commit('lib: change ' + n, when); };
+
+  test('commits to the governed paths after last_verified are a WARN with the count and the newest hash, exit 0', async () => {
+    await withSandbox({ git: false, files: { 'docs/reference/thing.md': governed() } }, async (s) => {
+      await dated(s);
+      const before = await s.lint();
+      assertGreen(before);
+      assert.deepStrictEqual(before.warns, [], 'a fixture committed before the verification day drifted');
+      await change(s, 1, '2020-01-12T12:00:00');
+      await change(s, 2, '2020-01-14T12:00:00');
+      const newest = (await s.git('rev-parse', '--short', 'HEAD')).stdout.trim();
+      const r = await s.lint();
+      assertGreen(r);
+      assert.deepStrictEqual(drifts(r), ['WARN  docs/reference/thing.md: 2 commit(s) touched its paths since last_verified ' + VERIFIED + ', newest ' + newest + ': re-verify it, then re-date it'], r.out);
+      assert.deepStrictEqual(r.gate, before.gate, 'drift moved the verdict');
+    });
+  });
+
+  test('a commit before the day, or ON it, is not drift', async () => {
+    await withSandbox({ git: false, files: { 'docs/reference/thing.md': governed() } }, async (s) => {
+      await dated(s);
+      await change(s, 1, '2020-01-05T12:00:00');
+      await change(s, 2, VERIFIED + 'T12:00:00');
+      const r = await s.lint();
+      assertGreen(r);
+      assert.deepStrictEqual(r.warns, [], r.out);
+    });
+  });
+
+  test('editing or re-dating the doc itself is not drift, and a path outside the globs is not either', async () => {
+    await withSandbox({ git: false, files: { 'docs/reference/thing.md': governed() } }, async (s) => {
+      await dated(s);
+      // The doc governs its own folder (`docs/reference/**`), so only the exclusion keeps it quiet.
+      s.put('docs/reference/thing.md', governed({ max_age_days: '100000' }));
+      s.put('src/real.js', '// outside every glob\n');
+      await s.commit('docs: touch the doc and a file it does not govern', '2020-02-01T12:00:00');
+      const r = await s.lint();
+      assertGreen(r);
+      assert.deepStrictEqual(drifts(r), [], r.out);
+      // Its neighbour in the same folder IS governed.
+      s.put('docs/reference/other.md', ref('other'));
+      await s.commit('docs: a neighbour', '2020-02-02T12:00:00');
+      assert.strictEqual(drifts(await s.lint()).length, 1);
+    });
+  });
+
+  test('outside a git repository the drift check says nothing and does not crash', async () => {
+    await withSandbox({ git: false, files: { 'docs/reference/thing.md': governed(), 'lib/a.js': '// never committed\n' } }, async (s) => {
+      const r = await s.lint();
+      assertGreen(r);
+      assert.deepStrictEqual(drifts(r), [], r.out);
+      assert.ok(!/shallow/.test(r.stdout), r.out);
+    });
+  });
+
+  test('a shallow clone says ONCE that drift was not checked, however many docs carry paths', async () => {
+    await withSandbox({ git: false, files: { 'docs/reference/thing.md': governed(), 'docs/reference/other.md': ref('other', null, { paths: '["lib/**"]', last_verified: VERIFIED }) } }, async (s) => {
+      await dated(s);
+      await change(s, 1, '2020-01-12T12:00:00');
+      assert.strictEqual(drifts(await s.lint()).length, 2, 'the full history did not drift, so the clone proves nothing');
+      const clone = path.join(s.base, 'shallow');
+      // file:// and not a bare path: a local-path clone ignores --depth. autocrlf off, or a Windows
+      // checkout rewrites the frontmatter's line ends under the linter's own copy.
+      const c = await s.git('-c', 'core.autocrlf=false', 'clone', '-q', '--depth', '1', pathToFileURL(s.root).href, clone);
+      assert.strictEqual(c.status, 0, 'could not make the shallow clone: ' + c.stderr);
+      const r = await s.lint([], clone);
+      assertGreen(r);
+      assert.deepStrictEqual(drifts(r), [], r.out);
+      const said = r.warns.filter((w) => /shallow/.test(w));
+      assert.deepStrictEqual(said, ['WARN  docs-lint: 2 doc(s) carry `paths` and `last_verified`, but this clone\'s history is shallow, so drift since last_verified was NOT checked: `git fetch --unshallow`, then run this again'], r.out);
+    });
+  });
+
+  test('a doc that is not open, or sits in an exempt directory, is never checked for drift', async () => {
+    const files = {
+      'docs/reference/thing.md': governed({ status: 'frozen' }),
+      'docs/archive/old.md': ref('old', null, { paths: '["lib/**"]', last_verified: VERIFIED }),
+    };
+    await withSandbox({ git: false, files }, async (s) => {
+      await dated(s);
+      await change(s, 1, '2020-01-12T12:00:00');
+      const r = await s.lint();
+      assertGreen(r);
+      assert.deepStrictEqual(drifts(r), [], r.out);
+    });
+  });
+
+  test('a last_verified that is not a date is a WARN line, exit 0, with or without max_age_days or paths', async () => {
+    await withSandbox({}, async (s) => {
+      const fresh = await s.lint();
+      const NOT = /docs\/reference\/thing\.md: last_verified "YYYY-MM-DD" is not a date, so this doc is never reported stale or drifted: write YYYY-MM-DD/;
+      for (const extra of [{}, { max_age_days: '30' }, { paths: '["src/**"]' }]) {
+        s.put('docs/reference/thing.md', ref('thing', null, Object.assign({ last_verified: 'YYYY-MM-DD' }, extra)));
+        const r = await s.lint();
+        assertGreen(r);
+        assert.strictEqual(r.warns.filter((w) => NOT.test(w)).length, 1, r.out);
+        assert.deepStrictEqual(drifts(r), [], 'a doc with no date was checked for drift');
+        assert.deepStrictEqual(r.gate, fresh.gate, 'an unreadable date moved the verdict');
+      }
     });
   });
 

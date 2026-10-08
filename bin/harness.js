@@ -70,6 +70,8 @@ const posix = (p) => String(p).split(path.sep).join('/');
 const WIRE = () => require('../scripts/harness/wire.js');
 const SKILLS = () => require('../scripts/harness/guards/skill-verify.cjs');
 const GITHOOKS = () => require('../scripts/harness/githooks.js');
+// The ONE frontmatter reader the index and the doc gate share, so an id is read here as they read it.
+const DOCFM = () => require('../scripts/harness/guards/doc-frozen.cjs');
 /** A row's dialect module, or null: the row has none, or the module is not in this copy. */
 const dialectOf = (row) => {
   if (!row || typeof row.dialect !== 'string' || !/^[a-z][a-z0-9-]*$/.test(row.dialect)) return null;
@@ -86,6 +88,8 @@ const dialectOf = (row) => {
 const SHIPPED_AGENTS = ['explore.md', 'implement.md', 'research.md', 'review.md'];
 const SHIPPED_SKILLS = ['plan', 'research', 'implement', 'guide'];
 const TRACK_TEMPLATES = ['README.md', 'plan.md', 'traps.md', 'handoff.md'];
+// The shape `harness reference new` renders. Copied by init too, so a hand copy works with no package.
+const REFERENCE_TEMPLATES = ['README.md'];
 /* The directory the shipped skills are WRITTEN in. A tool whose registry row names this root gets
    them copied; a tool that names another root gets them rendered there (portable frontmatter
    only), once per root however many tools read it. */
@@ -621,6 +625,8 @@ function buildPlan(pkgRoot, target, d) {
   items.push({ dest: 'scripts/harness/harness-baseline.json', content: emptyReport(), note: 'empty — no measurement is inherited; measure-context.js writes it' });
   copy('schema/harness.config.schema.json');
   for (const t of TRACK_TEMPLATES) copy('templates/track/' + t);
+  // The TEMPLATE only, beside the others: init writes no reference doc into the docs root.
+  for (const t of REFERENCE_TEMPLATES) copy('templates/reference/' + t);
 
   const cfg = buildConfig(d);
   items.push({ dest: CONFIG_NAME, content: JSON.stringify(cfg, null, 2) + '\n', note: 'generated from what was detected' });
@@ -1480,6 +1486,131 @@ function cmdWorktree(argv) {
   return r.status === null ? 1 : r.status;
 }
 
+/* ---------- reference new ----------
+   ONE doc for ONE named subsystem, on request. It writes the frame (frontmatter the index and
+   the doc gate can read) and leaves the body's placeholders standing: what a subsystem is the
+   contract for is a thing only its author knows, and nothing here is generated from the code.
+
+   Every refusal is decided before the write, and the write never replaces a file. */
+const REFERENCE_USAGE = 'harness reference new <subsystem> --read-when "<line>" --paths "<glob>[,<glob>]" [--verify "<command>"] [--into <dir>] [--dry-run]';
+const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+// Local, not UTC: `last_verified` is the day on the wall of whoever ran the command.
+const localDate = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+/** argv after `reference` -> the values, or { refuse: { msg, fix } }. Pure. */
+function referenceArgs(argv) {
+  const no = (msg, fix) => ({ refuse: { msg: msg, fix: fix || REFERENCE_USAGE } });
+  const sub = argv[0];
+  if (sub === undefined || sub.startsWith('-')) return no('`harness reference` needs its subcommand, `new`');
+  if (sub !== 'new') return no('unknown subcommand `reference ' + sub + '`: the only one is `new`');
+  const name = argv[1];
+  if (name === undefined || name.startsWith('-')) return no('no subsystem named');
+  if (!KEBAB.test(name)) return no('subsystem `' + name + '` is not kebab-case', 'lower-case letters, digits and single hyphens, e.g. `billing-export`');
+  const VALUED = { '--read-when': 'readWhen', '--paths': 'paths', '--verify': 'verify', '--into': 'into' };
+  const got = {};
+  let dry = false;
+  for (let i = 2; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (a === '--dry-run') dry = true;
+    else if (Object.prototype.hasOwnProperty.call(VALUED, a)) {
+      if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) return no(a + ' needs a value');
+      got[VALUED[a]] = argv[i + 1];
+      i += 1;
+    } else return no((a.startsWith('-') ? 'unknown flag `' : 'unexpected argument `') + a + '`');
+  }
+  const readWhen = String(got.readWhen || '').trim();
+  if (!readWhen) return no('--read-when is required: it is the one line the index shows for this doc', '--read-when "<the task that should make someone open it>"');
+  const paths = String(got.paths || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!paths.length) return no('--paths is required: the trees this doc is the contract for', '--paths "src/billing/**,tests/billing/**"');
+  let verify = null;
+  if (got.verify !== undefined) {
+    verify = String(got.verify).trim();
+    if (!verify) return no('--verify is empty', 'name the command, or drop --verify and the doc carries no verify line');
+  }
+  /* The frontmatter reader strips ONE quote from each end of a value and knows no escape, so a
+     double quote inside one cannot be carried: refused here rather than written as a line the
+     index then reads differently from what was typed. */
+  const carried = [['--read-when', readWhen], ['--verify', verify || '']].concat(paths.map((p) => ['--paths', p]));
+  for (const [flag, v] of carried) {
+    if (/["\r\n]/.test(v)) return no(flag + ' holds a double quote or a line break, which a frontmatter line cannot carry', 'use single quotes inside the value, on one line');
+  }
+  return { subsystem: name, readWhen: readWhen, paths: paths, verify: verify, into: got.into || null, dry: dry };
+}
+
+/** The template with its frontmatter filled and its frontmatter COMMENTS dropped; the body is
+ *  left as written, placeholders and guidance included. { text }, or { missing } naming each
+ *  field the template has no line for. With no `verify`, the template's verify line is dropped:
+ *  nothing checks that field, so a line nobody chose is not written. Pure. */
+function renderReference(template, v) {
+  const text = lf(template);
+  const m = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  if (!m) return { missing: ['a frontmatter block'] };
+  const q = (s) => '"' + s + '"';
+  const set = { id: v.subsystem, kind: 'reference', status: 'open', read_when: q(v.readWhen),
+    paths: '[' + v.paths.map(q).join(', ') + ']', verify: v.verify ? q(v.verify) : null, last_verified: v.today };
+  const seen = [];
+  const head = [];
+  for (const line of m[1].split('\n')) {
+    if (/^\s*#/.test(line)) continue;
+    const k = (/^([a-z_]+):/.exec(line) || [])[1];
+    if (k) seen.push(k);
+    if (k && Object.prototype.hasOwnProperty.call(set, k)) { if (set[k] !== null) head.push(k + ': ' + set[k]); } else head.push(line);
+  }
+  const missing = Object.keys(set).filter((k) => set[k] !== null && !seen.includes(k)).map((k) => '`' + k + ':`');
+  if (missing.length) return { missing: missing };
+  return { text: '---\n' + head.join('\n') + '\n---\n' + text.slice(m[0].length) };
+}
+
+/** What `reference new` would write into `target`: { rel, dest, content }, or { refuse }.
+ *  Reads only. `today` is passed in so the decision is testable on any day. */
+function referencePlan(pkgRoot, target, a, today) {
+  const no = (msg, fix) => ({ refuse: { msg: msg, fix: fix } });
+  if (!isDir(target)) return no('no directory at ' + target, 'pass --into <an existing repo>');
+  if (!isFile(path.join(target, CONFIG_NAME))) return no('no ' + CONFIG_NAME + ' in ' + target, selfInvocation(target) + ' init, or pass --into <the repo that has one>');
+  let cfg;
+  try { cfg = CONFIG.load({ root: target, fresh: true }); } catch (e) { return no(e.message, e.fix || 'node scripts/harness/config.js'); }
+  const docsRoot = cfg.project.docsRoot;
+  const rel = docsRoot + '/reference/' + a.subsystem + '/README.md';
+  const dest = path.join(target, ...rel.split('/'));
+  if (exists(dest)) return no(rel + ' already exists, and a reference doc is never overwritten', 'edit it in place, or name another subsystem');
+  // Every id in the docs tree is unique, and the doc gate fails BOTH files of a duplicate.
+  const roots = [...new Set([docsRoot, cfg.project.tracksDir || docsRoot])];
+  const docs = [...new Set(roots.flatMap((r) => walk(path.join(target, ...r.split('/')))))].filter((f) => f.endsWith('.md'));
+  for (const f of docs) {
+    const fm = DOCFM().parseFrontmatter(lf(readText(f) || ''));
+    if (fm && fm.id === a.subsystem) return no('id `' + a.subsystem + '` is already used by ' + posix(path.relative(target, f)), 'every id under ' + docsRoot + '/ is unique: name another subsystem');
+  }
+  const src = 'templates/reference/' + REFERENCE_TEMPLATES[0];
+  const template = readText(path.join(pkgRoot, ...src.split('/')));
+  if (template === null) return no('this copy of agent-harness has no ' + src, 'reinstall the package: it is incomplete');
+  const r = renderReference(template, { subsystem: a.subsystem, readWhen: a.readWhen, paths: a.paths, verify: a.verify, today: today });
+  if (r.missing) return no(src + ' has no ' + r.missing.join(', ') + ' to fill', 'restore the template from the package; its frontmatter carries one line per field');
+  return { rel: rel, dest: dest, content: r.text };
+}
+
+function cmdReference(argv) {
+  const a = referenceArgs(argv);
+  if (a.refuse) return stop(a.refuse.msg, a.refuse.fix);
+  const target = path.resolve(a.into || findRoot(process.cwd()));
+  const p = referencePlan(PKG_ROOT, target, a, localDate(new Date()));
+  if (p.refuse) return stop(p.refuse.msg, p.refuse.fix);
+  if (a.dry) {
+    console.log('DRY RUN: nothing is written.');
+    console.log('WOULD WRITE  ' + p.rel + '   (in ' + target + ')');
+    return 0;
+  }
+  fs.mkdirSync(path.dirname(p.dest), { recursive: true });
+  // `wx`: a file that appeared since the check above is still not replaced.
+  try { fs.writeFileSync(p.dest, p.content, { flag: 'wx' }); } catch (e) { return stop('could not write ' + p.rel + ': ' + e.message, 'check that the path is writable and the file is not already there'); }
+  console.log('WROTE  ' + p.rel + '   (in ' + target + ')');
+  console.log('  Fill each <PLACEHOLDER> in its body and delete the comment under it. A fact an agent');
+  console.log('  can get by search does not belong there.');
+  console.log('');
+  console.log('NEXT — the index does not list it, and its check is red, until you run:');
+  console.log('  node scripts/harness/docs-index.js');
+  return 0;
+}
+
 /** THE INPUTS A GATE'S VERDICT DEPENDS ON THAT THE REPO DOES NOT CONTAIN. Each one
  *  is supplied implicitly by a developer's machine and each can move a figure, so
  *  they are printed rather than assumed: a run whose environment drifted is then
@@ -1538,7 +1669,7 @@ const HELP = [
   '      rendered once to each skill root an enabled tool reads. A tool the harness cannot wire is named,',
   '      with the reason. With no --tools the config already in the repo says which, else the default.',
   '      Copy the harness into a repo: .claude/{settings.json,helpers,agents,skills}, scripts/harness/,',
-  '      schema/, templates/track/, a ' + CONFIG_NAME + ' generated from what it detects (package manager,',
+  '      schema/, templates/track/, templates/reference/, a ' + CONFIG_NAME + ' generated from what it detects (package manager,',
   '      test command, docs dir, default branch), AGENTS.md (the policy), its CLAUDE.md stub and the routing doc,',
   '      an empty skills-lock.json, an empty gate baseline, an empty context report and a context',
   '      budget marked `placeholder`: no figure measured on another tree is inherited.',
@@ -1562,6 +1693,14 @@ const HELP = [
   '',
   '  harness docs [--index] [--check]',
   '      Run the doc gate (scripts/harness/guards/docs-lint.cjs), or with --index the index generator.',
+  '',
+  '  ' + REFERENCE_USAGE,
+  '      Write ONE reference doc, <docsRoot>/reference/<subsystem>/README.md, from templates/reference/:',
+  '      the frontmatter filled (id, read_when, paths, today as last_verified; a verify line only with',
+  '      --verify), the body left as placeholders for a person to fill. Never overwrites: it stops when',
+  '      the file exists, when the id is already used under the docs root, or when the name is not',
+  '      kebab-case. --into names the repo, as for init. --dry-run prints the path and writes nothing.',
+  '      It ends by naming the index command to run, and does not run it.',
   '',
   '  harness run [<mode>] [--tool <id>] [--track <id>] [--dry-run]',
   '      Start a coding agent in a run mode (fully-auto, auto-edit, hitl, manual). The mode is chosen',
@@ -1743,6 +1882,11 @@ function selfTest() {
     put(pkg, 'scripts/harness/harness-baseline.json', JSON.stringify({ measured: '2020-01-01T00:00:00.000Z', project: 'the-package', groundTruth: { transcript: 'aaaaaaaa', firstTurnTokens: 99999 } }));
     put(pkg, 'schema/harness.config.schema.json', '{}');
     for (const x of TRACK_TEMPLATES) put(pkg, 'templates/track/' + x, '---\nid: x\n---\n');
+    // The shape of the real one in small: a comment line per field, a body token and a body comment.
+    const REF_TEMPLATE = ['---', '# TEMPLATE. Fill each <PLACEHOLDER>.', 'id: <SUBSYSTEM>', 'kind: reference', 'status: open',
+      '# <READ_WHEN>: one line.', 'read_when: "<READ_WHEN>"', 'paths: ["<PATH_GLOB>"]', 'verify: "<VERIFY_COMMAND>"',
+      'last_verified: <YYYY-MM-DD>', 'max_age_days: 90', '---', '', '# <TITLE>', '<!-- <TITLE>: in a clause. -->', ''].join('\n');
+    for (const x of REFERENCE_TEMPLATES) put(pkg, 'templates/reference/' + x, REF_TEMPLATE);
     put(pkg, 'templates/AGENTS.md', '# {{PROJECT_NAME}}\n');
     put(pkg, 'templates/CLAUDE.md', '@AGENTS.md\n');
     put(pkg, 'templates/docs/reference/routing/README.md', '---\nid: routing\n---\n# Routing for {{project.name}} ({{mystery}})\n');
@@ -1760,6 +1904,8 @@ function selfTest() {
     ok('plan: a skill that is not the harness\'s own is not installed', !dests.some((x) => x.includes('vendored')));
     ok('plan: nor an agent that is not', !dests.includes('.claude/agents/someone-elses.md'));
     eq('plan: every destination appears once', dests.length, new Set(dests).size);
+    ok('plan: the reference template is installed beside the track templates', REFERENCE_TEMPLATES.every((x) => dests.includes('templates/reference/' + x)));
+    eq('plan: and NO reference doc is written into the docs root, the routing doc aside', dests.filter((x) => x.startsWith('doc/reference/')), ['doc/reference/routing/README.md']);
 
     const dry = applyPlan(plan, { dry: true });
     eq('dry run: reports every file as a write', dry.wrote.length, plan.items.length);
@@ -1817,7 +1963,69 @@ function selfTest() {
     eq('merge: applied anyway, it is refused and the file is left as it was', [applyPlan(mplan, {}).refused.length, readText(path.join(mt, 'a', 'cfg.json'))], [1, '{ not json']);
 
     const broken = buildPlan(path.join(tmp, 'no-such-package'), t, detect(t));
-    ok('plan: an incomplete package names what is absent', broken.absent.includes('.claude/settings.json') && broken.absent.includes('templates/CLAUDE.md') && broken.absent.includes('templates/AGENTS.md') && broken.absent.includes('templates/docs/reference/routing/README.md'));
+    ok('plan: an incomplete package names what is absent', broken.absent.includes('.claude/settings.json') && broken.absent.includes('templates/CLAUDE.md') && broken.absent.includes('templates/AGENTS.md') && broken.absent.includes('templates/docs/reference/routing/README.md')
+      && TRACK_TEMPLATES.every((x) => broken.absent.includes('templates/track/' + x)) && REFERENCE_TEMPLATES.every((x) => broken.absent.includes('templates/reference/' + x)));
+
+    // ----- reference new: one doc, from the fake package's template, into a target of its own
+    const rt = path.join(tmp, 'ref-target');
+    put(rt, 'doc/taken.md', '---\nid: taken\nkind: reference\nstatus: open\nread_when: "x"\n---\n# taken\n');
+    const RA = ['new', 'billing-export', '--read-when', 'changing what the export writes', '--paths', 'src/billing/**, tests/billing/**'];
+    const refuses = (argv) => (referenceArgs(argv).refuse || {}).msg;
+    eq('reference: good arguments parse', referenceArgs(RA.concat('--dry-run')),
+      { subsystem: 'billing-export', readWhen: 'changing what the export writes', paths: ['src/billing/**', 'tests/billing/**'], verify: null, into: null, dry: true });
+    eq('reference: no subcommand is refused', refuses([]), '`harness reference` needs its subcommand, `new`');
+    eq('reference: a subcommand that is not `new` is refused', refuses(['list']), 'unknown subcommand `reference list`: the only one is `new`');
+    eq('reference: no subsystem is refused', refuses(['new']), 'no subsystem named');
+    eq('reference: nor is a flag where the subsystem goes', refuses(['new', '--read-when', 'x']), 'no subsystem named');
+    for (const bad of ['Billing', 'billing_export', 'billing--export', '-billing', 'billing-', 'a/b']) {
+      ok('reference: `' + bad + '` is not kebab-case', /not kebab-case|no subsystem named/.test(refuses(['new', bad].concat(RA.slice(2))) || ''));
+    }
+    ok('reference: --read-when absent is refused', /^--read-when is required/.test(refuses(['new', 'a', '--paths', 'src/**']) || ''));
+    ok('reference: --read-when empty is refused', /^--read-when is required/.test(refuses(['new', 'a', '--read-when', ' ', '--paths', 'src/**']) || ''));
+    ok('reference: --paths absent is refused', /^--paths is required/.test(refuses(['new', 'a', '--read-when', 'x']) || ''));
+    ok('reference: --paths of nothing but commas is refused', /^--paths is required/.test(refuses(['new', 'a', '--read-when', 'x', '--paths', ' , ']) || ''));
+    eq('reference: a flag with its value missing is refused', refuses(['new', 'a', '--read-when', '--paths', 'x']), '--read-when needs a value');
+    eq('reference: an unknown flag is refused, --force among them', refuses(RA.concat('--force')), 'unknown flag `--force`');
+    ok('reference: a double quote in --read-when is refused', /^--read-when holds a double quote/.test(refuses(['new', 'a', '--read-when', 'say "x"', '--paths', 'src/**']) || ''));
+    ok('reference: and in --verify', /^--verify holds a double quote/.test(refuses(RA.concat('--verify', 'node --test "a b"')) || ''));
+    ok('reference: an empty --verify is refused, not written as an empty line', /^--verify is empty/.test(refuses(RA.concat('--verify', ' ')) || ''));
+    ok('reference: every refusal carries a fix line', [[], ['list'], ['new'], ['new', 'Bad'], ['new', 'a'], RA.concat('--force')].every((v) => Boolean(referenceArgs(v).refuse.fix)));
+
+    const ra = referenceArgs(RA);
+    const DAY = '2031-02-03';
+    const refSnap = () => snapshot(rt);
+    const rBefore = refSnap();
+    ok('reference: a target with no config is refused', /^no harness\.config\.json in /.test((referencePlan(pkg, rt, ra, DAY).refuse || {}).msg || ''));
+    put(rt, CONFIG_NAME, '{ "project": }');
+    ok('reference: and so is one whose config does not parse', Boolean(referencePlan(pkg, rt, ra, DAY).refuse));
+    put(rt, CONFIG_NAME, JSON.stringify(buildConfig(detect(rt))));
+    ok('reference: a target that is not a directory is refused', /^no directory at /.test(referencePlan(pkg, path.join(tmp, 'nowhere'), ra, DAY).refuse.msg));
+    eq('reference: an id already used under the docs root is refused, naming the file', referencePlan(pkg, rt, referenceArgs(['new', 'taken'].concat(RA.slice(2))), DAY).refuse.msg, 'id `taken` is already used by doc/taken.md');
+    const rp = referencePlan(pkg, rt, ra, DAY);
+    eq('reference: it lands under the target\'s OWN docs root', rp.rel, 'doc/reference/billing-export/README.md');
+    eq('reference: frontmatter filled, its comments dropped, no verify line, the body left as written', rp.content,
+      ['---', 'id: billing-export', 'kind: reference', 'status: open', 'read_when: "changing what the export writes"',
+        'paths: ["src/billing/**", "tests/billing/**"]', 'last_verified: ' + DAY, 'max_age_days: 90', '---', '', '# <TITLE>', '<!-- <TITLE>: in a clause. -->', ''].join('\n'));
+    const rfm = DOCFM().parseFrontmatter(rp.content);
+    eq('reference: the shared frontmatter reader reads back what was typed', [rfm.id, rfm.kind, rfm.read_when, rfm.paths, rfm.verify], ['billing-export', 'reference', 'changing what the export writes', ['src/billing/**', 'tests/billing/**'], undefined]);
+    ok('reference: the date is a date, not a token', !Number.isNaN(Date.parse(rfm.last_verified)) && /^\d{4}-\d{2}-\d{2}$/.test(localDate(new Date())) && !Number.isNaN(Date.parse(localDate(new Date()))));
+    eq('reference: localDate pads, and reads the local day', localDate(new Date(2031, 1, 3, 23, 59)), DAY);
+    ok('reference: --verify writes the verify line', referencePlan(pkg, rt, referenceArgs(RA.concat('--verify', 'node --test tests/billing')), DAY).content.includes('\nverify: "node --test tests/billing"\n'));
+    ok('reference: a CRLF template renders the same bytes', renderReference(REF_TEMPLATE.replace(/\n/g, '\r\n'), Object.assign({ today: DAY }, ra)).text === rp.content);
+    eq('reference: a template with no line for a field says which', renderReference(REF_TEMPLATE.replace('last_verified: <YYYY-MM-DD>\n', ''), Object.assign({ today: DAY }, ra)).missing, ['`last_verified:`']);
+    eq('reference: planning (what --dry-run stops at) writes NOTHING but the config put above', refSnap(), rBefore.concat(CONFIG_NAME).sort());
+    put(rt, rp.rel, rp.content);
+    eq('reference: exactly one file is the whole write', refSnap().filter((x) => !rBefore.includes(x) && x !== CONFIG_NAME), [rp.rel]);
+    eq('reference: a second run is refused', referencePlan(pkg, rt, ra, '2031-02-04').refuse.msg, 'doc/reference/billing-export/README.md already exists, and a reference doc is never overwritten');
+    eq('reference: and the file is byte-identical', readText(rp.dest), rp.content);
+    ok('reference: a package with no template is refused', /has no templates\/reference\/README\.md$/.test(referencePlan(path.join(tmp, 'no-such-package'), rt, referenceArgs(['new', 'other'].concat(RA.slice(2))), DAY).refuse.msg));
+    ok('reference: the usage line and the help both name the command', REFERENCE_USAGE.startsWith('harness reference new <subsystem>') && HELP.includes(REFERENCE_USAGE) && HELP.includes('templates/reference/'));
+    // The REAL template: the shipped file renders with nothing missing and no token left in its frontmatter.
+    const shipped = readText(path.join(PKG_ROOT, 'templates', 'reference', REFERENCE_TEMPLATES[0]));
+    const real = shipped === null ? { missing: ['the file'] } : renderReference(shipped, Object.assign({ today: DAY }, ra, { verify: 'node --test' }));
+    eq('reference: the shipped template has a line for every field', real.missing, undefined);
+    ok('reference: and renders with no token and no comment left in its frontmatter', Boolean(real.text) && !/<[A-Z][A-Z0-9_-]*>|^#/m.test(real.text.slice(0, real.text.indexOf('\n---\n', 4))));
+    ok('reference: its one rule line survives into the body, once', Boolean(real.text) && real.text.split('a fact an agent can get by search does not belong here').length === 2);
 
     // A package that lost ONLY its guards: every sibling script is still there, so nothing
     // but the guards' own entry can notice. Run before doctor, restored after.
@@ -1902,12 +2110,13 @@ function selfTest() {
 
   for (const f of fails) console.log('  x ' + f);
   console.log(fails.length ? '\nFAIL — harness.js self-test: ' + fails.length + ' of ' + n + ' assertion(s)'
-    : 'PASS — harness.js self-test (' + n + ' assertions: detect, plan, dry-run, no-overwrite, --force, doctor OK/MISSING/DRIFTED, declared skips)');
+    : 'PASS — harness.js self-test (' + n + ' assertions: detect, plan, dry-run, no-overwrite, --force, reference new, doctor OK/MISSING/DRIFTED, declared skips)');
   return fails.length ? 1 : 0;
 }
 
 module.exports = { detect, buildConfig, buildPlan, applyPlan, planRefusals, toolsArgError, render, doctor, gateResolvable, hookScripts,
-  hookCommands, declaredSkips, configSkips, hostReport, requiredIgnores, SHIPPED_AGENTS, SHIPPED_SKILLS, TRACK_TEMPLATES };
+  hookCommands, declaredSkips, configSkips, hostReport, requiredIgnores, SHIPPED_AGENTS, SHIPPED_SKILLS, TRACK_TEMPLATES,
+  REFERENCE_TEMPLATES, REFERENCE_USAGE, referenceArgs, renderReference, referencePlan, localDate };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
@@ -1920,6 +2129,7 @@ if (require.main === module) {
   else if (cmd === 'doctor') code = cmdDoctor(rest);
   else if (cmd === 'gates') code = cmdGates(rest);
   else if (cmd === 'docs') code = cmdDocs(rest);
+  else if (cmd === 'reference') code = cmdReference(rest);
   else if (cmd === 'run') code = cmdRun(rest);
   else if (cmd === 'worktree') code = cmdWorktree(rest);
   else if (cmd === 'host') { for (const l of hostReport(findRoot(process.cwd()))) console.log(l); code = 0; }

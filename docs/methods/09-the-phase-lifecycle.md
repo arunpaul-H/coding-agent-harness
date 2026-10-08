@@ -3,7 +3,7 @@ id: method-09-the-phase-lifecycle
 kind: reference
 status: open
 read_when: "closing a phase or archiving a track, or when the close script refuses"
-paths: ["scripts/harness/close-phase.js", "scripts/harness/guards/phase-guard.cjs", "docs/tracks/**"]
+paths: ["scripts/harness/close-phase.js", "scripts/harness/guards/phase-guard.cjs", "templates/track/**"]
 verify: "node scripts/harness/close-phase.js --self-test && node scripts/harness/guards/phase-guard.cjs --self-test"
 last_verified: 2026-10-05
 max_age_days: 90
