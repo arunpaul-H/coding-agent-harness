@@ -28,6 +28,7 @@
 | id | read when | status |
 |---|---|---|
 | [branches](reference/branches/README.md) | cutting, reviving or syncing a long-lived branch, or changing any harness file | open |
+| [branches-workspaces](reference/branches/workspaces.md) | running more than one agent in this project on one computer, or creating, listing, landing or removing a workspace folder | open |
 | [doc-standard](reference/DOC-STANDARD.md) | creating any .md, opening a track, or closing a phase | open |
 | [routing](reference/routing/README.md) | you are the lead agent choosing a mode for a task, writing a spawn prompt, or closing a phase | open |
 | [skill-safety](reference/skill-safety/README.md) | installing, vendoring, updating or vetting an agent skill | open |
@@ -38,6 +39,7 @@
 |---|---|---|
 | [methods](methods/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [branches](reference/branches/README.md) | `node scripts/harness/branch-sync.js --self-test && node scripts/harness/branch-sync.js` | 2026-10-05 |
+| [branches-workspaces](reference/branches/workspaces.md) | `node scripts/harness/worktree.js --self-test` | 2026-10-08 |
 | [doc-standard](reference/DOC-STANDARD.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
@@ -47,4 +49,4 @@
 
 Nothing is blocked.
 
-<!-- 10 live docs -->
+<!-- 11 live docs -->

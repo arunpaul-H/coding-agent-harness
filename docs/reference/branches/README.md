@@ -113,7 +113,8 @@ branch-local edit to a common file is exactly what the check reds on.
 Cut from the source and the branch starts identical, so there is nothing to sync. Before its first
 commit: rewrite `AGENTS.md` §1 to say what the branch is; adjust `harness.config.json` if its gate
 registry differs; give every new subtree `AGENTS.md` a ceiling in `context-budget.json`; then run the
-suite and accept a baseline under a `gates:` subject.
+suite and accept a baseline under a `gates:` subject. To cut it as its own folder, so two agents
+never share one, see [workspaces.md](workspaces.md).
 
 ## Revive a branch from an older ref
 
@@ -140,9 +141,9 @@ docs moved onto the contract in `DOC-STANDARD.md`.
   compared. Two things make that visible: a disagreement with the remote's published default branch
   fails the manifest check outright, and every report names the mode, the branch and how the source
   was chosen. CI should pin the ref rather than trust a tracked file.
-- **A worktree may be checked by the wrong tree.** Hooks resolve the session's project directory,
-  not the worktree a command runs in. Run the checks inside the worktree yourself before committing
-  from one.
+- **A commit made from another folder is checked by the wrong tree.** A session STARTED in a
+  workspace runs that folder's own hooks (measured). One started elsewhere that commits there with
+  `cd` or `git -C` has its commit guard read the session's folder. Start the agent in the workspace.
 - **The check count is structural**, the same in both modes and with no source ref at all, so a
   baseline holds across branches. Anything that changes the count without a manifest change is a
   bug: the gate runner reads it as a check that vanished.

@@ -18,7 +18,7 @@ file, read nothing else. Never sweep the codebase by reading files: search for t
 read-only search agent for a broad question. Never re-read a file you already read this session.
 A subtree `AGENTS.md` holds that subtree's invariants and applies when you touch a file under it;
 nothing else is always-on. If you were spawned, your prompt carries a `READ-SET`: read exactly
-that, and report any reading past it. Open work starts at `<TRACKS_DIR>/<id>/handoff.md`.
+that, and report any reading past it. Open work starts at `<TRACKS_DIR>/<id>/handoff.md`. A second agent gets its own folder, never this one: `node scripts/harness/worktree.js --new <name>`.
 
 ## 3. Hard rules, and the mechanism behind each one
 - **A gate figure comes from `gates.js --check` and lives in `scripts/harness/gates.baseline.json`,

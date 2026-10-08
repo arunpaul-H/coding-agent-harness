@@ -1108,7 +1108,7 @@ module.exports = {
   nameProblem, decideLayout, decideCarry, hookPayload, parsePorcelain, fillTemplate, isInside, create, fromHook, list, sourceRef,
   noteText, notePath, noteCandidates, noteSummary, overlapsOf, others, decideSessionStart,
   verdictProblems, decideLand, decidePrune, land, prune,
-  PARENT_MAIN, SIBLING_SUFFIX, NAME_RE, NOTES_DIR,
+  PARENT_MAIN, SIBLING_SUFFIX, NAME_RE, NOTES_DIR, ADVICE,
 };
 
 if (require.main === module) main();

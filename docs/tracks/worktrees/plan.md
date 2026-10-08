@@ -135,4 +135,12 @@ no commits of its own (WT-12); a locked entry is named with its unlock command (
 **First commit:** `worktrees: ship workspaces to every repo the harness is installed into`
 **Exit:** `node bin/harness.js doctor && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** The installer needed no new copy rule: it already copies `scripts/harness/` whole
+and renders the hook entry from the registry row, so `init` carries the script and the routed
+entry; this phase added the ignore rule to its required list and to `common.json`, a
+`workspace layout` row in `harness doctor` (with the adoption steps under the sibling layout),
+the corrected trap, one sentence in `AGENTS.md` and its template, and the root README.
+Deviations: the workspace reference is its own routed file, `docs/reference/branches/workspaces.md`,
+because the branches README sat two lines under its cap; `AGENTS.md` was AT its cap, so the
+sentence was appended to an existing line; `init` writes no `worktrees` section into a new
+config, the defaults being the point; `common.json` gained a probe and no file entry.

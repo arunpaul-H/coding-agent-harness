@@ -23,7 +23,7 @@ read-only search agent for a broad question, and keep the conclusion rather than
 Never re-read a file you already read this session. A subtree `AGENTS.md` holds that subtree's
 invariants and applies when you touch a file under it; nothing else is always-on.
 If you were spawned, your prompt carries a `READ-SET`: read exactly that, and report any reading past it.
-Open work lives in `docs/tracks/<id>/`; a session on a track starts at that folder's `handoff.md`.
+Open work lives in `docs/tracks/<id>/`; a session on a track starts at that folder's `handoff.md`. A second agent gets its own folder, never this one: `node bin/harness.js worktree new <name>`.
 
 ## 3. Hard rules, and the mechanism behind each one
 

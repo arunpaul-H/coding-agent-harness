@@ -424,6 +424,66 @@ describe('landing and pruning refuse whatever would lose work', () => {
   });
 });
 
+describe('anyone who installs the harness gets workspaces', () => {
+  const cli = path.join(ROOT, 'bin', 'harness.js');
+  const harness = (args, cwd) => spawnSync(process.execPath, [cli].concat(args), { cwd: cwd || ROOT, encoding: 'utf8', env: cleanEnv() });
+  let tmp; let target;
+  before(() => {
+    tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-worktree-install-')));
+    // The documented shape of a new download: the project cloned as <project>/main.
+    target = path.join(tmp, 'proj', 'main');
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, 'package.json'), JSON.stringify({ name: 'proj', scripts: { test: 'node --test' } }));
+    git(target, ['init', '-q', '-b', 'main', '.']);
+    const r = harness(['init', '--into', target]);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    git(target, ['add', '-A']);
+    assert.strictEqual(git(target, ['commit', '-q', '-m', 'init']).status, 0);
+  });
+  after(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* the OS may still hold it */ } });
+
+  test('init copies the script, registers the routed hook entry and writes the ignore rule', () => {
+    assert.ok(fs.existsSync(path.join(target, 'scripts', 'harness', 'worktree.js')), 'the workspace script was not installed');
+    const s = JSON.parse(fs.readFileSync(path.join(target, '.claude', 'settings.json'), 'utf8'));
+    const cmds = (s.hooks.WorktreeCreate || []).flatMap((x) => x.hooks).map((h) => h.command);
+    assert.deepStrictEqual(cmds, ['node "${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js" --tool claude-code --event worktree-create']);
+    assert.strictEqual(spawnSync('git', ['check-ignore', '--no-index', '-q', '.claude/worktrees/x/f.txt'], { cwd: target }).status, 0, 'the installed ignore file does not cover the unrouted flag\'s folder');
+    assert.match(fs.readFileSync(path.join(target, 'AGENTS.md'), 'utf8'), /A second agent gets its own folder, never this one: `node scripts\/harness\/worktree\.js --new <name>`/);
+  });
+
+  test('the installed copy creates a workspace beside main/, and doctor reports the parent layout with no advice', () => {
+    const installed = path.join(target, 'scripts', 'harness', 'worktree.js');
+    const r = spawnSync(process.execPath, [installed, '--new', 'first-task', '--doing', 'try it'], { cwd: target, encoding: 'utf8', env: cleanEnv() });
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.ok(fs.existsSync(path.join(tmp, 'proj', 'first-task', 'package.json')), 'the workspace is not a sibling of main/');
+    assert.doesNotMatch(r.stdout, /It works better as ONE/, 'the parent layout was told to adopt the parent layout');
+    const d = harness(['doctor', '--root', target, '--no-self-tests']);
+    assert.match(d.stdout, /workspace layout\s+— parent: a new workspace goes under .*proj \(2 checkout\(s\) today\)/);
+    assert.doesNotMatch(d.stdout, /git worktree repair/);
+  });
+
+  test('in a plain clone, doctor names the sibling layout and prints the steps to adopt the parent one, and moves nothing', () => {
+    const d = harness(['doctor', '--no-self-tests']);
+    assert.match(d.stdout, /OK\s+workspace layout\s+— (sibling|parent|configured): a new workspace goes under /);
+    const plain = path.join(tmp, 'plain');
+    fs.mkdirSync(plain);
+    fs.writeFileSync(path.join(plain, 'f.txt'), 'x\n');
+    git(plain, ['init', '-q', '-b', 'main', '.']);
+    git(plain, ['add', '-A']); git(plain, ['commit', '-q', '-m', 'init']);
+    const p = harness(['doctor', '--root', plain, '--no-self-tests']);
+    assert.match(p.stdout, /workspace layout\s+— sibling: a new workspace goes under .*plain\.worktrees/);
+    assert.match(p.stdout, /2\. make a parent folder and move this checkout into it as `main\/`/);
+    assert.match(p.stdout, /3\. from `main\/`, run: git worktree repair/);
+    assert.ok(fs.existsSync(path.join(plain, 'f.txt')) && !fs.existsSync(path.join(tmp, 'plain.worktrees')), 'the health check moved or made a folder');
+  });
+
+  test('the ignore rule is one the health check and the branch manifest both probe', () => {
+    const common = JSON.parse(fs.readFileSync(path.join(SRC, 'common.json'), 'utf8'));
+    assert.ok(common.ignore.mustIgnore.includes('.claude/worktrees/example/file.txt'));
+    assert.match(fs.readFileSync(cli, 'utf8'), /pattern: '\.claude\/worktrees\/', probe: '\.claude\/worktrees\/example\/file\.txt'/);
+  });
+});
+
 describe('the registration this repo runs under', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8'));
   const commands = [];

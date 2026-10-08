@@ -115,6 +115,7 @@ const STATIC_IGNORES = [
   { pattern: '.claude/.commit-hygiene-clearance.json', probe: '.claude/.commit-hygiene-clearance.json', why: 'a waiver bound to one tree state' },
   { pattern: 'node_modules/', probe: 'node_modules/example/index.js', why: 'dependency tree' },
   { pattern: '.phase', probe: 'docs/tracks/example/.phase', why: 'a run-mode receipt: one person\'s approval of one phase on one machine' },
+  { pattern: '.claude/worktrees/', probe: '.claude/worktrees/example/file.txt', why: 'where an agent\'s own worktree flag puts a folder when no hook routes it: a second tree inside this one' },
 ];
 function requiredIgnores(guarded) {
   const secrets = (guarded || []).map((p) => ({
@@ -1341,8 +1342,25 @@ function doctor(root, opts) {
   else {
     if (!gaps.length) add('OK', '.gitignore', requiredIgnores(guarded).length + ' required path(s) ignored');
     for (const g of gaps) add('MISSING', '.gitignore ' + g.pattern, g.probe + ' is not ignored (' + g.why + ')', 'echo "' + g.pattern + '" >> .gitignore');
+    // 10. WHERE A WORKSPACE FOLDER GOES. A report: it is never MISSING or DRIFTED, and nothing
+    // here moves a folder. Under the sibling layout it prints the steps to adopt the parent one.
+    const layout = workspaceLayout(root);
+    if (layout) add('OK', 'workspace layout', layout);
   }
   return rows;
+}
+
+/** The layout line of the health check, or null when the workspace script cannot say (no
+ *  script, no repository, a config it refuses). It reads; it never creates or moves anything. */
+function workspaceLayout(root) {
+  let W;
+  try { W = require(path.join(PKG_ROOT, 'scripts', 'harness', 'worktree.js')); } catch { return null; }
+  let r;
+  try { r = W.list(root); } catch { return null; }
+  if (!r || !r.ok || !r.layout) return null;
+  if (r.layout.problem) return r.layout.kind + ' — ' + r.layout.problem;
+  const where = r.layout.kind + ': a new workspace goes under ' + r.layout.root + ' (' + r.rows.length + ' checkout(s) today)';
+  return r.layout.kind === 'sibling' ? where + '\n        ' + W.ADVICE.join('\n        ') : where;
 }
 
 function cmdDoctor(argv) {
