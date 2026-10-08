@@ -1,18 +1,18 @@
 ---
 id: project-reference
 kind: track
-status: open
+status: complete
 read_when: "changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs"
 trap_prefix: REF
 paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs-lint.cjs", "tests/cli.test.js", "docs/reference/DOC-STANDARD.md"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
-closed_phase: 3
+closed_phase: 4
 closed_at: 2026-10-08
-gates_sha: f300539b339c8f6bf7076f9e764a0a4bcc6853da305e77b39f709d749d00d695
-block_sha: fce138604b81b1313be75160c67d144ac779b6c42e7010d2e9c76936e5b16de0
-receipt: 485995c06f0261706d1ca4ae733a3a05fa7ac6e2c0580080cce8fa8d54cc84e4
+gates_sha: f12dd214f4e63abdc3c29f98bb94ed799b69ae66e77dae9ef3b21d54e42ea148
+block_sha: 5e1905416af78b0e40fc1d81ee7b783e658ae06fe36a4437c302f48bdc1a74fa
+receipt: a37033bd76c4da962222ef7d3b5d6303ce02cf383e07d4b25194116c27577cf5
 ---
 
 # Project reference docs: asked for by name, and never stale in silence
