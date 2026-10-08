@@ -11,6 +11,11 @@
 
 | id | read when | status |
 |---|---|---|
+| [guard-hardening-handoff](tracks/guard-hardening/handoff.md) | starting or resuming guard-hardening | open |
+| [guard-hardening-plan](tracks/guard-hardening/plan.md) | guard-hardening: the phases, each with its exit command and first commit | open |
+| [guard-hardening](tracks/guard-hardening/README.md) | changing what a pre-tool guard refuses, adding a stop or spawn check, or pinning the skills the harness ships | open |
+| [guard-hardening-research-guard-probe](tracks/guard-hardening/research/2026-10-08-guard-probe.md) | planning or reviewing what the pre-tool guards stop, or deciding whether a guard gap is worth closing | frozen |
+| [guard-hardening-traps](tracks/guard-hardening/traps.md) | something behaves oddly while working on guard-hardening | open |
 | [project-reference-handoff](tracks/project-reference/handoff.md) | starting or resuming project-reference | open |
 | [project-reference-plan](tracks/project-reference/plan.md) | project-reference: the phases, each with its exit command and first commit | open |
 | [project-reference](tracks/project-reference/README.md) | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs | open |
@@ -49,6 +54,7 @@
 | [doc-standard](reference/DOC-STANDARD.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
+| [guard-hardening](tracks/guard-hardening/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js guard-hardening` | 2026-10-08 |
 | [project-reference](tracks/project-reference/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference` | 2026-10-07 |
 | [worktrees](tracks/worktrees/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees` | 2026-10-08 |
 
@@ -58,4 +64,4 @@
 |---|---|---|
 | [project-reference](tracks/project-reference/README.md) | the owner: merge the pull request, then say whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
 
-<!-- 17 live docs -->
+<!-- 22 live docs -->
