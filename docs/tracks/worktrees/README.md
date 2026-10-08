@@ -8,11 +8,11 @@ paths: ["scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "ha
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees"
 last_verified: 2026-10-08
 max_age_days: 30
-closed_phase: 2
+closed_phase: 3
 closed_at: 2026-10-08
-gates_sha: 15337d3c10f488d90bcec4541fba88cfd62e9ec7fbb7bb99f8a055aee1810a53
-block_sha: d9ff18bb39887e45e864414133a66ad03288348a029b42b85b64333a9e0daa63
-receipt: 23df47a8f3eed71fed1655e80233bdda43ee858e96e8966cc185b37dc6e6da0f
+gates_sha: d44bec4abbbfe580cf301c7fdf4b50b7912f15d40aa3ffed944ce8e7651b1ed7
+block_sha: f63387fb50369fb30ef4662d40084f752d159a07fe338e48ddde4ad9faa731a2
+receipt: 21290c395ec08e0106e557b7711abd044621af82fe660ec5b744544efe13c72c
 ---
 
 # Workspaces: several agents in one project on one computer, without collisions
@@ -75,7 +75,7 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 | 0 | the research file: what the agent's flag does on this machine | closed |
 | 1 | `worktree.js --new`, `--list`, `--self-test`; config keys with defaults | closed |
 | 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | closed |
-| 3 | the announce note, the generated overview, the overlap warning, a session-start line | landed |
+| 3 | the announce note, the generated overview, the overlap warning, a session-start line | closed |
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | open |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | open |
 
