@@ -90,6 +90,7 @@ const WORKSPACE = 'worktree-create';
 const envGuard = () => require('./guards/env-guard.cjs');
 const commitHygiene = () => require('./guards/commit-hygiene.cjs');
 const phaseGuard = () => require('./guards/phase-guard.cjs');
+const spawnGuard = () => require('./guards/spawn-guard.cjs');
 const skillVerify = () => require('./guards/skill-verify.cjs');
 const docsLint = () => require('./guards/docs-lint.cjs');
 const branchSync = () => require('./branch-sync.js');
@@ -141,6 +142,15 @@ const HANDLERS = {
       actions: ['shell', 'write'],
       gather: (event, ctx) => phaseGuard().gather(event, ctx.cfg()),
       decide: (event, state) => phaseGuard().decide(event, state),
+    },
+    {
+      // A spawn of an agent this repo defines must carry the four contract fields. It is
+      // offered a spawn and nothing else, and the other three are not offered a spawn: a
+      // prompt is prose, and none of them has anything to read in it.
+      name: 'spawn-guard',
+      actions: ['spawn'],
+      gather: (event, ctx) => spawnGuard().gather(ctx.root, ctx.dialect && ctx.dialect.agents && ctx.dialect.agents.dir),
+      decide: (event, state) => spawnGuard().decide(event, state),
     },
   ],
 
@@ -719,8 +729,8 @@ function selfTest() {
 
   /* THE REAL TABLE. Order is the property: it is the order the guards were registered in. */
   eq('the table has one list per event and no other key', Object.keys(HANDLERS).sort(), EVENTS.slice().sort());
-  eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard']);
-  eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write']);
+  eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard', 'spawn-guard']);
+  eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write', 'spawn']);
   eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync', 'worktree']);
   eq('prompt-submit is a list, ready for a handler', HANDLERS['prompt-submit'], []);
   eq('stop handlers, in order', HANDLERS.stop.map((x) => x.name), ['gate-staleness']);
@@ -736,6 +746,16 @@ function selfTest() {
   eq('a shell call that is not a git write and moves nothing is allowed', gate({ action: 'shell', command: 'npm test', input: { command: 'npm test' } }), { deny: false, reason: '' });
   const blindCall = gate({ action: 'other', opaque: true, tool: 'srv.q', input: { query: 'select 1' } });
   eq('an opaque call nothing can read is an ask, not an allow', [blindCall.deny, blindCall.ask], [false, true]);
+
+  /* THE SPAWN GUARD, through the real table. Which agents are registered is a literal here:
+     the directory walk is the guard's own self-test, on a throwaway tree. */
+  const withAgents = HANDLERS['pre-tool'].map((x) => (x.name === 'spawn-guard' ? Object.assign({}, x, { gather: () => ({ registered: ['review'] }) }) : x));
+  const spawned = (agent, prompt) => runGate(withAgents, { event: 'pre-tool', action: 'spawn', command: null, path: null, content: null, old: null, tool: 'Agent', input: {}, opaque: false, spawn: { agent, prompt } }, live);
+  const bare = spawned('review', 'look at the diff');
+  eq('a spawn of a registered agent with no contract is denied by the real list', [bare.deny, /^S1 SPAWN WITHOUT THE CONTRACT/.test(bare.reason)], [true, true]);
+  eq('...the same agent with the four fields is allowed, and no other guard is asked', spawned('review', 'OUTCOME: a\nREAD-SET: b\nRETURN: c\nBOUNDS: d'), { deny: false, reason: '' });
+  eq('...and an agent the harness did not define passes untouched', spawned('general-purpose', 'look at the diff'), { deny: false, reason: '' });
+  eq('with no agent directory to read, through the real gather, a spawn passes', runGate(HANDLERS['pre-tool'], { event: 'pre-tool', action: 'spawn', tool: 'Agent', input: {}, opaque: false, spawn: { agent: 'review', prompt: 'x' } }, live), { deny: false, reason: '' });
 
   /* THE REAL STOP HANDLER, through the real table. Its disk half is close-phase.js's and is
      driven there on a synthetic tree; here the state is a literal and the decision is watched. */

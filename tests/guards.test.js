@@ -155,6 +155,7 @@ describe('every guard helper ships a --self-test, and it passes', () => {
   const FLOOR = {
     'commit-hygiene.cjs': 94, 'doc-frozen.cjs': 31, 'docs-lint.cjs': 101,
     'env-guard.cjs': 50, 'phase-guard.cjs': 71, 'skill-verify.cjs': 38,
+    'spawn-guard.cjs': 31,
   };
   const guards = fs.readdirSync(helper('')).filter((f) => /\.(c|m)?js$/.test(f)).sort();
   test('every script in the guards directory has a floor recorded here', () => {

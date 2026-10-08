@@ -53,6 +53,9 @@ const ACTION_OF = {
   Read: 'read',
   Grep: 'search', Glob: 'search',
   Edit: 'write', Write: 'write',
+  // A subagent spawn. Measured for Claude Code (the guard-hardening track's research file on
+  // the spawn payload): the agent is `subagent_type`, the text is `prompt`.
+  Agent: 'spawn',
 };
 
 /* Every field the three cells name that is about the session and not the call. `tool_input` is
@@ -74,6 +77,11 @@ function parse(stdin) {
   // Where the tool's shell is standing, when the envelope says. All three cells name `cwd`. The
   // phase guard resolves a relative path against it; absent, a path is read from the repo root.
   e.cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : null;
+  // A spawn, as the two things the spawn guard reads. Either may be null: a spawn that names
+  // no agent is nobody's registered agent, and one with no text carries no contract.
+  if (action === 'spawn' && shaped) {
+    e.spawn = { agent: typeof input.subagent_type === 'string' ? input.subagent_type : null, prompt: typeof input.prompt === 'string' ? input.prompt : null };
+  }
   // A stop that follows a turn a stop hook forced. Only the boolean counts: see the header.
   e.forced = p.stop_hook_active === true;
   // A name this file maps is vouched for only when the field that action is decided from is there.
@@ -129,6 +137,14 @@ const permissions = {
 };
 
 /**
+ * WHERE THE AGENTS THIS HARNESS DEFINES LIVE, for the spawn guard: a spawn of one of these must
+ * carry the contract, and a spawn of any other agent is not the harness's to judge. Like
+ * `permissions`, it is one tool's directory; under a row that has no such tool call the guard
+ * is never offered anything.
+ */
+const agents = { dir: '.claude/agents' };
+
+/**
  * THE SHAPE OF THE HOOK CONFIG FILE, for the one row whose hook config is the file named here.
  * It is the same rule as `permissions` above: two rows share this wire format, and the shape of
  * the files the other two keep their hooks in is NOT in the research cells (one is named with no
@@ -171,4 +187,4 @@ const wiring = {
   },
 };
 
-module.exports = { parse, emit, permissions, wiring };
+module.exports = { parse, emit, permissions, agents, wiring };

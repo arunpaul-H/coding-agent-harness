@@ -254,6 +254,16 @@ describe('the dialect modules — fixtures built from the research file\'s proto
       assert.strictEqual(JSON.parse(d.emit(ask, at).stdout).decision, 'block', 'an ask with no spelling must not end the turn in silence');
     });
 
+    test('parse: a spawn is the measured tool name, with the agent and the prompt handed on', () => {
+      const spawnOf = (input) => d.parse(JSON.stringify({ hook_event_name: 'PreToolUse', cwd: '/repo', tool_name: 'Agent', tool_input: input }));
+      const e = spawnOf({ description: 'd', prompt: 'OUTCOME: x', subagent_type: 'review', run_in_background: false });
+      assert.deepStrictEqual([e.action, e.opaque, e.spawn], ['spawn', false, { agent: 'review', prompt: 'OUTCOME: x' }]);
+      assert.deepStrictEqual(spawnOf({ prompt: 7 }).spawn, { agent: null, prompt: null }, 'a field that is not text must not be handed on as text');
+      assert.strictEqual(d.parse(claudePayload('Bash', { command: 'npm test' })).spawn, undefined, 'a call that is not a spawn carries no spawn');
+      assert.strictEqual(d.agents.dir, '.claude/agents');
+      assert.ok(d.wiring.entries(rowOf(DEFAULT_TOOL))[0].entry.matcher.split('|').includes('Agent'), 'the matcher does not name the spawn tool, so the entry is never called for one');
+    });
+
     test('parse: a stop that follows a forced turn is marked, and only the boolean marks it', () => {
       const stop = (extra) => d.parse(JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's' }, extra)));
       assert.deepStrictEqual([stop({ stop_hook_active: false }).forced, stop({ stop_hook_active: true }).forced, stop({}).forced, stop({ stop_hook_active: 'true' }).forced], [false, true, false, false]);
@@ -931,6 +941,42 @@ describe('guard hardening — what a shell opens, where a shell stands, and what
     refused(into('GATE smoke pass=' + '42 fail=0 skipped=0'), 'a pasted verdict line');
     passed(into('this phase added 20 tests'), 'a count in a sentence');
     passed(into('the line ends pass=<n> fail=<n>'), 'the line format');
+  });
+
+  /* THE SPAWN CONTRACT, as a process: the payload is the measured one, the agent directory a
+     fixture. The contract is spelled across lines the way the routing reference gives it. */
+  const CONTRACT = 'OUTCOME: the callers of one function, listed.\nREAD-SET: None, everything you need is below.\nRETURN: one line per caller.\nBOUNDS: read only, spawn nothing.\n';
+  const spawnRoot = () => {
+    const root = hardRoot();
+    put(root, '.claude/agents/review.md', '---\nname: review\nmodel: inherit\n---\n\nYou find defects.\n');
+    return root;
+  };
+  const spawnOf = (root, agent, prompt, tool) => entry(root, tool || DEFAULT_TOOL, 'pre-tool', JSON.stringify({
+    session_id: 'test', cwd: root, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_use_id: 'u1',
+    tool_input: { description: 'a spawn', prompt: prompt, subagent_type: agent, run_in_background: false },
+  }));
+
+  test('a spawn of a registered agent with no contract is refused, and the reason names what is missing', () => {
+    const root = spawnRoot();
+    const none = spawnOf(root, 'review', 'Look at the diff and tell me what is wrong.');
+    refused(none, 'a spawn with no contract');
+    const out = JSON.parse(none.stdout).hookSpecificOutput;
+    assert.strictEqual(out.permissionDecision, 'deny');
+    assert.match(out.permissionDecisionReason, /^S1 SPAWN WITHOUT THE CONTRACT: the prompt for the registered agent `review` lacks OUTCOME, READ-SET, RETURN, BOUNDS\./);
+    const partial = spawnOf(root, 'review', CONTRACT.replace('BOUNDS:', 'Limits:'));
+    refused(partial, 'a spawn with three of the four fields');
+    assert.match(partial.stderr, /lacks BOUNDS\.\n/);
+  });
+
+  test('...and the ordinary spawns are not: the contract present, or an agent the harness did not define', () => {
+    const root = spawnRoot();
+    passed(spawnOf(root, 'review', CONTRACT + '\nThe diff is below.\n'), 'a registered agent with the four fields');
+    passed(spawnOf(root, 'review', 'OUTCOME:\nREAD-SET:\nRETURN:\nBOUNDS: none'), 'four fields whose content nothing judges');
+    passed(spawnOf(root, 'general-purpose', 'Look at the diff.'), 'a built-in agent with no contract');
+    passed(spawnOf(root, 'some-plugin:review', 'Look at the diff.'), 'a plugin agent with no contract');
+    passed(spawnOf(hardRoot(), 'review', 'Look at the diff.'), 'the same name in a repo that defines no agent');
+    // A prompt is prose: a guarded name or a gate line in it is not a path or a doc write.
+    passed(spawnOf(root, 'review', CONTRACT + 'Do not open ' + DOTENV + '. The line reads GATE smoke pass=' + '42 fail=0 skipped=0'), 'a contract whose text mentions a guarded name');
   });
 
   /* THE STOP REPORT, as a process. The handler reads the verdict BESIDE THE ENTRY IT WAS LOADED

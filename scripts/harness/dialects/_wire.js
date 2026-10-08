@@ -7,7 +7,10 @@
  *
  *   event    'pre-tool' | 'session-start' | 'prompt-submit' | 'stop', or null when the payload
  *            does not say (hook.js then takes it from its --event flag, which is authoritative)
- *   action   'shell' | 'read' | 'search' | 'write' | 'other'
+ *   action   'shell' | 'read' | 'search' | 'write' | 'spawn' | 'other'
+ *   spawn    OPTIONAL, a `spawn` call only: `{ agent, prompt }`, the subagent's type and the
+ *            text it is handed, each a string or null. A dialect sets it after event(); only
+ *            the spawn guard reads it
  *   command  the shell text, or null. A STRING or nothing: a `command` spelled as a list or an
  *            object is not text a guard can judge, so it is null and the call is not readable
  *   path     the file the call targets, or null

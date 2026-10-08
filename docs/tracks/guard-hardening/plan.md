@@ -3,7 +3,7 @@ id: guard-hardening-plan
 kind: plan
 status: open
 read_when: "guard-hardening: the phases, each with its exit command and first commit"
-first_commit: "skills: pin what the harness ships, and say only that"
+first_commit: "guards: a spawn of a registered agent carries the contract"
 ---
 
 # Guard hardening: the phases
@@ -126,7 +126,14 @@ prompt lacks any of the four field names. Every other agent type passes untouche
 **First commit:** `guards: a spawn of a registered agent carries the contract`
 **Exit:** `node scripts/harness/hook.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** Measured first: `research/2026-10-08-spawn-payload.md`. A fourth pre-tool
+handler, `spawn-guard`, in `scripts/harness/guards/spawn-guard.cjs`: a spawn of an agent a file
+in the tool's agent directory defines is denied unless its prompt carries the four field names,
+each with a colon, in any case. Every other agent type passes, and no field's content is read.
+The `claude` dialect maps the tool name to a new neutral action `spawn`, hands on the agent and
+the prompt, names the agent directory, and renders the tool name into the matcher. Deviations:
+the other three guards are not offered a spawn; one line was added to both routing docs; an
+install made before this phase keeps its old matcher (GH-12).
 
 ## Phase 7: where the test gate's minutes go
 

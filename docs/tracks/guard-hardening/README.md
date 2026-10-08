@@ -78,13 +78,13 @@ Evidence: `research/2026-10-08-guard-probe.md`.
 | 3 | a pasted gate line is a figure, in the guard and the linter | closed |
 | 4 | a stop handler that reports edits made after the last gate run; forcing a turn is the opt-in key `stop.block` | closed |
 | 5 | the installer pins the skills the harness ships, as `shipped` entries that claim no review; this repo's lock pins its own | closed |
-| 6 | a spawn of a registered agent must carry the four contract fields | open |
+| 6 | a spawn of a registered agent must carry the four contract field names; other agents pass and no field's content is read | closed |
 | 7 | where the test gate's minutes go, measured | open |
 
 Phases 0 to 3 were done in one session at the owner's request and are committed in three
-commits, not four: phases 2 and 3 edit the same two files, so they share one. Phases 4 and 5
+commits, not four: phases 2 and 3 edit the same two files, so they share one. Phases 4 to 6
 followed in a second session; decision 6 held against the tool, and what was measured is in
-`research/2026-10-08-stop-hook.md` (a headless session only). The receipt in
+`research/2026-10-08-stop-hook.md` and `research/2026-10-08-spawn-payload.md` (headless only). The receipt in
 this file's frontmatter names the last phase closed; trust it over this sentence. Nothing is
 pushed. This machine has no git identity configured: a commit passes one on the command line.
 The policy file was not edited: it sits within a few bytes of its context ceiling, and raising
