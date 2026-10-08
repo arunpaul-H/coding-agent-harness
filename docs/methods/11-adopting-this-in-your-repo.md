@@ -3,7 +3,7 @@ id: method-11-adopting-this-in-your-repo
 kind: reference
 status: open
 read_when: "installing this harness into another repo, or borrowing one idea from it on another stack"
-paths: ["harness.config.json", "schema/harness.config.schema.json", "templates/**", "scripts/harness/**", ".claude/**"]
+paths: ["harness.config.json", "schema/harness.config.schema.json", "templates/**", "bin/harness.js"]
 verify: "node scripts/harness/config.js --self-test && node scripts/harness/gates.js --self-test"
 last_verified: 2026-10-05
 max_age_days: 90

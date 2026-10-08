@@ -8,7 +8,7 @@ paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
-blocked_on: "the owner: whether to reconsider an interview skill (decision 6), then whether to archive"
+blocked_on: "the owner: merge the pull request, then say whether to archive"
 closed_phase: 3
 closed_at: 2026-10-08
 gates_sha: f300539b339c8f6bf7076f9e764a0a4bcc6853da305e77b39f709d749d00d695
@@ -57,8 +57,9 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 5. **Drift is a warning, never a red.** A block is cleared by re-dating the doc unread, which
    turns a verified claim into an unverified one (`docs/reference/DOC-STANDARD.md` §5).
 6. **No drafting skill in this track.** A skill that summarises code is the measured-cost case of
-   decision 3, and its approval step is prose a model can skip. An interview skill may be
-   reconsidered after phase 3; that is blocked on the owner.
+   decision 3, and its approval step is prose a model can skip. An interview skill: not now.
+   Owner, 2026-10-08, on the lead's advice: one pair of runs is too little to build on. A second
+   measurement on an edit task, with a doc written before the question, would reopen it.
 
 ## Invariants
 
@@ -83,8 +84,10 @@ root `README.md` that rests on it (`research/2026-10-08-one-task-with-and-withou
 deleted; this repo holds no reference doc made by the command. This repo's own docs draw drift
 warnings and were left as they are: re-verifying them is the owner's call, not a re-date.
 
-**Waiting on the owner.** Decision 6: reconsider an interview skill, or not. The measurement
-neither supports nor undercuts one, because none was run. The track is not archived.
+**After phase 3**, on the owner's word: the gate command in the policy file and the routing doc
+now names the docs skip a machine with no auto-memory index needs (REF-09), and six docs whose
+`paths` matched nearly every commit were narrowed to the files that can falsify them, so a drift
+warning means something. No date was changed. A pull request is open; the track is not archived.
 
 ## How to work
 

@@ -55,6 +55,6 @@
 
 | id | blocked on | read when |
 |---|---|---|
-| [project-reference](tracks/project-reference/README.md) | the owner: whether to reconsider an interview skill (decision 6), then whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
+| [project-reference](tracks/project-reference/README.md) | the owner: merge the pull request, then say whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
 
 <!-- 17 live docs -->

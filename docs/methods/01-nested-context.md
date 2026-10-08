@@ -3,7 +3,7 @@ id: method-01-nested-context
 kind: reference
 status: open
 read_when: "deciding where a fact should live, or why an agent here does not read the whole repo"
-paths: ["AGENTS.md", "CLAUDE.md", "**/AGENTS.md", "docs/reference/routing/**", "docs/INDEX.md", "scripts/harness/docs-index.js"]
+paths: ["AGENTS.md", "CLAUDE.md", "**/AGENTS.md", "docs/reference/routing/**", "scripts/harness/docs-index.js"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check"
 last_verified: 2026-10-05
 max_age_days: 90

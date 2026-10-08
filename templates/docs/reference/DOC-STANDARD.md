@@ -3,7 +3,7 @@ id: doc-standard
 kind: reference
 status: open
 read_when: "creating any .md, opening a track, or closing a phase"
-paths: ["docs/**", "CLAUDE.md", "AGENTS.md"]
+paths: ["scripts/harness/guards/docs-lint.cjs", "scripts/harness/guards/doc-frozen.cjs", "scripts/harness/docs-index.js", "scripts/harness/handoff-lint.js", "scripts/harness/close-phase.js", "harness.config.json"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check"
 last_verified: YYYY-MM-DD
 max_age_days: 90
