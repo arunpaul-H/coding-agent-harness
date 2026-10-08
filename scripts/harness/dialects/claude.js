@@ -64,6 +64,9 @@ function parse(stdin) {
     for (const k of Object.keys(p)) if (!ENVELOPE.includes(k)) input[k] = p[k];
   }
   const e = event(EVENT_OF[p.hook_event_name], action, tool, input, !known || !shaped);
+  // Where the tool's shell is standing, when the envelope says. All three cells name `cwd`. The
+  // phase guard resolves a relative path against it; absent, a path is read from the repo root.
+  e.cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : null;
   // A name this file maps is vouched for only when the field that action is decided from is there.
   if (needsField(action, e)) e.opaque = true;
   return e;

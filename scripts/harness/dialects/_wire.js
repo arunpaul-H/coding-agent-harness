@@ -19,6 +19,9 @@
  *            text, and the phase guard names its KEYS when it has to ask. An input that arrived
  *            as a string or a list is KEPT, under the one key `value`, so the text guard still
  *            reads it; it is never replaced by an empty object
+ *   cwd      OPTIONAL: the directory the tool's shell is standing in, where the envelope names
+ *            one. A dialect sets it after event(); absent or null, a relative path is read from
+ *            the repo root. Only the phase guard reads it
  *   opaque   true when the dialect cannot vouch for the input's shape: a server-defined tool, a
  *            tool name the dialect has no row for, an input that is not an object, or a known
  *            action whose needed field is absent (a shell call with no string `command`, a write

@@ -835,6 +835,45 @@ describe('docs-lint — `status: complete` needs a receipt only close-phase.js c
 });
 
 /* ============================================================ */
+describe('docs-lint — a track in the archive was closed by the script, not moved there', SUITE, () => {
+  const ARCHIVED = 'docs/' + 'archive' + '/alpha/README.md';
+  const parts = { closed_phase: '4', gates_sha: 'gsha', block_sha: 'bsha' };
+  const receiptOf = (s, id) => {
+    s.put('receipt-of.js', 'process.stdout.write(require("./scripts/harness/close-phase.js").receiptFor(process.argv[2], "4", "gsha", "bsha"));\n');
+    const r = spawnSync(process.execPath, ['receipt-of.js', id], { cwd: s.root, encoding: 'utf8' });
+    fs.rmSync(s.abs('receipt-of.js'));
+    assert.strictEqual(r.status, 0, r.stderr);
+    return r.stdout;
+  };
+  const track = (extra) => doc(Object.assign({}, TRACK_FM, extra || {}), TRACK_BODY);
+
+  test('a track moved in by hand, still open, is red and the message names the fix', async () => {
+    await withSandbox({ files: { [ARCHIVED]: track() } }, async (s) => {
+      assertRed(await s.lint(), ARCHIVED, /a track in the archive that says `status: open` — it was moved by hand.*close-phase\.js alpha --archive/);
+    });
+  });
+
+  test('complete with no receipt is red; the receipt for this folder is green; another folder\'s is red', async () => {
+    await withSandbox({}, async (s) => {
+      s.put(ARCHIVED, track({ status: 'complete' }));
+      assertRed(await s.lint(), ARCHIVED, /an archived track without `receipt`/);
+      s.put(ARCHIVED, track(Object.assign({ status: 'complete', receipt: receiptOf(s, 'alpha') }, parts)));
+      assertGreen(await s.lint());
+      s.put(ARCHIVED, track(Object.assign({ status: 'complete', receipt: receiptOf(s, 'beta') }, parts)));
+      assertRed(await s.lint(), ARCHIVED, /does not recompute for the id `alpha`/);
+    });
+  });
+
+  test('closed work with no track frontmatter owes nothing, and neither does a repo with no archive', async () => {
+    await withSandbox({}, async (s) => {
+      assertGreen(await s.lint());
+      s.put('docs/' + 'archive' + '/old/README.md', '# An old plan\n\nWritten before the contract.\n');
+      assertGreen(await s.lint());
+    });
+  });
+});
+
+/* ============================================================ */
 describe('docs-lint — `source: external` requires the ⚠ UNTRUSTED banner in the BODY', SUITE, () => {
   const SIGN = String.fromCharCode(0x26A0), VS16 = String.fromCharCode(0xFE0F); // spelled out, never pasted
   const ext = (source, body, extraFm) => doc(Object.assign({}, RESEARCH_FM, { id: 'fetched', source }, extraFm || {}), body);

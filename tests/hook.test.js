@@ -840,3 +840,75 @@ describe('session start through the entry — the reports say what the separate 
     assert.match(contextOf(r), /permissions\.deny is missing/, 'the reports did not run');
   });
 });
+
+/* ============================================================ */
+
+describe('guard hardening — what a shell opens, where a shell stands, and what a terminal prints', () => {
+  // Every guarded name below is assembled: this file is written through the guard it tests.
+  const D = DOTENV[0];
+  const N = DOTENV.slice(1);
+  const hardRoot = () => {
+    const root = mkRoot('harden', { env: { guarded: [DOTENV, DOTENV + '.*'], openCarveOuts: [] } });
+    put(root, 'docs/tracks/t/README.md', '---\nid: t\nkind: track\nstatus: open\nread_when: "x"\n---\n# t\n');
+    put(root, 'docs/tracks/t/handoff.md', '---\nid: t-handoff\nkind: handoff\nstatus: open\nread_when: "x"\n---\n# h\n');
+    return root;
+  };
+  const call = (root, tool, input, cwd) => entry(root, DEFAULT_TOOL, 'pre-tool', JSON.stringify({
+    session_id: 'test', cwd: cwd || root, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input, tool_use_id: 'u1',
+  }));
+  const refused = (r, why) => assert.strictEqual(r.status, 2, why + ' was not refused: ' + r.stdout + r.stderr);
+  const passed = (r, why) => assert.deepStrictEqual([r.status, r.stdout], [0, ''], why + ' was not allowed: ' + r.stdout + r.stderr);
+
+  test('a guarded file reached through a quote, a backslash or a wildcard is refused', () => {
+    const root = hardRoot();
+    for (const [why, tool, input] of [
+      ['a quote pair inside the name', 'Bash', { command: 'cat ' + D + N[0] + '""' + N.slice(1) }],
+      ['a backslash inside the name', 'Bash', { command: 'cat ' + D + N[0] + '\\' + N.slice(1) }],
+      ['a trailing star', 'Bash', { command: 'cat ' + D + N.slice(0, 2) + '*' }],
+      ['a question mark', 'Bash', { command: 'cat ' + D + '?' + N.slice(1) }],
+      ['a bracket set', 'Bash', { command: 'cat ' + D + '[' + N[0] + ']' + N.slice(1) }],
+      ['a search glob', 'Grep', { pattern: 'KEY', glob: D + N[0] + '*' }],
+      ['a file glob under any directory', 'Glob', { pattern: '**/' + D + N.slice(0, 2) + '*' }],
+      ['the same star in PowerShell', 'PowerShell', { command: 'Get-Content ' + D + N.slice(0, 2) + '*' }],
+    ]) refused(call(root, tool, input), why);
+  });
+
+  test('...and the wildcards of ordinary work are not', () => {
+    const root = hardRoot();
+    for (const [why, tool, input] of [
+      ['a star that cannot match a dotfile', 'Bash', { command: 'rm *.log' }],
+      ['a search for every script', 'Glob', { pattern: '**/*.js' }],
+      ['a regex that starts dot-star', 'Bash', { command: "sed -i 's/.*foo//' notes.txt" }],
+      ['another dotfile with a star', 'Bash', { command: 'cat .eslintrc*' }],
+      ['a wildcard ending in a twin suffix', 'Bash', { command: 'cat ' + D + N[0] + '*.example' }],
+    ]) passed(call(root, tool, input), why);
+  });
+
+  test('the BODY of a write may mention a guarded name; its path may not be one (MT-01)', () => {
+    const root = hardRoot();
+    passed(call(root, 'Write', { file_path: path.join(root, 'README.md'), content: 'copy the example to ' + DOTENV + ' and fill it in\n' }), 'a setup paragraph');
+    passed(call(root, 'Write', { file_path: path.join(root, '.gitignore'), content: DOTENV + '\n' + DOTENV + '.*\n' }), 'an ignore file');
+    passed(call(root, 'Edit', { file_path: path.join(root, 'compose.yml'), old_string: 'env_file: x', new_string: 'env_file: ' + DOTENV }), 'an in-place edit');
+    refused(call(root, 'Write', { file_path: path.join(root, DOTENV), content: 'A=1\n' }), 'a write TO the guarded file');
+    refused(call(root, 'Edit', { file_path: DOTENV + '.local', old_string: 'A=1', new_string: 'A=2' }), 'an edit OF one');
+    // A tool the dialect has no row for is opaque: nothing says which field is a body.
+    refused(call(root, 'NotebookEdit', { notebook_path: 'a.ipynb', new_source: 'open("' + DOTENV + '")' }), 'an opaque write naming it in a body');
+  });
+
+  test('a move into the archive is refused wherever the shell is standing', () => {
+    const root = hardRoot();
+    refused(call(root, 'Bash', { command: 'cd docs && mv tracks/t ' + 'archive/' }), 'a cd, then a relative move');
+    refused(call(root, 'Bash', { command: 'mv tracks/t ' + 'archive/' }, path.join(root, 'docs')), 'a relative move from a shell already in docs');
+    refused(call(root, 'Bash', { command: 'cp -r docs/tracks/t ' + ARCHIVE + '/ && rm -r docs/tracks/t' }), 'a copy in, then a delete');
+    passed(call(root, 'Bash', { command: 'cd docs && mv tracks/t/a.md tracks/t/b.md' }), 'a move that stays in the track');
+    passed(call(root, 'Bash', { command: 'mv tracks/t ' + 'archive/' }, os.tmpdir()), 'the same words from a shell outside the repo');
+  });
+
+  test('a gate line pasted into a track doc is refused; a sentence with a number in it is not', () => {
+    const root = hardRoot();
+    const into = (text) => call(root, 'Edit', { file_path: path.join(root, 'docs/tracks/t/handoff.md'), old_string: '# h', new_string: '# h\n' + text });
+    refused(into('GATE smoke pass=' + '42 fail=0 skipped=0'), 'a pasted verdict line');
+    passed(into('this phase added 20 tests'), 'a count in a sentence');
+    passed(into('the line ends pass=<n> fail=<n>'), 'the line format');
+  });
+});
