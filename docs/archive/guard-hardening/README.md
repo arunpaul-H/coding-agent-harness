@@ -1,18 +1,18 @@
 ---
 id: guard-hardening
 kind: track
-status: open
+status: complete
 read_when: "changing what a pre-tool guard refuses, adding a stop or spawn check, or pinning the skills the harness ships"
 trap_prefix: GH
 paths: ["scripts/harness/guards/**", "scripts/harness/hook.js", "scripts/harness/dialects/**", "tests/hook.test.js", "tests/docs.test.js"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js guard-hardening"
 last_verified: 2026-10-08
 max_age_days: 30
-closed_phase: 7
+closed_phase: 8
 closed_at: 2026-10-08
-gates_sha: b0a4adb7592cf03ed825f4f78d6f249e0d2f5cd1c0068b2210cba6b17c2670e7
-block_sha: 4c000271477f6c9f025d7f28765b717f7b01c1661ec1167fcada96b510bb09a8
-receipt: 1b970e736691abb2ff4b25c7b158041b6a8e2448e40604e84ec99dcb65e9a304
+gates_sha: 773544fc3470ec2fc095616f2613d0fcad93852be1cc0bbdb37ee4ee4019b30b
+block_sha: 30e59407c2df138a57c26a3087314d0a73fa66944fe037f0e865bd15132e22ea
+receipt: 34e86c7f6eb1cd4be32b5891b4cf2d578b4a1364a24b6ed00bbae40c564dca22
 ---
 
 # Guard hardening: close the gaps an agent reaches by accident
