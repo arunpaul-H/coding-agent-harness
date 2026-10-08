@@ -11,12 +11,6 @@
 
 | id | read when | status |
 |---|---|---|
-| [autonomy-modes-handoff](tracks/autonomy-modes/handoff.md) | starting or resuming autonomy-modes | open |
-| [autonomy-modes-plan](tracks/autonomy-modes/plan.md) | autonomy-modes: the phases, each with its exit command and first commit | open |
-| [autonomy-modes](tracks/autonomy-modes/README.md) | changing how a run mode is chosen or enforced, or stating who this harness is for | open |
-| [autonomy-modes-research-mechanisms-and-seat-economics](tracks/autonomy-modes/research/2026-10-06-mechanisms-and-seat-economics.md) | deciding what mechanism to add to this harness next, or why a flat-rate seat changes the answer | frozen |
-| [autonomy-modes-research-tool-enforcement-surfaces](tracks/autonomy-modes/research/2026-10-06-tool-enforcement-surfaces.md) | planning or reviewing how a guard, a session-start reporter or an autonomy mode behaves under a coding agent other than Claude Code | frozen |
-| [autonomy-modes-traps](tracks/autonomy-modes/traps.md) | something behaves oddly while working on autonomy-modes | open |
 | [project-reference-handoff](tracks/project-reference/handoff.md) | starting or resuming project-reference | open |
 | [project-reference-plan](tracks/project-reference/plan.md) | project-reference: the phases, each with its exit command and first commit | open |
 | [project-reference](tracks/project-reference/README.md) | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs | open |
@@ -48,7 +42,6 @@
 | [doc-standard](reference/DOC-STANDARD.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
-| [autonomy-modes](tracks/autonomy-modes/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js autonomy-modes` | 2026-10-06 |
 | [project-reference](tracks/project-reference/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference` | 2026-10-07 |
 
 ## Blocked: waiting on someone outside the code
@@ -57,4 +50,4 @@
 |---|---|---|
 | [project-reference](tracks/project-reference/README.md) | the owner: merge the pull request, then say whether to archive | changing how an adopter gets a project reference doc, the reference template, or the check that a doc has drifted from the files it governs |
 
-<!-- 17 live docs -->
+<!-- 11 live docs -->

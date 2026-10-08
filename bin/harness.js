@@ -117,6 +117,7 @@ const STATIC_IGNORES = [
   { pattern: '.claude/settings.local.json', probe: '.claude/settings.local.json', why: 'personal settings; may hold a credential' },
   { pattern: '.claude/.commit-hygiene-clearance.json', probe: '.claude/.commit-hygiene-clearance.json', why: 'a waiver bound to one tree state' },
   { pattern: 'node_modules/', probe: 'node_modules/example/index.js', why: 'dependency tree' },
+  { pattern: '.phase', probe: 'docs/tracks/example/.phase', why: 'a run-mode receipt: one person\'s approval of one phase on one machine' },
 ];
 function requiredIgnores(guarded) {
   const secrets = (guarded || []).map((p) => ({
@@ -1443,6 +1444,15 @@ function cmdDocs(argv) {
   if (argv.includes('--index')) return runScript(root, 'scripts/harness/docs-index.js', argv.filter((a) => a !== '--index'));
   return runScript(root, 'scripts/harness/guards/docs-lint.cjs', argv);
 }
+/** The launcher. It owns the terminal and its own refusals; this only finds it. No `> node` echo
+ *  line: what it prints is a question to a person, and then the tool's own screen. */
+function cmdRun(argv) {
+  const root = findRoot(process.cwd());
+  const script = path.join(root, 'scripts', 'harness', 'run.js');
+  if (!isFile(script)) return stop('no scripts/harness/run.js under ' + root, selfInvocation(root) + ' init');
+  const r = spawnSync(process.execPath, [script].concat(argv), { cwd: root, stdio: 'inherit' });
+  return r.status === null ? 1 : r.status;
+}
 
 /* ---------- reference new ----------
    ONE doc for ONE named subsystem, on request. It writes the frame (frontmatter the index and
@@ -1659,6 +1669,14 @@ const HELP = [
   '      the file exists, when the id is already used under the docs root, or when the name is not',
   '      kebab-case. --into names the repo, as for init. --dry-run prints the path and writes nothing.',
   '      It ends by naming the index command to run, and does not run it.',
+  '',
+  '  harness run [<mode>] [--tool <id>] [--track <id>] [--dry-run]',
+  '      Start a coding agent in a run mode (fully-auto, auto-edit, hitl, manual). The mode is chosen',
+  '      here, by a person, before the agent exists: with no mode it asks on the terminal, and with no',
+  '      terminal it refuses. The flags and the program come from the tool\'s registry row; a mode or',
+  '      a tool with nothing recorded is refused, never started bare. --dry-run starts nothing.',
+  '      --track records which phase of that track was approved, in a receipt beside its handoff.',
+  '      A receipt is an approval, so it is written only from a terminal.',
   '',
   '  harness host           Print the host-dependent inputs a gate verdict rests on. Always exits 0.',
   '  harness selftest       Run every --self-test in the repo; exit 1 if any fails.',
@@ -2070,6 +2088,7 @@ if (require.main === module) {
   else if (cmd === 'gates') code = cmdGates(rest);
   else if (cmd === 'docs') code = cmdDocs(rest);
   else if (cmd === 'reference') code = cmdReference(rest);
+  else if (cmd === 'run') code = cmdRun(rest);
   else if (cmd === 'host') { for (const l of hostReport(findRoot(process.cwd()))) console.log(l); code = 0; }
   else if (cmd === 'selftest' || cmd === 'self-test') code = cmdSelftest();
   else code = stop('unknown command `' + cmd + '`', 'harness --help');

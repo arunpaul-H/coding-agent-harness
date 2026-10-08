@@ -94,6 +94,7 @@ failure, the mechanism, why a mechanism and not a rule, the cost and the limits.
 
 ## What this harness does not claim
 
+- **It is written for flat-rate subscription seats.** A seat rations quota and context, not dollars, so costs here are bytes and repeated work; per-token billing and organisation-wide policy are out of scope (root `README.md`).
 - **It has no control arm.** Nobody has run the same work with the harness off. Its costs are
   measured; its effect on output quality is argued from the failures it ended, not measured.
 - **A green verdict proves shape, not truth.** The gates prove that the declared checks ran, that

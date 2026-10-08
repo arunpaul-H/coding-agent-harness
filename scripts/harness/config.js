@@ -113,7 +113,16 @@ const DEFAULTS = {
   // with no registry; what holds an id to a row is `tools.js --check`, and the context gate,
   // which refuses to measure an enabled id the registry cannot wire.
   tools: { enabled: ['claude-code'] },
+  // The run mode the launcher OFFERS when it asks. null: it offers none. It is a suggestion a
+  // person still has to accept at a terminal, never a mode in force: this file is one the agent
+  // can edit, and a file the agent can edit cannot approve anything for the agent.
+  mode: { default: null },
 };
+
+/* The run modes, most to least autonomous: the keys of MODES in mode.js. Spelled here because
+   this file loads with no other harness file beside it; tests/tools.test.js holds the two lists
+   to each other. */
+const RUN_MODES = ['fully-auto', 'auto-edit', 'hitl', 'manual'];
 
 /* The one doc the harness places by CONVENTION rather than by a config key: the lead-only
    routing reference, `<docsRoot>/reference/routing/README.md`. Two scripts need the path and
@@ -129,8 +138,9 @@ const routingDoc = (cfg) => String(cfg.project.docsRoot).replace(/\\/g, '/').rep
 // its default instead of your setting. `_readme` is a key, not a comment, because
 // JSON has no comments and the explanations have to live somewhere.
 const TOP_LEVEL = ['$schema', '_readme', 'project', 'gates', 'artifacts', 'env',
-  'commitHygiene', 'docs', 'context', 'tools'];
+  'commitHygiene', 'docs', 'context', 'tools', 'mode'];
 const TOOLS_KEYS = ['_readme', 'enabled'];
+const MODE_KEYS = ['_readme', 'default'];
 const GATE_KEYS = ['_readme', 'name', 'command', 'adapter', 'optional', 'gateLine'];
 
 /* ---------- deep merge ----------
@@ -299,6 +309,19 @@ function validate(cfg) {
         else if (seenTools.has(id)) errs.push('tools.enabled[' + i + ']: duplicate tool id `' + id + '`');
         else seenTools.add(id);
       });
+    }
+  }
+
+  if (!isPlain(cfg.mode)) errs.push('`mode` must be an object { default } — omit the key and the launcher offers no mode');
+  else {
+    // Closed like `tools`: `defualt` would otherwise leave no suggestion in force while the
+    // file reads as if it had made one.
+    for (const k of Object.keys(cfg.mode)) {
+      if (!MODE_KEYS.includes(k)) errs.push('mode: unknown key `' + k + '` (allowed: ' + MODE_KEYS.join(', ') + ')');
+    }
+    const d = cfg.mode.default;
+    if (d !== null && !RUN_MODES.includes(d)) {
+      errs.push('mode.default must be one of ' + RUN_MODES.join(', ') + ', or null (got ' + JSON.stringify(d) + ')');
     }
   }
 
@@ -479,6 +502,28 @@ function selfTest() {
     write(Object.assign({}, minimal, { tools: { enabled: ['Tool A'] } }));
     ok('a tool id that is not kebab-case is rejected', /tools\.enabled\[0\] must be a kebab-case tool id/.test(String((err() || {}).message)));
 
+    // The mode section. Absent means the launcher suggests nothing; a wrong shape is a stop.
+    write(minimal);
+    eq('an absent mode key means no suggested mode', fresh().mode.default, null);
+    write(Object.assign({}, minimal, { mode: {} }));
+    eq('an empty mode section suggests nothing either', fresh().mode.default, null);
+    for (const m of RUN_MODES) {
+      write(Object.assign({}, minimal, { mode: { default: m } }));
+      eq('mode.default `' + m + '` is carried through', fresh().mode.default, m);
+    }
+    write(Object.assign({}, minimal, { mode: { default: 'yolo' } }));
+    ok('a mode that is not one is rejected', /mode\.default must be one of fully-auto, auto-edit, hitl, manual, or null/.test(String((err() || {}).message)));
+    write(Object.assign({}, minimal, { mode: { default: '' } }));
+    ok('an empty mode is rejected rather than read as unset', /mode\.default must be one of/.test(String((err() || {}).message)));
+    write(Object.assign({}, minimal, { mode: 'hitl' }));
+    ok('a mode section that is not an object is rejected', /`mode` must be an object/.test(String((err() || {}).message)));
+    write(Object.assign({}, minimal, { mode: { defualt: 'hitl' } }));
+    const badModeKey = err();
+    ok('a misspelled mode sub-key is rejected rather than ignored', badModeKey && /mode: unknown key `defualt`/.test(badModeKey.message));
+    ok('...with a fix line', badModeKey && isStr(badModeKey.fix));
+    write(Object.assign({ modes: { default: 'hitl' } }, minimal));
+    ok('the section misspelled at the top level is rejected too', /unknown top-level key\(s\) `modes`/.test(String((err() || {}).message)));
+
     // SOFT MODE. A hook that cannot read the config must degrade, not throw: an
     // exception out of a PreToolUse hook takes the whole session with it.
     fs.unlinkSync(path.join(dir, CONFIG_NAME));
@@ -532,7 +577,7 @@ function selfTest() {
   process.exit(fails.length ? 1 : 0);
 }
 
-module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, ROUTING_DOC, routingDoc };
+module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, MODE_KEYS, RUN_MODES, ROUTING_DOC, routingDoc };
 
 if (require.main === module) {
   if (process.argv.slice(2).includes('--self-test')) selfTest();

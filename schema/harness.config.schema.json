@@ -264,6 +264,24 @@
           "default": ["claude-code"]
         }
       }
+    },
+
+    "mode": {
+      "description": "The run mode the launcher (`harness run`) offers when it asks. A suggestion only: a person still accepts it at a terminal, and with no terminal the launcher refuses. It is never a mode in force, because this file is one the agent can edit.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "default": {
+          "description": "The mode offered on a bare Enter, or null to offer none. An unknown sub-key or an unknown mode is a hard stop, never a fallback.",
+          "enum": ["fully-auto", "auto-edit", "hitl", "manual", null],
+          "default": null
+        }
+      }
     }
   },
 

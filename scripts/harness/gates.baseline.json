@@ -4,26 +4,26 @@
     "which refuses unless the suite is green. A re-baseline is a deliberate act, so its",
     "commit subject must start `gates:` — enforced at commit time, not here."
   ],
-  "generatedAt": "2026-10-08T00:02:58.834Z",
-  "commit": "94f0475a02daf67a613aed527310d6731c2a000c",
+  "generatedAt": "2026-10-07T22:10:51.799Z",
+  "commit": "577a12ea945c1ded718f2ba37fa45b193d7c14ab",
   "dirty": false,
   "node": "v24.19.0",
   "gates": {
     "test": {
-      "pass": 631,
+      "pass": 656,
       "fail": 0,
       "skipped": 0,
-      "total": 631,
+      "total": 656,
       "exit": 0,
-      "ms": 262290
+      "ms": 359174
     },
     "docs": {
-      "pass": 644,
+      "pass": 572,
       "fail": 0,
       "skipped": 1,
-      "total": 645,
+      "total": 573,
       "exit": 0,
-      "ms": 2841
+      "ms": 1613
     },
     "context": {
       "pass": 6,
@@ -31,7 +31,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 213
+      "ms": 504
     },
     "hygiene": {
       "pass": 7,
@@ -39,7 +39,7 @@
       "skipped": 0,
       "total": 7,
       "exit": 0,
-      "ms": 191
+      "ms": 471
     },
     "skills": {
       "pass": 2,
@@ -47,7 +47,7 @@
       "skipped": 0,
       "total": 2,
       "exit": 0,
-      "ms": 110
+      "ms": 235
     },
     "tools": {
       "pass": 15,
@@ -55,7 +55,39 @@
       "skipped": 0,
       "total": 15,
       "exit": 0,
-      "ms": 122
+      "ms": 229
+    },
+    "mode": {
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "total": 1,
+      "exit": 0,
+      "ms": 206
+    },
+    "effects": {
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "total": 1,
+      "exit": 0,
+      "ms": 4871
+    },
+    "carveouts": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "total": 6,
+      "exit": 0,
+      "ms": 433
+    },
+    "peers": {
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "total": 1,
+      "exit": 0,
+      "ms": 859
     },
     "reproducible-build": {
       "pass": 0,

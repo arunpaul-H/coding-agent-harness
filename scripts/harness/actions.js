@@ -123,11 +123,10 @@
    different depths silently keep two ledgers, neither sees the other's pending row, and both
    push. An unresolved seam is a hard stop in this repo, not a quiet default.
 
-   NOT IN THE SUITE YET, said here rather than left for a reader to discover: harness.config.json's
-   `gates` array does not list `effects`, and there is no tests/ entry for this file. Its
-   `--self-test` is therefore its only test, and by this repo's own rule (untested = prose) this
-   gate is prose with a GATE line attached until it is registered. Registering it is a change to
-   harness.config.json and tests/, both outside this file.
+   IN THE SUITE AS A SELF-TEST ONLY, since 2026-10-07: this repo's `effects` gate runs
+   `--self-test` and reads the exit status, and tests/mode-gates.test.js runs it too. That grades
+   THIS SCRIPT. No gate runs --check: there is no ledger in the repo to grade, and a gate over a
+   ledger that does not exist would be one more declared skip in every command line.
 
    Zero dependencies (Node built-ins only). Node >= 20. Windows is a first-class box: every
    path goes through node:path and every read tolerates CRLF.
