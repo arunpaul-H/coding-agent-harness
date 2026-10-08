@@ -6,7 +6,16 @@
  * nothing else:
  *
  *   node scripts/harness/hook.js --tool <id> --event <pre-tool|session-start|prompt-submit|stop>
+ *   node scripts/harness/hook.js --tool <id> --event worktree-create
  *   node scripts/harness/hook.js --self-test
+ *
+ * THE FIFTH EVENT IS NOT A VERDICT. `worktree-create` is the agent's own worktree flag asking
+ * WHERE its folder is: the answer is a path on stdout, alone, and no guard has anything to
+ * decide. So it runs no handler list and no dialect emit(): the payload goes to
+ * scripts/harness/worktree.js, which creates the workspace exactly as `--new` does and returns
+ * the path. It is here, and not a second registered script, because the installer recognises
+ * its own registrations by a command that runs THIS file. It is honoured only for a registry
+ * row whose `worktreeCreate` cell is true; for any other row it is a refusal, exit 2.
  *
  * WHAT IT DOES, in order: looks `<id>` up in the tool registry (scripts/harness/tools.json),
  * loads that row's dialect module from scripts/harness/dialects/, has the dialect parse stdin
@@ -67,6 +76,8 @@ const path = require('node:path');
 const EVENTS = ['pre-tool', 'session-start', 'prompt-submit', 'stop'];
 /** The one event whose verdict cannot refuse anything: a session starts whatever was found. */
 const REPORT_ONLY = 'session-start';
+/** The one event that answers with a path instead of a verdict. It has no handler list. */
+const WORKSPACE = 'worktree-create';
 
 /* ── the guards, loaded when first needed ───────────────────────────────────── */
 
@@ -79,6 +90,7 @@ const phaseGuard = () => require('./guards/phase-guard.cjs');
 const skillVerify = () => require('./guards/skill-verify.cjs');
 const docsLint = () => require('./guards/docs-lint.cjs');
 const branchSync = () => require('./branch-sync.js');
+const worktree = () => require('./worktree.js');
 
 /**
  * The declarative deny list that sits in front of the hooks, for the secret-file guard's
@@ -129,7 +141,7 @@ const HANDLERS = {
   ],
 
   /* Reporters. None can deny; each is silent when it has nothing to say. Same order as the
-     four separate registrations they replace. */
+     four separate registrations they replace; the fifth, the workspace line, came later. */
   'session-start': [
     {
       name: 'skill-verify',
@@ -150,6 +162,12 @@ const HANDLERS = {
       name: 'branch-sync',
       gather: () => ({ ev: branchSync().evaluate(process.env.BRANCH_SYNC_REF || null) }),
       decide: (event, state) => branchSync().decideSessionStart(event, state),
+    },
+    {
+      // Who else has a folder of this repo on this computer. One line, silent with none.
+      name: 'worktree',
+      gather: (event, ctx) => ({ others: worktree().others(ctx.root) }),
+      decide: (event, state) => worktree().decideSessionStart(event, state),
     },
   ],
 
@@ -246,7 +264,7 @@ function parseArgs(argv) {
   }
   if (!out.tool && !out.problems.some((p) => p.startsWith('--tool'))) out.problems.push('--tool <id> is missing');
   if (!out.event && !out.problems.some((p) => p.startsWith('--event'))) out.problems.push('--event is missing');
-  else if (out.event && !EVENTS.includes(out.event)) out.problems.push('--event `' + out.event + '` is not one of ' + EVENTS.join(', '));
+  else if (out.event && out.event !== WORKSPACE && !EVENTS.includes(out.event)) out.problems.push('--event `' + out.event + '` is not one of ' + EVENTS.join(', '));
   return out;
 }
 
@@ -299,7 +317,18 @@ function execute(o) {
   try { found = dialectFor(o.readRegistry(), args.tool, o.loadDialect); } catch (e) { return refuse(oneLine(e)); }
   const { row, dialect } = found;
   const kind = args.event;
-  const list = (o.handlers && o.handlers[kind]) || [];
+  /* A PATH, NOT A VERDICT: see the header. Decided before the payload is parsed as a tool
+     call, because it is not one. Whatever goes wrong is a refusal with nothing on stdout: the
+     agent reads stdout as the folder to start in, and half a path is a folder. */
+  if (kind === WORKSPACE) {
+    if (row.worktreeCreate !== true) return refuse('the registry row `' + row.id + '` does not establish a worktree-create hook (`worktreeCreate` is not true), so nothing is routed for it.');
+    let out;
+    try { out = o.workspace(o.stdin, row); } catch (e) { return refuse('the workspace could not be created (' + oneLine(e) + ').'); }
+    if (!out || typeof out !== 'object') return refuse('the workspace script returned nothing.');
+    const code = Number.isInteger(out.exitCode) ? out.exitCode : 2;
+    return { stdout: code === 0 ? String(out.stdout || '') : '', stderr: String(out.stderr || ''), exitCode: code === 0 ? 0 : 2 };
+  }
+  const list =(o.handlers && o.handlers[kind]) || [];
   /* THE DIALECT SPELLS, THIS FILE ENFORCES. A deny is exit 2 whatever emit() returned, and a
      deny or an ask that emit() threw on, returned nothing for, or spelled as silence is a
      refusal on stderr. Only a verdict that refuses nothing takes the dialect's exit code, and
@@ -415,6 +444,8 @@ function liveContext(row, dialect) {
 
 const liveRegistry = () => require('./tools.js').readRegistry();
 const liveDialect = (name) => require(path.join(__dirname, 'dialects', name + '.js'));
+// Loaded when the event arrives: a pre-tool call never pays for the workspace script.
+const liveWorkspace = (stdin) => require('./worktree.js').fromHook(stdin);
 
 /* ── self-test ──────────────────────────────────────────────────────────────── */
 
@@ -641,11 +672,30 @@ function selfTest() {
   eq('deny layer: a row that keeps its hooks elsewhere has none the harness can read', denyLayerOf(ctxOf({ hookConfig: '.other/hooks.json' }, '{}')), { denyLayer: false });
   eq('deny layer: a dialect that names no permissions file has none', denyLayerOf({ row: REG.tools[0], dialect: {} }), { denyLayer: false });
 
+  /* THE WORKSPACE EVENT: a path on stdout, alone, and only for a row that establishes it. */
+  const wt = ['--tool', 'tool-w', '--event', 'worktree-create'];
+  const REGW = { dialects: ['wire-a'], tools: REG.tools.concat({ id: 'tool-w', dialect: 'wire-a', hookConfig: '.tool-w/hooks.json', worktreeCreate: true }) };
+  const got = [];
+  const ws = (answer) => ({ readRegistry: () => REGW, workspace: (stdin, row) => { got.push([stdin, row.id]); if (answer instanceof Error) throw answer; return answer; } });
+  eq('args: worktree-create is an event the entry takes', parseArgs(wt).problems, []);
+  eq('it is not one of the four that run handlers', EVENTS.includes(WORKSPACE), false);
+  const made = run(wt, '{"name":"fix-a"}', { 'pre-tool': [h('g', { deny: true, reason: 'no' })] }, ws({ stdout: '/r/fix-a\n', stderr: 'CREATED\n', exitCode: 0 }));
+  eq('the path is stdout, whole and alone; the rest is stderr', made, { stdout: '/r/fix-a\n', stderr: 'CREATED\n', exitCode: 0 });
+  eq('...the payload reached the workspace script unparsed, with the row', got, [['{"name":"fix-a"}', 'tool-w']]);
+  const refusedWs = run(wt, '{}', {}, ws({ stdout: '/half/a/path', stderr: 'WORKSPACE REFUSED: why\n', exitCode: 1 }));
+  eq('a refusal is exit 2 with NOTHING on stdout, whatever the script printed', refusedWs, { stdout: '', stderr: 'WORKSPACE REFUSED: why\n', exitCode: 2 });
+  const wsThrew = run(wt, '{}', {}, ws(new Error('boom')));
+  eq('a script that throws is a refusal', [wsThrew.stdout, wsThrew.exitCode, /could not be created \(boom\)/.test(wsThrew.stderr)], ['', 2, true]);
+  eq('...and so is one that returns nothing', run(wt, '{}', {}, ws(null)).exitCode, 2);
+  const noCell = run(['--tool', 'tool-a', '--event', 'worktree-create'], '{"name":"x"}', {}, ws({ stdout: '/r/x\n', stderr: '', exitCode: 0 }));
+  eq('a row that does not establish the event gets a refusal, and the script is not called', [noCell.stdout, noCell.exitCode, /worktreeCreate/.test(noCell.stderr), got.length], ['', 2, true, 4]);
+  eq('an unknown tool id is refused for this event too', run(['--tool', 'tool-nope', '--event', 'worktree-create'], '{}', {}, ws(null)).exitCode, 2);
+
   /* THE REAL TABLE. Order is the property: it is the order the guards were registered in. */
   eq('the table has one list per event and no other key', Object.keys(HANDLERS).sort(), EVENTS.slice().sort());
   eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard']);
   eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write']);
-  eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync']);
+  eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync', 'worktree']);
   eq('prompt-submit and stop are lists, ready for a handler', [Array.isArray(HANDLERS['prompt-submit']), Array.isArray(HANDLERS.stop)], [true, true]);
   eq('every handler is { name, decide } with gather a function where present',
     EVENTS.every((e) => HANDLERS[e].every((x) => typeof x.name === 'string' && typeof x.decide === 'function' && (x.gather === undefined || typeof x.gather === 'function'))), true);
@@ -729,7 +779,7 @@ function main() {
   return readStdin((stdin) => {
     let out;
     try {
-      out = execute({ argv, stdin, readRegistry: liveRegistry, loadDialect: liveDialect, handlers: HANDLERS, context: liveContext });
+      out = execute({ argv, stdin, readRegistry: liveRegistry, loadDialect: liveDialect, handlers: HANDLERS, context: liveContext, workspace: liveWorkspace });
     } catch (e) {
       out = refuse('the hook entry itself failed (' + oneLine(e) + ').');
     }
@@ -738,6 +788,6 @@ function main() {
   });
 }
 
-module.exports = { execute, parseArgs, runGate, runReport, dialectFor, denyLayerOf, HANDLERS, EVENTS };
+module.exports = { execute, parseArgs, runGate, runReport, dialectFor, denyLayerOf, HANDLERS, EVENTS, WORKSPACE };
 
 if (require.main === module) main();

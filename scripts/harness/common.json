@@ -79,6 +79,7 @@
       ".claude/settings.local.json",
       ".claude/.commit-hygiene-clearance.json",
       "node_modules/example/index.js",
+      ".claude/worktrees/example/file.txt",
       ".env.local"
     ]
   },

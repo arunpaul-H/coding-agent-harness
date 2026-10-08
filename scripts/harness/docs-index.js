@@ -59,6 +59,12 @@ const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '');
    index: a row here is an invitation to read, and nothing in the archive is live. The doc linter
    uses the same convention for the same reason. */
 const ARCHIVE = norm(DOCS) + '/archive';
+/* A workspace's announce note (`<docsRoot>/workspaces/<task>.md`, written by worktree.js) is
+   absent too, for a different reason: it is read by `worktree.js --list` straight out of git and
+   is removed when the workspace lands. A row here would make this GENERATED file one that every
+   plain task rewrites, which is a merge conflict per task for no reader. The linter still grades
+   the note; only the routing skips it. The folder name is worktree.js's NOTES_DIR. */
+const NOTES = norm(DOCS) + '/workspaces';
 /* The index routes to an ENTRY POINT, not to every file in a folder. Split residue — `NN-slug.md`
    and its prefixed forms `plan-NN-`, `qa-NN-` — is listed by its own folder README instead. One
    row per entry point is the whole point of replacing the read-map; forty rows for one doc that
@@ -88,7 +94,7 @@ function sections(docsRoot, tracksDir, readdir) {
   const out = [{ dir: tracks, title: 'Tracks: open work' }];
   for (const d of readdir(docs)) {
     const p = docs + '/' + d;
-    if (p === tracks || p === ARCHIVE) continue;
+    if (p === tracks || p === ARCHIVE || p === NOTES) continue;
     out.push({ dir: p, title: titleFor(p) });
   }
   // A tracks dir nested inside the docs root is already first; one configured elsewhere is too.
@@ -119,7 +125,7 @@ function collect(scope) {
   const seen = new Set();
   for (const s of scope) {
     for (const f of walk(s.dir)) {
-      if (f.startsWith(ARCHIVE + '/') || RESIDUE.test(f) || seen.has(f)) continue;
+      if (f.startsWith(ARCHIVE + '/') || f.startsWith(NOTES + '/') || RESIDUE.test(f) || seen.has(f)) continue;
       seen.add(f);
       if (!fs.existsSync(resolve(f))) continue;
       const fm = parseFrontmatter(fs.readFileSync(resolve(f), 'utf8')) || {};
@@ -286,11 +292,12 @@ function selfTest() {
   eq('link: a non-default docs root', docLink('prose/reference/x.md', 'prose'), 'reference/x.md');
   // The sections, derived from the config. The hazard being pinned is a tracks dir configured
   // OUTSIDE the docs root, and a docs folder nobody listed in this file.
-  const dirs = { docs: ['archive', 'explorations', 'reference', 'tracks', 'oddments'] };
+  const dirs = { docs: ['archive', 'explorations', 'reference', 'tracks', 'oddments', 'workspaces'] };
   const readdir = (d) => dirs[d] || [];
   const inside = sections('docs', 'docs/tracks', readdir).map((s) => s.dir);
   eq('sections: tracks first', inside[0], 'docs/tracks');
   eq('sections: the archive is absent', inside.includes('docs/archive'), false);
+  eq('sections: the workspace notes are absent, so a plain task never rewrites the index', inside.includes(NOTES), false);
   eq('sections: tracks is not listed twice', inside.filter((d) => d === 'docs/tracks').length, 1);
   eq('sections: an unknown docs folder is still routed', inside.includes('docs/oddments'), true);
   eq('sections: an unknown folder is titled after itself', sections('docs', 'docs/tracks', readdir).find((s) => s.dir === 'docs/oddments').title, 'Oddments');

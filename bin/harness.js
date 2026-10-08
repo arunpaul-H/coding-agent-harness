@@ -32,6 +32,7 @@
          harness doctor [--root <dir>] [--no-self-tests]
          harness gates [--check] [--print-allow-skip [--with <gate>=<n>]] [...flags for gates.js]
          harness docs [--index] [...flags for the doc scripts]
+         harness worktree new <name> [--track] [--from <ref>] | list | land <name> | prune [--yes]
          harness host
          harness selftest
          harness --help | --self-test
@@ -118,6 +119,7 @@ const STATIC_IGNORES = [
   { pattern: '.claude/.commit-hygiene-clearance.json', probe: '.claude/.commit-hygiene-clearance.json', why: 'a waiver bound to one tree state' },
   { pattern: 'node_modules/', probe: 'node_modules/example/index.js', why: 'dependency tree' },
   { pattern: '.phase', probe: 'docs/tracks/example/.phase', why: 'a run-mode receipt: one person\'s approval of one phase on one machine' },
+  { pattern: '.claude/worktrees/', probe: '.claude/worktrees/example/file.txt', why: 'where an agent\'s own worktree flag puts a folder when no hook routes it: a second tree inside this one' },
 ];
 function requiredIgnores(guarded) {
   const secrets = (guarded || []).map((p) => ({
@@ -1346,8 +1348,25 @@ function doctor(root, opts) {
   else {
     if (!gaps.length) add('OK', '.gitignore', requiredIgnores(guarded).length + ' required path(s) ignored');
     for (const g of gaps) add('MISSING', '.gitignore ' + g.pattern, g.probe + ' is not ignored (' + g.why + ')', 'echo "' + g.pattern + '" >> .gitignore');
+    // 10. WHERE A WORKSPACE FOLDER GOES. A report: it is never MISSING or DRIFTED, and nothing
+    // here moves a folder. Under the sibling layout it prints the steps to adopt the parent one.
+    const layout = workspaceLayout(root);
+    if (layout) add('OK', 'workspace layout', layout);
   }
   return rows;
+}
+
+/** The layout line of the health check, or null when the workspace script cannot say (no
+ *  script, no repository, a config it refuses). It reads; it never creates or moves anything. */
+function workspaceLayout(root) {
+  let W;
+  try { W = require(path.join(PKG_ROOT, 'scripts', 'harness', 'worktree.js')); } catch { return null; }
+  let r;
+  try { r = W.list(root); } catch { return null; }
+  if (!r || !r.ok || !r.layout) return null;
+  if (r.layout.problem) return r.layout.kind + ' — ' + r.layout.problem;
+  const where = r.layout.kind + ': a new workspace goes under ' + r.layout.root + ' (' + r.rows.length + ' checkout(s) today)';
+  return r.layout.kind === 'sibling' ? where + '\n        ' + W.ADVICE.join('\n        ') : where;
 }
 
 function cmdDoctor(argv) {
@@ -1451,6 +1470,19 @@ function cmdRun(argv) {
   const script = path.join(root, 'scripts', 'harness', 'run.js');
   if (!isFile(script)) return stop('no scripts/harness/run.js under ' + root, selfInvocation(root) + ' init');
   const r = spawnSync(process.execPath, [script].concat(argv), { cwd: root, stdio: 'inherit' });
+  return r.status === null ? 1 : r.status;
+}
+
+/** Workspaces: one folder per agent. The script owns every decision and refusal; this only
+ *  finds it and spells `new`, `list`, `land` and `prune` as its flags. It runs in the CALLER'S directory, not
+ *  the root, because which checkout the caller stands in is one of its inputs. */
+function cmdWorktree(argv) {
+  const root = findRoot(process.cwd());
+  const script = path.join(root, 'scripts', 'harness', 'worktree.js');
+  if (!isFile(script)) return stop('no scripts/harness/worktree.js under ' + root, selfInvocation(root) + ' init');
+  const verbs = { new: '--new', list: '--list', land: '--land', prune: '--prune' };
+  const args = argv.length && verbs[argv[0]] ? [verbs[argv[0]]].concat(argv.slice(1)) : argv;
+  const r = spawnSync(process.execPath, [script].concat(args), { cwd: process.cwd(), stdio: 'inherit' });
   return r.status === null ? 1 : r.status;
 }
 
@@ -1677,6 +1709,16 @@ const HELP = [
   '      a tool with nothing recorded is refused, never started bare. --dry-run starts nothing.',
   '      --track records which phase of that track was approved, in a receipt beside its handoff.',
   '      A receipt is an approval, so it is written only from a terminal.',
+  '',
+  '  harness worktree new <name> [--track] [--from <ref>]',
+  '  harness worktree list',
+  '  harness worktree land <name>',
+  '  harness worktree prune [--yes]',
+  '      One folder per agent, each on its own branch over one shared history, so several agents',
+  '      can work in one project on one computer. `new` makes the folder and a branch of the same',
+  '      name, cut from the source branch, OUTSIDE every checkout; --track also scaffolds a track.',
+  '      `list` prints every checkout and where the next one would go. Start the agent inside the',
+  '      new folder. It never merges, pushes, removes a folder or deletes a branch.',
   '',
   '  harness host           Print the host-dependent inputs a gate verdict rests on. Always exits 0.',
   '  harness selftest       Run every --self-test in the repo; exit 1 if any fails.',
@@ -2089,6 +2131,7 @@ if (require.main === module) {
   else if (cmd === 'docs') code = cmdDocs(rest);
   else if (cmd === 'reference') code = cmdReference(rest);
   else if (cmd === 'run') code = cmdRun(rest);
+  else if (cmd === 'worktree') code = cmdWorktree(rest);
   else if (cmd === 'host') { for (const l of hostReport(findRoot(process.cwd()))) console.log(l); code = 0; }
   else if (cmd === 'selftest' || cmd === 'self-test') code = cmdSelftest();
   else code = stop('unknown command `' + cmd + '`', 'harness --help');

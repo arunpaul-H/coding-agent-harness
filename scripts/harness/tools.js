@@ -62,7 +62,7 @@ const REGISTRY_REL = 'scripts/harness/tools.json';
 
 const REQUIRED = ['id', 'policy', 'nested', 'hookConfig', 'dialect', 'sessionStart', 'projectHooks',
   'tier', 'evidence', 'asOf', 'source'];
-const OPTIONAL = ['name', 'command', 'notes', 'skills', 'modes', 'bin'];
+const OPTIONAL = ['name', 'command', 'notes', 'skills', 'modes', 'bin', 'worktreeCreate'];
 /* The harness's run modes, most to least autonomous. They are the keys of MODES in mode.js, which
    this script cannot load: it is copied beside the config loader alone into places that carry no
    other harness file. tests/tools.test.js holds the two lists to each other. */
@@ -159,6 +159,13 @@ function checkRow(row, dialects) {
   for (const k of ['sessionStart', 'projectHooks']) {
     if (has(k) && row[k] !== null && typeof row[k] !== 'boolean') bad(k, 'must be true, false or null (got ' + show(row[k]) + ')');
   }
+  // The hook that answers the tool's own worktree flag with a folder path. The entry point
+  // routes it only for a row where this is true, so it is a claim about a tool that was run:
+  // true needs a hook the harness can wire, and anything but a boolean is not an answer.
+  if (has('worktreeCreate')) {
+    if (typeof row.worktreeCreate !== 'boolean') bad('worktreeCreate', 'must be true or false (got ' + show(row.worktreeCreate) + ') — leave the key out when it is not established');
+    else if (row.worktreeCreate === true && !(isStr(row.hookConfig) && isStr(row.dialect))) bad('worktreeCreate', 'true needs a hookConfig and a dialect: with neither there is no hook to route the worktree flag through');
+  }
   if (has('tier') && !TIERS.includes(row.tier)) bad('tier', 'unknown value ' + show(row.tier) + ' (one of ' + oneOf(TIERS) + ')');
   if (has('evidence') && !EVIDENCE.includes(row.evidence)) bad('evidence', 'unknown value ' + show(row.evidence) + ' (one of ' + oneOf(EVIDENCE) + ')');
   if (has('asOf') && !isDate(row.asOf)) bad('asOf', 'must be the YYYY-MM-DD the evidence was gathered (got ' + show(row.asOf) + ')');
@@ -181,6 +188,7 @@ function checkRow(row, dialects) {
     }
     if (has('modes')) bad('modes', 'tier `inherits` is a model, not an agent: it has no command line to pass a flag to, so leave the key out');
     if (has('bin')) bad('bin', 'tier `inherits` is a model, not an agent: it has no program of its own to start, so leave the key out');
+    if (has('worktreeCreate')) bad('worktreeCreate', 'tier `inherits` is a model, not an agent: it has no worktree flag of its own, so leave the key out');
   } else if (TIERS.includes(row.tier)) {
     if (has('policy') && row.policy === null) bad('policy', 'only tier `inherits` may have no policy route');
   }
@@ -761,6 +769,12 @@ function selfTest() {
     eq('bin: ' + show(v) + ' is refused', rowFields(good({ bin: v })), ['bin']);
   }
   eq('bin: an `inherits` row has no program', rowFields(good(Object.assign({}, inherits, { bin: 'tool-a' }))), ['bin']);
+
+  // worktreeCreate: the cell the hook entry routes the tool's own worktree flag on.
+  eq('worktreeCreate: true on a wired row is clean, and so is false', [rowFields(good({ worktreeCreate: true })), rowFields(good({ worktreeCreate: false }))], [[], []]);
+  for (const v of ['yes', null, 1]) eq('worktreeCreate: ' + show(v) + ' is refused', rowFields(good({ worktreeCreate: v })), ['worktreeCreate']);
+  eq('worktreeCreate: true with no hook to route through is refused', rowFields(good(Object.assign({}, backstop, { worktreeCreate: true }))), ['worktreeCreate']);
+  eq('worktreeCreate: an `inherits` row has no worktree flag', rowFields(good(Object.assign({}, inherits, { worktreeCreate: false }))), ['worktreeCreate']);
   eq('enabled rows: in the config\'s order, an id with no row left out',
     enabledRows(reg([sharedA, ownRoot]), ['tool-u', 'tool-z', 'tool-s']).map((r) => r.id), ['tool-u', 'tool-s']);
   eq('body: text is a body', hasPolicyBody('# Policy\n'), true);

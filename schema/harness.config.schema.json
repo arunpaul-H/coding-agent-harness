@@ -282,6 +282,43 @@
           "default": null
         }
       }
+    },
+
+    "worktrees": {
+      "description": "Where a workspace folder goes and what its branch is called (`harness worktree new`). A workspace is a linked git worktree: one folder per agent, each on its own branch over one shared history. Absent, both keys are derived, so a fresh clone needs no edit here.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "root": {
+          "description": "The folder new workspaces are created in, resolved against the main checkout, or null to derive it: the parent folder when the main checkout is a folder named `main` inside one, else a sibling `<repo>.worktrees`. It may not be inside any checkout; that is refused when a workspace is created.",
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null
+        },
+        "branchPrefix": {
+          "description": "Prepended to a workspace name to make its branch name. Empty means the branch is the name.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]*$",
+          "default": ""
+        },
+        "carry": {
+          "description": "Paths copied from the main checkout into every new workspace. Only a path that exists there AND that git ignores is copied: a tracked file is already in the new folder. Each is relative to the checkout, with no `..` and no leading slash or drive. A path the secret guard's `env.guarded` patterns match is refused unless a live dated entry in `env.openCarveOuts` covers it. Empty means a new folder holds the tracked files and nothing else.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "setup": {
+          "description": "One command line run in a new workspace folder after it is created and its carried files are in place (an install step, for example), or null to run nothing. Its output goes to stderr. A command that fails is reported and the folder is kept.",
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null
+        }
+      }
     }
   },
 

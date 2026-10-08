@@ -61,8 +61,9 @@ prints one line for the person at the keyboard and puts nothing into agent conte
 **The rules every hook here obeys.** Each is a failure that happened.
 
 - **A file, never an inline one-liner.** The form is
-  `node "$CLAUDE_PROJECT_DIR/scripts/harness/hook.js" --tool <id> --event <event>`. A one-liner
-  handed to a shell is word-split and its arrows become redirects.
+  `node "${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js" --tool <id> --event <event>`. A one-liner
+  handed to a shell is word-split and its arrows become redirects. The variable keeps its braces:
+  PowerShell reads the bare dollar form as an undefined variable and the hook never loads.
 - **The default tool's pre-tool matcher includes `mcp__.*`.** A verb list or a named set of
   servers is silent about every server added later.
 - **An unparseable payload is an ask, never a silent allow.** The ask names the payload's keys

@@ -102,6 +102,9 @@ node agent-harness/bin/harness.js init --into <your-repo> --dry-run   # the plan
 node agent-harness/bin/harness.js init --into <your-repo>
 ```
 
+Cloning a project you will run several agents in? Clone it as `git clone <url> <project>/main`:
+every workspace then sits beside `main/` in one folder. A plain clone works too (step 5 below).
+
 `init` never overwrites a file without `--force`, and it copies no numbers measured on another
 repo: your baseline starts empty. It writes no `.gitattributes`; pin your line endings yourself.
 
@@ -146,6 +149,19 @@ node scripts/harness/gates.js --check --allow-skip reproducible-build=1,docs=1
 
 4. **Commit** (a commit that changes the baseline needs a subject starting `gates:`), run
    `node agent-harness/bin/harness.js doctor`, and put the same `--check` command in CI.
+
+5. **More than one agent? One folder each.** Two sessions in one folder trip over each other's
+   unfinished files. A workspace is a folder on its own branch over the same history:
+
+   ```
+   $ node bin/harness.js worktree new fix-export --doing "mend the CSV export"
+   $ node bin/harness.js worktree list            # who is doing what; files two branches changed
+   $ node bin/harness.js worktree land fix-export # clean, green, merged? prints the merge command
+   $ node bin/harness.js worktree prune           # stale entries; removes only with --yes
+   ```
+
+   Start the agent in the new folder. Nothing here merges or pushes: a person runs the merge.
+   `harness doctor` says which layout you have and how to adopt the parent-folder one.
 
 What the baseline buys you: delete a test later and nothing fails, yet the run is red.
 
