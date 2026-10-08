@@ -2,52 +2,44 @@
 id: project-reference-handoff
 kind: handoff
 status: open
-read_when: "starting or resuming project-reference"
-phase_next: 4
+read_when: "asking what the project-reference track left behind"
+phase_next: 5
 ---
 
-# Project reference docs: the next phase
+# Project reference docs: the track is complete
 
-## ▶ THE NEXT SESSION: paste this into a new chat
+## ▶ NOTHING IS LEFT TO BUILD
 
 ```
-PHASE 4: the owner decides, then the track archives or grows one phase
+THE PROJECT-REFERENCE TRACK IS COMPLETE. Every phase is closed and merged into the source
+branch, and the owner said to close it. Nothing here is an open task.
 
-Read, in this order:
-  docs/tracks/project-reference/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md
-  docs/tracks/project-reference/traps.md    (before touching anything)
-Nothing else unless a line below cites it.
+Read, only if you need to know what was built:
+  templates/reference/README.md   (the shape `harness reference new` renders)
+  docs/reference/DOC-STANDARD.md  (section 5: the drift warning)
 
-SCOPE: in: once the owner has merged the pull request and said so, archiving the track through
-close-phase.js, or planning one further phase if the owner reopens README decision 6.
-Out: building any skill before the owner answers, re-running the measurement, re-dating any doc
-to quiet a drift warning, and touching bin/harness.js or docs-lint.cjs.
+SCOPE: in: nothing. Out: everything. A follow-up is a new track with its own folder.
 
-Do NOT re-derive, re-measure or re-open: the measurement is frozen in the research file named
-above and the earlier evidence in
-docs/tracks/project-reference/research/2026-10-07-project-reference-docs.md. Do NOT re-run either.
+Do NOT reopen a phase here. Decision 6 stands: no drafting or interview skill.
+Do NOT re-run either measurement: both research files are frozen.
+Do NOT re-date a doc to quiet a drift warning: re-verify it, then re-date it.
 One pair of runs is an observation, not proof; do not quote it as more.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phases 0 to 3 are closed and committed on branch project-reference. The branch is pushed and a
-  pull request is open; the merge is the owner's.
-  The command, the template, both warnings and the root README section exist. The experiment's
-  doc was deleted. The track README carries blocked_on, so the index lists it as waiting.
-  The root README links to the measurement inside this track folder; archiving moves that file,
-  so the link must be repointed in the same change (traps.md REF-04 covers the index half).
-  This repo's own docs draw drift warnings. Re-verifying them is a separate job nobody has taken.
-  The gate needs a second tolerated skip on a machine with no auto-memory index (traps.md REF-09).
-  Decision 6 is answered: no interview skill now. After phase 3 the gate command in the policy
-  file was corrected and six over-wide `paths` lists were narrowed; no doc was re-dated.
-  Owed to the owner: nothing. Owed by the owner: the merge, and whether to archive.
+  Phases 0 to 3 are closed by close-phase.js and merged. The receipt in README.md's
+  frontmatter names the last close.
+  WHAT EXISTS: `harness reference new <subsystem>`, its template, the paths-against-history
+  drift warning, the unreadable-date warning, and the adopter section of the root README.
+  WHAT WAS CHECKED AT CLOSE: every Delivered line in plan.md against the tree.
+  WHAT IS STILL TRUE: this repo's own docs draw drift warnings. Re-verifying them is a
+  separate job nobody has taken, and it is not this track's.
+  WHAT IS OWED: nothing.
 
-First commit: `project-reference: archive the track`
-Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference`
+First commit: `tracks: close worktrees and project-reference`
+Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
-How to work: follow "How to work" in docs/tracks/project-reference/README.md. One phase, then stop
-and hand off.
+How to work: follow "How to work" in docs/tracks/project-reference/README.md if a question comes up.
 ```

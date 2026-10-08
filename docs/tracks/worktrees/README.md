@@ -79,7 +79,8 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | closed |
 | 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | closed |
 
-Nothing is pushed. `node scripts/harness/worktree.js --list` is the overview: every checkout, what
+Everything is merged into the source branch and the gate baseline was re-recorded after it:
+the track is complete. `node scripts/harness/worktree.js --list` is the overview: every checkout, what
 each branch's note says it is doing, announced branches with no folder here, and files changed
 on two or more branches. A plain task's note is `<docsRoot>/workspaces/<name>.md`.
 `--land <name>` verifies clean, green and merged, prints the merge command, and removes the folder

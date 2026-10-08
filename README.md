@@ -225,8 +225,8 @@ one tree with a hand-filled doc and one without. Both answered every part correc
 the doc used `65083` tokens against `78068`, the same `18` tool uses, and one fewer file; it still
 read the code, because the question asked for line numbers. One pair is an observation, not
 proof, and it does not count the time spent writing the doc. Expect a modest saving at best, and
-write a doc for what the code cannot say, not to save tokens. The write-up is
-[here](docs/tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md).
+write a doc for what the code cannot say, not to save tokens. The write-up is in
+git history: `git show b2183f0:docs/tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md`.
 
 ## Your stack
 

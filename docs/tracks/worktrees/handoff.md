@@ -2,50 +2,43 @@
 id: worktrees-handoff
 kind: handoff
 status: open
-read_when: "starting or resuming worktrees"
-phase_next: 6
+read_when: "asking what the workspaces track left behind"
+phase_next: 7
 ---
 
-# Workspaces: the next step
+# Workspaces: the track is complete
 
-## ▶ THE NEXT SESSION: paste this into a new chat
+## ▶ NOTHING IS LEFT TO BUILD
 
 ```
-AFTER PHASE 5: re-baseline the gates, then archive the track
+THE WORKSPACES TRACK IS COMPLETE. Every phase is closed, merged into the source branch, and
+the gate baseline was re-recorded after it. Nothing here is an open task.
 
-You are in the workspace folder Agent-Harness-worktrees, on branch `worktrees`. Check with
-`node scripts/harness/worktree.js --list` before anything else.
+Read, only if you need to know what was built:
+  docs/reference/branches/workspaces.md   (the reference: how to use a workspace)
+  scripts/harness/worktree.js             (its header)
 
-Read, in this order:
-  docs/tracks/worktrees/README.md   (State: every phase must read closed)
-  docs/reference/DOC-STANDARD.md    (section 6: closing, and the archive route)
-Nothing else. No code changes in this step.
+SCOPE: in: nothing. Out: everything. A follow-up is a new track with its own folder.
 
-SCOPE: in: one re-baseline commit, a final handoff saying the track is complete, the archive
-through close-phase.js. Out: any change to a script, a test or a reference doc; merging; pushing.
-
-Do NOT move the track folder or flip a status: line by hand: close-phase.js --archive does both.
-Do NOT stage anything beside scripts/harness/gates.baseline.json in the re-baseline commit, and
-start its subject with `gates:`.
-Do NOT merge `worktrees` into the source branch, push, or remove a workspace: the owner does.
-Do NOT re-open the six locked decisions in the README.
-No inline node -e: write a script file in the scratchpad.
+Do NOT reopen a phase here, and do NOT re-open the six locked decisions.
+Do NOT re-run the measurement of what the agent's own worktree flag does: it is frozen.
+Do NOT merge, push or remove a workspace from a script: a person does.
 
 Provenance: every figure comes from `node scripts/harness/gates.js --check`, and lives only in
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phases 0 to 5 are committed and closed by close-phase.js: the receipt in README.md's
-  frontmatter names the last one. Nothing is pushed. Trust the receipt over this sentence.
-  WHAT EXISTS: everything the plan lists, and the installer carries it. See README.md State.
-  WHAT IS OWED: the gate baseline predates the tests the last four phases added, so the suite
-  is green against it only because more checks than the baseline is not a violation.
-  The owner is owed: merging `worktrees` into the source branch, pushing, and adopting the
-  parent-folder layout for this project (`node bin/harness.js doctor` prints the steps).
-  This machine has no git identity configured: a commit needs one passed on the command line.
+  Phases 0 to 5 are closed by close-phase.js and merged. The receipt in README.md's
+  frontmatter names the last close.
+  WHAT EXISTS: `harness worktree new|list|land|prune`, the announce note, the overlap warning,
+  the session-start line, the routed worktree hook, and the installer carries all of it.
+  WHAT WAS CHECKED AT CLOSE: every Delivered line in plan.md against the tree, and the
+  script's own self-test.
+  WHAT IS OWED: nothing by an agent. The owner may still adopt the parent-folder layout for
+  this project (`node bin/harness.js doctor` prints the steps).
 
-First commit: `gates: re-baseline after the workspace phases`
-Exit: `node bin/harness.js gates --check`
+First commit: `tracks: close worktrees and project-reference`
+Exit: `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check`
 
-How to work: follow "How to work" in the track README.
+How to work: follow "How to work" in the track README if a question about this track comes up.
 ```

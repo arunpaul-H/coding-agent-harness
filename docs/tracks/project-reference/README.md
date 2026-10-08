@@ -8,7 +8,6 @@ paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
-blocked_on: "the owner: merge the pull request, then say whether to archive"
 closed_phase: 3
 closed_at: 2026-10-08
 gates_sha: f300539b339c8f6bf7076f9e764a0a4bcc6853da305e77b39f709d749d00d695
@@ -87,7 +86,8 @@ warnings and were left as they are: re-verifying them is the owner's call, not a
 **After phase 3**, on the owner's word: the gate command in the policy file and the routing doc
 now names the docs skip a machine with no auto-memory index needs (REF-09), and six docs whose
 `paths` matched nearly every commit were narrowed to the files that can falsify them, so a drift
-warning means something. No date was changed. A pull request is open; the track is not archived.
+warning means something. No date was changed. The pull request merged and the owner said to
+close the track: it is complete, with nothing owed.
 
 ## How to work
 
