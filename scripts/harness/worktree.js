@@ -23,8 +23,12 @@
    A root inside any checkout is REFUSED: a second copy of every test and every doc under the
    tree is graded by the first tree's gates and listed as a stray by its hygiene check.
 
-   WHAT THIS DOES NOT DO, stated rather than implied. It never merges, pushes, removes a
-   folder or deletes a branch: landing is a later phase and a person runs the merge.
+   WHAT THIS DOES NOT DO, stated rather than implied. It never merges, pushes, force-removes
+   a dirty folder or deletes an unmerged branch. --land verifies (clean, green, merged) and
+   prints the merge command; a person runs it, and only then does --land remove anything.
+   --prune lists by default and removes only with --yes. A LOCKED entry is named with the
+   command that unlocks it, never skipped silently and never unlocked here: a lock is how a
+   running session says the folder is in use.
 
    WHAT A NEW FOLDER HOLDS. git puts the tracked files there and nothing else, so two config
    keys make it ready to work in:
@@ -234,6 +238,74 @@ function decideSessionStart(event, state) {
       + shown.join('; ') + (others.length > shown.length ? '; and ' + (others.length - shown.length) + ' more' : '')
       + '. Edit only this one. What each is doing, and files changed on two branches: node scripts/harness/worktree.js --list',
   };
+}
+
+/* ---------- landing and pruning: pure halves ---------- */
+
+/* IS THE RECORDED GATE VERDICT A GREEN ONE ABOUT THIS COMMIT. `gates` is a folder's gates.json,
+   `baseline` its committed gates.baseline.json, `head` the commit the branch is on. The rules
+   are gates.js's own (a failing check, a non-zero exit, an undeclared skip, a pass or a total
+   below the baseline), restated here because that file reads its config as it loads and this
+   one must answer about ANOTHER folder. It is the stricter of the two where they could differ:
+   it only ever withholds a merge command. Returns the reasons; none means green. */
+function verdictProblems(gates, baseline, head) {
+  if (!gates || typeof gates !== 'object') return ['no gate verdict is recorded there (scripts/harness/gates.json): nothing has graded this commit'];
+  const out = [];
+  if (gates.commit !== head) out.push('the gate verdict was recorded at ' + String(gates.commit).slice(0, 8) + ' and the branch is at ' + String(head).slice(0, 8));
+  if (gates.dirty !== false) out.push('the gate verdict was not recorded on a clean tree');
+  const base = (baseline && baseline.gates) || {};
+  const cur = gates.gates || {};
+  const names = Array.from(new Set(Object.keys(base).concat(Object.keys(cur))));
+  if (!names.length) out.push('the gate verdict records no gates at all');
+  const total = (r) => (typeof r.total === 'number' ? r.total : (r.pass || 0) + (r.fail || 0) + (r.skipped || 0));
+  for (const n of names) {
+    const c = cur[n]; const b = base[n];
+    if (!c) { out.push(n + ': did not run'); continue; }
+    if (c.missingVerdict || c.fail > 0 || c.exit !== 0) out.push(n + ': red');
+    else if ((c.skipped || 0) > ((b && b.skipped) || 0)) out.push(n + ': skipped more than the baseline declares');
+    else if (b && ((c.skipped === 0 && c.pass < b.pass) || total(c) < total(b))) out.push(n + ': fewer checks than the baseline');
+    else if (Object.prototype.hasOwnProperty.call(c, 'reproducible') && c.reproducible !== true) out.push(n + ': not reproducible');
+  }
+  return out;
+}
+
+/* LANDING ONE WORKSPACE. Everything is a fact gathered by the caller. The order is the order
+   of what would be LOST: a folder that cannot be found or must not be touched, then
+   uncommitted work, then unmerged work. `remove` is reached only when the branch's commits
+   are already in the source ref; `ready` prints a merge command and removes nothing. */
+function decideLand(i) {
+  const no = (why) => ({ action: 'refuse', why });
+  if (!i.found) return no('no workspace named `' + i.name + '` — see --list');
+  if (i.main) return no('`' + i.name + '` is the main checkout, not a workspace');
+  if (i.here) return no('you are standing in ' + i.path + ' — run --land from another checkout: a folder cannot be removed from inside it');
+  if (i.locked) return no('the entry for ' + i.path + ' is LOCKED, so git will not remove it. If no session is using it: git worktree unlock "' + i.path + '"   then run --land again');
+  if (i.gone) return no('the folder ' + i.path + ' is gone already — --prune clears the entry');
+  if (!i.branch) return no(i.path + ' is on no branch (detached), so there is nothing to compare with the source branch');
+  if (!i.source) return no('no source ref to compare with — fetch, or set project.sourceBranch');
+  const dirty = i.dirty || [];
+  if (dirty.length) {
+    return no(dirty.length + ' uncommitted or untracked path(s) in ' + i.path + ' would be lost: ' + dirty.slice(0, 5).join(', ')
+      + (dirty.length > 5 ? ', and ' + (dirty.length - 5) + ' more' : '') + ' — commit them, or delete them yourself');
+  }
+  if (i.merged) return { action: 'remove', why: '`' + i.branch + '` is merged into ' + i.source };
+  const red = i.verdict || [];
+  if (red.length) return no('`' + i.branch + '` is not merged into ' + i.source + ', and it is not shown green: ' + red.slice(0, 3).join('; ') + ' — run the gates in ' + i.path + ' at this commit first');
+  return { action: 'ready', why: '`' + i.branch + '` is clean and green, and not yet merged into ' + i.source };
+}
+
+/* PRUNING, one entry. `forget` clears an entry whose folder is gone; `remove` takes a folder
+   whose branch is merged and which holds no uncommitted work; `named` is said and left alone.
+   A workspace with no commits of its own is merged by definition and is NOT removed: it is
+   the one somebody made a minute ago. null: nothing to say about this entry. */
+function decidePrune(e) {
+  if (e.main || e.here) return null;
+  const say = (action, why) => ({ action, why });
+  if (e.gone) return e.locked ? say('named', 'its folder is gone and the entry is LOCKED: git worktree unlock "' + e.path + '"   then --prune again') : say('forget', 'its folder is gone');
+  if (!e.branch || !e.merged) return null;
+  if (e.fresh) return say('named', 'new: no commits of its own yet, so it is kept');
+  if (e.locked) return say('named', 'merged, and the entry is LOCKED: git worktree unlock "' + e.path + '"   then --prune again');
+  if ((e.dirty || []).length) return say('named', 'merged, but ' + e.dirty.length + ' uncommitted or untracked path(s) would be lost, so it is kept');
+  return say('remove', 'merged into ' + e.source + ' and clean');
 }
 
 const ADVICE = [
@@ -538,6 +610,126 @@ function printList(r) {
   else console.log('layout: ' + r.layout.kind + ' — a new workspace goes under ' + r.layout.root);
 }
 
+/* ---------- --land and --prune ---------- */
+
+const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
+const statusOf = (folder) => (git(folder, ['status', '--porcelain']).stdout || '').split(/\r?\n/).filter(Boolean).map((l) => l.slice(3));
+// A branch nobody has committed on has one reflog line, its creation. A repo that keeps no
+// reflog answers nothing, which reads as fresh: the direction that keeps a folder.
+const isFresh = (cwd, branch) => (git(cwd, ['reflog', 'show', '--format=%H', 'refs/heads/' + branch]).stdout || '').split(/\r?\n/).filter(Boolean).length <= 1;
+
+/* What both commands need to know about every entry, gathered once. */
+function entryFacts(cwd) {
+  const facts = repoFacts(cwd);
+  if (!facts.ok) return { ok: false, why: facts.why };
+  const conf = readConfig(facts.top || facts.mainRoot);
+  if (!conf.ok) return { ok: false, why: conf.why };
+  const layout = layoutOf(facts, conf.cfg);
+  const proj = conf.cfg.project || CONFIG.DEFAULTS.project;
+  const src = sourceRef(cwd, null, proj.sourceBranch);
+  const entries = facts.entries.filter((e) => !e.bare).map((e) => {
+    const gone = e.prunable || !fs.existsSync(e.path);
+    const onSource = !!src.ref && !!e.branch && e.branch === src.ref.replace(/^origin\//, '');
+    return {
+      path: e.path, branch: e.branch, head: e.head, locked: e.locked, gone,
+      main: (!!facts.mainRoot && e.path === facts.mainRoot) || onSource,
+      here: !!facts.top && e.path === facts.top,
+      source: src.ref,
+      merged: !!src.ref && !!e.branch && git(cwd, ['merge-base', '--is-ancestor', 'refs/heads/' + e.branch, src.ref]).status === 0,
+      fresh: !!e.branch && isFresh(cwd, e.branch),
+      dirty: gone ? [] : statusOf(e.path),
+    };
+  });
+  return { ok: true, facts, conf, layout, proj, src, entries };
+}
+
+/* The folder, then the branch. Neither is forced: git's own refusal of a dirty folder or an
+   unmerged branch stands, and is reported as what it is. */
+function removeEntry(cwd, e) {
+  const said = [];
+  const rm = git(cwd, ['worktree', 'remove', e.path]);
+  if (rm.status !== 0) return { ok: false, said: ['git would not remove ' + e.path + ': ' + (rm.stderr || rm.stdout).trim()] };
+  said.push('removed the folder ' + e.path);
+  const del = git(cwd, ['branch', '-d', e.branch]);
+  if (del.status === 0) said.push('deleted the branch `' + e.branch + '`');
+  else said.push('KEPT the branch `' + e.branch + '`: git\'s own check refused from this checkout (' + (del.stderr || del.stdout).trim().split(/\r?\n/)[0] + '). It is merged into ' + e.source + '; delete it from a checkout of that branch: git branch -d ' + e.branch);
+  return { ok: true, said };
+}
+
+function land(cwd, name) {
+  const f = entryFacts(cwd);
+  if (!f.ok) return { ok: false, lines: [f.why] };
+  if (typeof name !== 'string' || !name) return { ok: false, lines: ['--land needs the workspace name: --land <name>'] };
+  const branch = f.layout.branchPrefix + name;
+  const e = f.entries.find((x) => x.branch === branch) || f.entries.find((x) => path.basename(x.path) === name);
+  const head = e && e.head;
+  const d = decideLand(Object.assign({ name, found: !!e }, e || {}, {
+    verdict: e && !e.gone && !e.merged ? verdictProblems(readJson(path.join(e.path, 'scripts', 'harness', 'gates.json')), readJson(path.join(e.path, 'scripts', 'harness', 'gates.baseline.json')), head) : [],
+  }));
+  if (d.action === 'refuse') return { ok: false, action: d.action, lines: [d.why] };
+
+  const noteRel = notePath(f.proj.docsRoot, name);
+  const srcShort = f.src.ref.replace(/^origin\//, '');
+  const srcHome = f.entries.find((x) => x.branch === srcShort && !x.gone);
+  if (d.action === 'ready') {
+    const lines = ['READY TO MERGE: ' + d.why + '. Nothing was removed. A person runs the merge:'];
+    lines.push('  ' + (srcHome ? 'cd "' + srcHome.path + '"' : 'git switch ' + srcShort + '   (in a checkout of the source branch)'));
+    lines.push('  git merge --no-ff ' + e.branch);
+    if (git(cwd, ['cat-file', '-e', 'refs/heads/' + e.branch + ':' + noteRel]).status === 0) lines.push('  git rm ' + noteRel + '   and commit: the announce note is done once the work is in');
+    lines.push('then run --land ' + name + ' again: it removes the folder and the branch only once the merge exists.');
+    return { ok: false, action: 'ready', lines };
+  }
+
+  const lines = ['LANDING `' + name + '`: ' + d.why + '.'];
+  const rm = removeEntry(cwd, e);
+  for (const s of rm.said) lines.push('  ' + s);
+  if (!rm.ok) return { ok: false, action: 'refuse', lines };
+  // The plain-task note went in with the merge. Its removal is STAGED where the source branch
+  // is checked out, never committed: a commit is a person's, and this machine may have no identity.
+  if (git(cwd, ['cat-file', '-e', f.src.ref + ':' + noteRel]).status === 0) {
+    const file = srcHome ? path.join(srcHome.path, ...noteRel.split('/')) : null;
+    const clean = !!file && fs.existsSync(file) && !(git(srcHome.path, ['status', '--porcelain', '--', noteRel]).stdout || '').trim();
+    if (clean && git(srcHome.path, ['rm', '-q', '--', noteRel]).status === 0) lines.push('  staged the removal of ' + noteRel + ' in ' + srcHome.path + ' — commit it there');
+    else lines.push('  the announce note ' + noteRel + ' is still on ' + srcShort + ': git rm ' + noteRel + '   and commit, in a checkout of that branch');
+  }
+  return { ok: true, action: 'remove', lines };
+}
+
+function prune(cwd, yes) {
+  const f = entryFacts(cwd);
+  if (!f.ok) return { ok: false, lines: [f.why] };
+  const found = f.entries.map((e) => ({ e, d: decidePrune(e) })).filter((x) => x.d);
+  const lines = [];
+  const label = (e) => (e.branch || '(detached)') + '  ' + e.path;
+  for (const x of found.filter((y) => y.d.action === 'named')) lines.push('KEPT    ' + label(x.e) + ' — ' + x.d.why);
+  const acts = found.filter((y) => y.d.action !== 'named');
+  if (!yes) {
+    for (const x of acts) lines.push((x.d.action === 'forget' ? 'STALE   ' : 'MERGED  ') + label(x.e) + ' — ' + x.d.why);
+    lines.push(acts.length ? acts.length + ' entry(ies) can go. Nothing was removed: run --prune --yes to remove exactly these.' : 'Nothing to prune.');
+    return { ok: true, lines, removed: 0, candidates: acts.length };
+  }
+  let removed = 0; let failed = 0;
+  // `git worktree prune` clears every entry whose folder is gone and leaves a locked one alone.
+  if (acts.some((x) => x.d.action === 'forget')) {
+    const p = git(cwd, ['worktree', 'prune']);
+    for (const x of acts.filter((y) => y.d.action === 'forget')) {
+      if (p.status !== 0) { failed++; lines.push('FAILED  ' + label(x.e) + ' — git worktree prune: ' + (p.stderr || '').trim()); continue; }
+      removed++;
+      let tail = '';
+      if (x.e.branch && x.e.merged && !x.e.fresh) tail = git(cwd, ['branch', '-d', x.e.branch]).status === 0 ? '; deleted the merged branch `' + x.e.branch + '`' : '; the branch `' + x.e.branch + '` is kept';
+      else if (x.e.branch) tail = '; the branch `' + x.e.branch + '` is kept: it is not merged into ' + (x.e.source || 'the source branch');
+      lines.push('FORGOT  ' + label(x.e) + ' — the entry is cleared' + tail);
+    }
+  }
+  for (const x of acts.filter((y) => y.d.action === 'remove')) {
+    const rm = removeEntry(cwd, x.e);
+    if (rm.ok) removed++; else failed++;
+    lines.push((rm.ok ? 'REMOVED ' : 'FAILED  ') + label(x.e) + ' — ' + rm.said.join('; '));
+  }
+  lines.push(removed + ' removed' + (failed ? ', ' + failed + ' failed' : '') + '.');
+  return { ok: failed === 0, lines, removed, candidates: acts.length };
+}
+
 /* ---------- --self-test ---------- */
 
 function selfTest() {
@@ -636,6 +828,39 @@ function selfTest() {
   ok('session start: each other checkout is named on one line, and it never denies', ss.deny === false && !/\n/.test(ss.context) && ss.context.includes('fix-a in ' + P('w', 'fix-a')) && /\(detached\) in /.test(ss.context) && /--list/.test(ss.context));
   ok('session start: a long list is cut with a count', /and 3 more/.test(decideSessionStart(null, { others: Array.from({ length: 9 }, (_, i) => ({ branch: 'b' + i, path: 'p' })) }).context));
 
+  // the recorded verdict, landing and pruning
+  const row = (o) => Object.assign({ pass: 5, fail: 0, skipped: 0, total: 5, exit: 0 }, o);
+  const V = (o) => Object.assign({ commit: 'abc', dirty: false, gates: { test: row() } }, o);
+  const B = { gates: { test: row() } };
+  eq('a verdict at this commit, clean and no worse than the baseline is green', verdictProblems(V(), B, 'abc'), []);
+  ok('no verdict at all is not green', /nothing has graded/.test(verdictProblems(null, B, 'abc')[0]));
+  ok('a verdict about another commit is not green', /recorded at/.test(verdictProblems(V(), B, 'def')[0]));
+  eq('a dirty verdict, and one that does not say, are not green', [verdictProblems(V({ dirty: true }), B, 'abc').length, verdictProblems(V({ dirty: undefined }), B, 'abc').length], [1, 1]);
+  eq('a failing check, a bad exit, a vanished check, an undeclared skip and a gate that did not run are each red',
+    [{ fail: 1 }, { exit: 1 }, { pass: 4, total: 4 }, { skipped: 1 }].map((o) => verdictProblems(V({ gates: { test: row(o) } }), B, 'abc').length).concat(verdictProblems(V({ gates: {} }), B, 'abc').length), [1, 1, 1, 1, 1]);
+  eq('a skip the baseline declares is green; more checks than the baseline is green',
+    [verdictProblems(V({ gates: { test: row({ pass: 4, skipped: 1 }) } }), { gates: { test: row({ pass: 4, skipped: 1 }) } }, 'abc'), verdictProblems(V({ gates: { test: row({ pass: 9, total: 9 }) } }), B, 'abc')], [[], []]);
+  eq('an empty suite is not a green one', verdictProblems(V({ gates: {} }), { gates: {} }, 'abc').length, 1);
+
+  const L = { name: 'fix-a', found: true, path: P('w', 'fix-a'), branch: 'fix-a', source: 'origin/main', dirty: [], merged: false, verdict: [] };
+  const landing = (o) => decideLand(Object.assign({}, L, o));
+  eq('clean, green and unmerged is READY: a merge command, nothing removed', landing({}).action, 'ready');
+  eq('clean and merged is removed, whatever the verdict says', landing({ merged: true, verdict: ['x'] }).action, 'remove');
+  ok('uncommitted work refuses, and names it', landing({ merged: true, dirty: ['a.js', 'b.js'] }).action === 'refuse' && /2 uncommitted or untracked path\(s\).*a\.js, b\.js/.test(landing({ merged: true, dirty: ['a.js', 'b.js'] }).why));
+  ok('a locked entry refuses with the unlock command', /LOCKED.*git worktree unlock/.test(landing({ merged: true, locked: true }).why));
+  ok('unmerged and not shown green refuses', /not shown green: no verdict/.test(landing({ verdict: ['no verdict'] }).why));
+  eq('unknown, the main checkout, the one you stand in, a gone folder, a detached one and no source ref each refuse',
+    [{ found: false }, { main: true }, { here: true }, { gone: true }, { branch: null }, { source: null }].map((o) => landing(Object.assign({ merged: true }, o)).action), Array(6).fill('refuse'));
+  ok('a lock is said before dirt, and dirt before unmerged', /LOCKED/.test(landing({ locked: true, dirty: ['a'] }).why) && /would be lost/.test(landing({ dirty: ['a'], verdict: ['x'] }).why));
+
+  const E = { path: P('w', 'x'), branch: 'x', source: 'main', merged: true, fresh: false, dirty: [] };
+  const pr = (o) => { const d = decidePrune(Object.assign({}, E, o)); return d && d.action; };
+  eq('merged, clean and worked on is removed', pr({}), 'remove');
+  eq('a gone folder is forgotten, unless locked', [pr({ gone: true }), pr({ gone: true, locked: true })], ['forget', 'named']);
+  eq('merged but locked, dirty or brand new is named and kept', [pr({ locked: true }), pr({ dirty: ['a'] }), pr({ fresh: true })], ['named', 'named', 'named']);
+  eq('unmerged, detached, the main checkout and this one are not mentioned', [pr({ merged: false }), pr({ branch: null }), pr({ main: true }), pr({ here: true })], [null, null, null, null]);
+  ok('a locked entry is told how to unlock', /git worktree unlock/.test(decidePrune(Object.assign({}, E, { locked: true })).why));
+
   // a throwaway repo: the real git, never this repo
   const tmp = real(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-worktree-self-test-')));
   try {
@@ -728,6 +953,48 @@ function selfTest() {
     eq('every checkout but this one is what the session-start line names', others(na.target).map((o) => o.branch).sort(), ['main', 'task-b']);
     eq('outside a repo there are no others', others(tmp), []);
 
+    // landing and pruning, in the overview repo: task-a and task-b each hold one commit
+    eq('an unmerged branch with no verdict is refused', [land(one, 'task-a').ok, /not shown green/.test(land(one, 'task-a').lines[0])], [false, true]);
+    const headA = out1(gi(na.target, ['rev-parse', 'HEAD']));
+    const vdir = path.join(na.target, 'scripts', 'harness');
+    fs.mkdirSync(vdir, { recursive: true });
+    fs.writeFileSync(path.join(vdir, 'gates.json'), JSON.stringify(V({ commit: headA })));
+    fs.writeFileSync(path.join(vdir, 'gates.baseline.json'), JSON.stringify(B));
+    const ta = na.target; const tb = nb.target;
+    ok('uncommitted files refuse the landing, named', /would be lost: .*scripts\//.test(land(one, 'task-a').lines[0]));
+    const exclude = out1(gi(one, ['rev-parse', '--path-format=absolute', '--git-path', 'info/exclude']));
+    fs.appendFileSync(exclude, '\nscripts/harness/gates.json\nscripts/harness/gates.baseline.json\n');
+    const ready = land(one, 'task-a');
+    eq('clean, green and unmerged: READY, with the merge command and the note\'s removal, and nothing removed',
+      [ready.ok, ready.action, ready.lines.some((l) => /git merge --no-ff task-a/.test(l)), ready.lines.some((l) => /git rm docs\/workspaces\/task-a\.md/.test(l)), fs.existsSync(ta)], [false, 'ready', true, true, true]);
+    eq('--prune lists nothing while nothing is merged', [prune(one, false).candidates, prune(one, true).removed], [0, 0]);
+    ok('standing in the folder refuses', /standing in/.test(land(ta, 'task-a').lines[0]));
+    ok('an unknown name refuses', /no workspace named `nope`/.test(land(one, 'nope').lines[0]));
+    // a person merges
+    eq('the fixture merges', [gi(one, ['merge', '-q', '--no-ff', '-m', 'merge a', 'task-a']).status, gi(one, ['merge', '-q', '--no-ff', '-m', 'merge b', '-X', 'ours', 'task-b']).status], [0, 0]);
+    gi(one, ['update-ref', 'refs/remotes/origin/main', 'refs/heads/main']);
+    gi(ta, ['worktree', 'lock', ta]);
+    ok('a locked entry is refused by name, with the unlock command', /LOCKED.*git worktree unlock/.test(land(one, 'task-a').lines[0]) && fs.existsSync(ta));
+    fs.writeFileSync(path.join(tb, 'scratch.txt'), 'unsaved\n');
+    const pl = prune(one, true);
+    ok('--prune --yes names the locked one and keeps it', pl.lines.some((l) => /^KEPT .*task-a.*LOCKED/.test(l)) && fs.existsSync(ta));
+    ok('...and the dirty one, with what would be lost', pl.lines.some((l) => /^KEPT .*task-b.*would be lost/.test(l)) && fs.existsSync(tb) && pl.removed === 0);
+    gi(ta, ['worktree', 'unlock', ta]);
+    const dry = prune(one, false);
+    eq('--prune lists the merged clean one, names the dirty one, and removes nothing', [dry.candidates, dry.lines.some((l) => /^MERGED .*task-a/.test(l)), dry.lines.some((l) => /^KEPT .*task-b.*would be lost/.test(l)), fs.existsSync(ta)], [1, true, true, true]);
+    const landed = land(one, 'task-a');
+    eq('merged and clean: the folder and the branch go', [landed.ok, fs.existsSync(ta), refExists(one, 'refs/heads/task-a')], [true, false, false]);
+    ok('...and the note\'s removal is staged where the source branch is checked out, not committed',
+      landed.lines.some((l) => /staged the removal of docs\/workspaces\/task-a\.md/.test(l)) && /^D {2}docs\/workspaces\/task-a\.md/m.test(gi(one, ['status', '--porcelain']).stdout));
+    ok('a dirty merged workspace is refused by --land too', /scratch\.txt/.test(land(one, 'task-b').lines[0]) && fs.existsSync(tb));
+    fs.rmSync(path.join(tb, 'scratch.txt'));
+    fs.rmSync(tb, { recursive: true, force: true });
+    ok('a folder deleted by hand is refused by --land, which points at --prune', /gone already/.test(land(one, 'task-b').lines[0]));
+    const fresh = create(one, { name: 'task-new', note: false });
+    const swept = prune(one, true);
+    eq('--prune --yes forgets the gone entry and deletes its merged branch; a brand-new workspace is kept',
+      [swept.removed, refExists(one, 'refs/heads/task-b'), swept.lines.some((l) => /^KEPT .*task-new.*no commits of its own/.test(l)), fs.existsSync(fresh.target)], [1, false, true, true]);
+    eq('the main checkout is never a candidate', list(one).rows.some((x) => x.main), true);
     // carry and setup, in a repo of their own. The fixture's ignored files are NOT named like a
     // guarded secret file: the secret guard refuses any command that spells one, fixture or not.
     const kit = path.join(tmp, 'kit');
@@ -777,7 +1044,7 @@ function selfTest() {
 
   for (const f of fails) console.log('FAIL  ' + f);
   console.log(fails.length ? '\nFAIL — worktree.js self-test: ' + fails.length + ' of ' + n + ' checks'
-    : 'PASS — worktree.js self-test (' + n + ' checks: names, layout, porcelain, --new, --track, --list, config, carry, setup, hook, note, overview, overlap)');
+    : 'PASS — worktree.js self-test (' + n + ' checks: names, layout, porcelain, --new, --track, --list, config, carry, setup, hook, note, overview, overlap, land, prune)');
   return fails.length ? 1 : 0;
 }
 
@@ -795,10 +1062,17 @@ const USAGE = [
   '  --list',
   '        The overview: every checkout of this repo and what its branch says it is doing, read',
   '        from git; announced branches with no folder here; files changed on two or more branches.',
+  '  --land <name>',
+  '        Finish a workspace. Refuses a dirty folder, a locked entry and a branch not shown green.',
+  '        Unmerged: prints the merge command for a person to run, and removes nothing (exit 1).',
+  '        Merged: removes the folder and the branch, and stages the removal of the task\'s note.',
+  '  --prune [--yes]',
+  '        List entries whose folder is gone or whose branch is merged. Removes them only with',
+  '        --yes; a locked, dirty or brand-new one is named and kept.',
   '  --self-test',
   '        Check this file against literals and a throwaway repo. Touches no real repo.',
   '',
-  'It never merges, pushes, removes a folder or deletes a branch.',
+  'It never merges, pushes, force-removes a dirty folder or deletes an unmerged branch.',
 ].join('\n');
 
 function main() {
@@ -813,6 +1087,13 @@ function main() {
     if (r.setup && !r.setup.ok) { console.error('SETUP FAILED: `' + r.setup.command + '` in ' + r.target + ' — the workspace exists; fix the command and run it there'); return process.exit(1); }
     return process.exit(0);
   }
+  if (has('--land') || has('--prune')) {
+    const r = has('--land') ? land(process.cwd(), valueOf('--land')) : prune(process.cwd(), has('--yes'));
+    // A refusal goes to stderr. A merge command or a list of what was kept is the answer, on stdout.
+    if (!r.ok && r.action !== 'ready' && !has('--prune')) console.error('REFUSED: ' + r.lines.join('\n'));
+    else for (const l of r.lines) console.log(l);
+    return process.exit(r.ok ? 0 : 1);
+  }
   if (has('--list')) {
     const r = list(process.cwd());
     if (!r.ok) { console.error('REFUSED: ' + r.why); return process.exit(1); }
@@ -826,6 +1107,7 @@ function main() {
 module.exports = {
   nameProblem, decideLayout, decideCarry, hookPayload, parsePorcelain, fillTemplate, isInside, create, fromHook, list, sourceRef,
   noteText, notePath, noteCandidates, noteSummary, overlapsOf, others, decideSessionStart,
+  verdictProblems, decideLand, decidePrune, land, prune,
   PARENT_MAIN, SIBLING_SUFFIX, NAME_RE, NOTES_DIR,
 };
 

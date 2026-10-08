@@ -32,7 +32,7 @@
          harness doctor [--root <dir>] [--no-self-tests]
          harness gates [--check] [--print-allow-skip [--with <gate>=<n>]] [...flags for gates.js]
          harness docs [--index] [...flags for the doc scripts]
-         harness worktree new <name> [--track] [--from <ref>] | list
+         harness worktree new <name> [--track] [--from <ref>] | list | land <name> | prune [--yes]
          harness host
          harness selftest
          harness --help | --self-test
@@ -1450,13 +1450,13 @@ function cmdRun(argv) {
 }
 
 /** Workspaces: one folder per agent. The script owns every decision and refusal; this only
- *  finds it and spells `new` and `list` as its flags. It runs in the CALLER'S directory, not
+ *  finds it and spells `new`, `list`, `land` and `prune` as its flags. It runs in the CALLER'S directory, not
  *  the root, because which checkout the caller stands in is one of its inputs. */
 function cmdWorktree(argv) {
   const root = findRoot(process.cwd());
   const script = path.join(root, 'scripts', 'harness', 'worktree.js');
   if (!isFile(script)) return stop('no scripts/harness/worktree.js under ' + root, selfInvocation(root) + ' init');
-  const verbs = { new: '--new', list: '--list' };
+  const verbs = { new: '--new', list: '--list', land: '--land', prune: '--prune' };
   const args = argv.length && verbs[argv[0]] ? [verbs[argv[0]]].concat(argv.slice(1)) : argv;
   const r = spawnSync(process.execPath, [script].concat(args), { cwd: process.cwd(), stdio: 'inherit' });
   return r.status === null ? 1 : r.status;
@@ -1555,6 +1555,8 @@ const HELP = [
   '',
   '  harness worktree new <name> [--track] [--from <ref>]',
   '  harness worktree list',
+  '  harness worktree land <name>',
+  '  harness worktree prune [--yes]',
   '      One folder per agent, each on its own branch over one shared history, so several agents',
   '      can work in one project on one computer. `new` makes the folder and a branch of the same',
   '      name, cut from the source branch, OUTSIDE every checkout; --track also scaffolds a track.',

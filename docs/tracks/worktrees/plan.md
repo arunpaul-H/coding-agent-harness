@@ -3,7 +3,7 @@ id: worktrees-plan
 kind: plan
 status: open
 read_when: "worktrees: the phases, each with its exit command and first commit"
-first_commit: "worktrees: land and prune a workspace, refusing whatever would lose work"
+first_commit: "worktrees: ship workspaces to every repo the harness is installed into"
 ---
 
 # Workspaces: the phases
@@ -109,7 +109,13 @@ unmerged work. A non-interactive run leaves a locked entry (WT-06).
 **First commit:** `worktrees: land and prune a workspace, refusing whatever would lose work`
 **Exit:** `node scripts/harness/worktree.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** `--land <name>` and `--prune [--yes]` in `worktree.js`, `harness worktree land|prune`,
+and their tests. Deviations: the gate verdict is required only BEFORE the merge (once merged,
+clean is enough); green is judged by a restatement of the `gates.js` rules, as that file cannot
+be loaded about another folder; `--land` on an unmerged clean green branch exits 1 with the
+merge command; the removal of the note is STAGED in the source checkout, not committed; the
+branch goes with `git branch -d` and is kept when git refuses; `--prune` keeps a workspace with
+no commits of its own (WT-12); a locked entry is named with its unlock command (WT-06).
 
 ## Phase 5: anyone who clones gets it working
 

@@ -296,6 +296,134 @@ describe('workspaces announce themselves, and the overview is read from git', ()
   });
 });
 
+describe('landing and pruning refuse whatever would lose work', () => {
+  let tmp; let repo; let root;
+  const commit = (dir, msg) => { git(dir, ['add', '-A']); assert.strictEqual(git(dir, ['commit', '-q', '-m', msg]).status, 0, msg); };
+  const make = (name) => {
+    assert.strictEqual(run(repo, ['--new', name, '--doing', 'work on ' + name]).status, 0, name);
+    const dir = path.join(root, name);
+    fs.writeFileSync(path.join(dir, name + '.txt'), name + '\n');
+    commit(dir, name);
+    return dir;
+  };
+  // A verdict the folder's own gate run would have written: green, clean, at the branch's commit.
+  const green = (dir, over) => {
+    const head = git(dir, ['rev-parse', 'HEAD']).stdout.trim();
+    const rowOf = { pass: 3, fail: 0, skipped: 0, total: 3, exit: 0 };
+    fs.mkdirSync(path.join(dir, 'scripts', 'harness'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'scripts', 'harness', 'gates.json'), JSON.stringify(Object.assign({ commit: head, dirty: false, gates: { test: rowOf } }, over || {})));
+    fs.writeFileSync(path.join(dir, 'scripts', 'harness', 'gates.baseline.json'), JSON.stringify({ gates: { test: rowOf } }));
+  };
+  before(() => {
+    tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-worktree-land-')));
+    repo = path.join(tmp, 'shop');
+    root = path.join(tmp, 'shop.worktrees');
+    fs.mkdirSync(repo);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'x\n');
+    // The verdict files are run output: ignored, as they are in a real checkout.
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'scripts/harness/gates.json\nscripts/harness/gates.baseline.json\n');
+    git(repo, ['init', '-q', '-b', 'main', '.']);
+    commit(repo, 'init');
+  });
+  after(() => { try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* the OS may still hold it */ } });
+
+  test('--land walks the three refusals in order, then prints the merge command and removes nothing', () => {
+    const dir = make('alpha');
+    let r = run(repo, ['--land', 'alpha']);
+    assert.strictEqual(r.status, 1);
+    assert.match(r.stderr, /^REFUSED: `alpha` is not merged into main, and it is not shown green: no gate verdict is recorded there/);
+    green(dir, { commit: '0'.repeat(40) });
+    assert.match(run(repo, ['--land', 'alpha']).stderr, /not shown green: the gate verdict was recorded at 00000000/);
+    green(dir, { dirty: true });
+    assert.match(run(repo, ['--land', 'alpha']).stderr, /not recorded on a clean tree/);
+    green(dir);
+    fs.writeFileSync(path.join(dir, 'unsaved.txt'), 'x\n');
+    r = run(repo, ['--land', 'alpha']);
+    assert.match(r.stderr, /^REFUSED: 1 uncommitted or untracked path\(s\) in .* would be lost: unsaved\.txt/);
+    fs.rmSync(path.join(dir, 'unsaved.txt'));
+    r = run(repo, ['--land', 'alpha']);
+    assert.strictEqual(r.status, 1, 'READY is not landed: the exit says so');
+    assert.match(r.stdout, /^READY TO MERGE: `alpha` is clean and green, and not yet merged into main\. Nothing was removed\./);
+    assert.match(r.stdout, /^ {2}git merge --no-ff alpha$/m);
+    assert.match(r.stdout, /^ {2}git rm docs\/workspaces\/alpha\.md {3}and commit/m);
+    assert.ok(fs.existsSync(dir), 'an unmerged workspace was removed');
+    assert.strictEqual(git(repo, ['rev-parse', '--verify', '--quiet', 'refs/heads/alpha']).status, 0);
+    assert.strictEqual(git(repo, ['log', '--oneline', 'main']).stdout.trim().split('\n').length, 1, '--land merged something');
+  });
+
+  test('once a person has merged, --land removes the folder and the branch and stages the note\'s removal', () => {
+    const dir = path.join(root, 'alpha');
+    assert.strictEqual(git(repo, ['merge', '-q', '--no-ff', '-m', 'merge alpha', 'alpha']).status, 0);
+    assert.match(run(dir, ['--land', 'alpha']).stderr, /^REFUSED: you are standing in /);
+    assert.strictEqual(git(repo, ['worktree', 'lock', dir]).status, 0);
+    const locked = run(repo, ['--land', 'alpha']);
+    assert.strictEqual(locked.status, 1);
+    assert.match(locked.stderr, /^REFUSED: the entry for .* is LOCKED.*git worktree unlock "/);
+    assert.ok(fs.existsSync(dir), 'a locked workspace was removed');
+    git(repo, ['worktree', 'unlock', dir]);
+    const r = run(repo, ['--land', 'alpha']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^LANDING `alpha`: `alpha` is merged into main\./);
+    assert.ok(!fs.existsSync(dir), 'the folder is still there');
+    assert.notStrictEqual(git(repo, ['rev-parse', '--verify', '--quiet', 'refs/heads/alpha']).status, 0, 'the branch is still there');
+    assert.match(r.stdout, /staged the removal of docs\/workspaces\/alpha\.md in .* — commit it there/);
+    assert.match(git(repo, ['status', '--porcelain']).stdout, /^D {2}docs\/workspaces\/alpha\.md$/m);
+    assert.ok(fs.existsSync(path.join(repo, 'alpha.txt')), 'the merged work is not in the source branch');
+    commit(repo, 'drop the note');
+    assert.match(run(repo, ['--land', 'alpha']).stderr, /^REFUSED: no workspace named `alpha`/);
+    assert.match(run(repo, ['--land']).stderr, /^REFUSED: --land needs the workspace name/);
+    assert.match(run(repo, ['--land', 'main']).stderr, /REFUSED: `main` is the main checkout/);
+  });
+
+  test('--prune lists by default, removes only with --yes, and names a locked, dirty or brand-new entry', () => {
+    const merged = make('merged-one');
+    const dirty = make('dirty-one');
+    const lockedDir = make('locked-one');
+    const gone = make('gone-one');
+    const unmerged = make('unmerged-one');
+    for (const b of ['merged-one', 'dirty-one', 'locked-one', 'gone-one']) assert.strictEqual(git(repo, ['merge', '-q', '--no-ff', '-m', 'merge ' + b, b]).status, 0, b);
+    assert.strictEqual(run(repo, ['--new', 'brand-new', '--track']).status, 1, 'no track template in this fixture');
+    assert.strictEqual(git(repo, ['worktree', 'add', '-q', '-b', 'brand-new', path.join(root, 'brand-new'), 'main']).status, 0);
+    fs.writeFileSync(path.join(dirty, 'unsaved.txt'), 'x\n');
+    git(repo, ['worktree', 'lock', lockedDir]);
+    fs.rmSync(gone, { recursive: true, force: true });
+
+    const dry = run(repo, ['--prune']);
+    assert.strictEqual(dry.status, 0, dry.stdout + dry.stderr);
+    assert.match(dry.stdout, /^MERGED {2}merged-one {2}.* — merged into main and clean$/m);
+    assert.match(dry.stdout, /^STALE {3}gone-one {2}.* — its folder is gone$/m);
+    assert.match(dry.stdout, /^KEPT {4}dirty-one {2}.* — merged, but 1 uncommitted or untracked path\(s\) would be lost, so it is kept$/m);
+    assert.match(dry.stdout, /^KEPT {4}locked-one {2}.* — merged, and the entry is LOCKED: git worktree unlock "/m);
+    assert.match(dry.stdout, /^KEPT {4}brand-new {2}.* — new: no commits of its own yet, so it is kept$/m);
+    assert.doesNotMatch(dry.stdout, /unmerged-one|^\S+ +main {2}/m, 'an unmerged workspace or the main checkout was offered up');
+    assert.match(dry.stdout, /2 entry\(ies\) can go\. Nothing was removed: run --prune --yes/);
+    assert.ok(fs.existsSync(merged), 'a listing removed a folder');
+
+    const wet = run(repo, ['--prune', '--yes']);
+    assert.strictEqual(wet.status, 0, wet.stdout + wet.stderr);
+    assert.match(wet.stdout, /^REMOVED merged-one /m);
+    assert.match(wet.stdout, /^FORGOT {2}gone-one .* the entry is cleared; deleted the merged branch `gone-one`/m);
+    assert.match(wet.stdout, /^2 removed\.$/m);
+    assert.deepStrictEqual(fs.readdirSync(root).sort(), ['brand-new', 'dirty-one', 'locked-one', 'unmerged-one']);
+    const branches = git(repo, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).stdout.trim().split(/\r?\n/).sort();
+    assert.deepStrictEqual(branches, ['brand-new', 'dirty-one', 'locked-one', 'main', 'unmerged-one']);
+    assert.ok(fs.existsSync(path.join(unmerged, 'unmerged-one.txt')), 'unmerged work was touched');
+    assert.ok(fs.existsSync(path.join(dirty, 'unsaved.txt')), 'uncommitted work was lost');
+    assert.match(run(repo, ['--prune', '--yes']).stdout, /^0 removed\.$/m);
+    git(repo, ['worktree', 'unlock', lockedDir]);
+  });
+
+  test('`harness worktree` spells land and prune too', () => {
+    const cli = path.join(ROOT, 'bin', 'harness.js');
+    const r = spawnSync(process.execPath, [cli, 'worktree', 'land', 'no-such-workspace-name'], { cwd: ROOT, encoding: 'utf8', env: cleanEnv() });
+    assert.strictEqual(r.status, 1);
+    assert.match(r.stderr, /REFUSED: no workspace named `no-such-workspace-name`/);
+    const help = spawnSync(process.execPath, [cli, '--help'], { cwd: ROOT, encoding: 'utf8', env: cleanEnv() });
+    assert.match(help.stdout, /harness worktree land <name>/);
+    assert.match(help.stdout, /harness worktree prune \[--yes\]/);
+  });
+});
+
 describe('the registration this repo runs under', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8'));
   const commands = [];
