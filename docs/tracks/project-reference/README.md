@@ -8,11 +8,11 @@ paths: ["bin/harness.js", "templates/reference/**", "scripts/harness/guards/docs
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference"
 last_verified: 2026-10-07
 max_age_days: 30
-closed_phase: 1
-closed_at: 2026-10-07
-gates_sha: 4bfc4c652f12c47096b61c37b35595a0102e6b64040c24038f4c05feae238651
-block_sha: bce45fea36e89e9dd813c1a975b418a4ff246d7fa2851c4867aed27ae5efea1d
-receipt: 747715444ebfc263c2cb0f908868e0d238701e543db7af8efac4e76fc2193729
+closed_phase: 2
+closed_at: 2026-10-08
+gates_sha: 3ab8dd620797a2009f55e524efcc1c9f74eac0239a67be3bd2e5515470cf6900
+block_sha: 30d240f726393b6c810a445008cb7d616dc4c9a1fbe2ba3fe0f554abc474ec6d
+receipt: ebac53bf11ee5793a14bb16eaa4d21543460eccc2663a047baea212933132fd9
 ---
 
 # Project reference docs: asked for by name, and never stale in silence
@@ -73,7 +73,7 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 |---|---|---|
 | 0 | The track opened: research frozen, plan and handoff written | closed |
 | 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | closed |
-| 2 | A paths-against-history drift warning, and a warning for an unreadable date | built |
+| 2 | A paths-against-history drift warning, and a warning for an unreadable date | closed |
 | 3 | One measured task with and without a reference doc, and the adopter guidance it supports | open |
 
 Branch `project-reference`, commits only: no push, no PR. `harness reference new` and its template
