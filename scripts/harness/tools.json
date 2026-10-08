@@ -61,7 +61,9 @@
     "evidence      `docs` or `ran`.   asOf  the date the evidence was gathered.",
     "source        where each cell came from.   notes  what the row does not establish.",
     "",
-    "Evidence for every `docs` row: docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md"
+    "Evidence for every `docs` row: docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md,",
+    "which is no longer in the tree. Closed tracks were removed from it; read the file out of git",
+    "history: git show 5661b73:docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md"
   ],
 
   "dialects": ["claude", "gemini", "cursor", "antigravity"],
