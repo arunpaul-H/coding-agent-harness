@@ -50,6 +50,8 @@
  * carries, keys included and at any depth, is matched as text (see textOf for why
  * that is the decoded text and not the serialised JSON), and the mcp__.* matcher in
  * settings.json needs no special case.
+ * ONE EXCEPTION, in decide(): the BODY of a write the dialect vouches for is not read. Its path
+ * is. And the text is read as a shell would open it: see readings() and wildcardHits().
  *
  * A FILE, NEVER AN INLINE `node -e`: a one-liner handed to a shell gets word-split,
  * `=>` is read as a redirect, and the guard both breaks and litters the repo with
@@ -168,6 +170,120 @@ function spans(patterns, hay, twinGuard) {
   return out;
 }
 
+/* ── what a shell does to a name before it opens the file ───────────────────── */
+
+/**
+ * WHAT THIS GUARD IS, SAID ONCE: A NAME MATCHER. It stops the ACCIDENT, the call that names a
+ * guarded file in a spelling a shell would open. It does not stop INTENT: a name built from a
+ * variable, decoded from base64, or opened inside a script the agent wrote first never appears
+ * in the call, and neither does a recursive read of the whole directory. A sandbox is the
+ * boundary for those; a deny list of spellings is a list, and silent past its last row.
+ *
+ * The two spellings below are inside the line because an agent reaches them without meaning to.
+ *
+ * QUOTES AND BACKSLASHES. A shell removes them before it opens anything, so a name with a quote
+ * pair or a backslash in the middle of it is the same file. The haystack is therefore read three
+ * times: as written, with the quote characters dropped, and with the backslashes dropped as
+ * well. As written stays first because a Windows path separator is a backslash, and dropping it
+ * would glue a directory onto the name.
+ */
+const unquoted = (s) => String(s).replace(/["'`]/g, '');
+const readings = (hay) => {
+  const a = unquoted(hay);
+  return [...new Set([String(hay), a, a.replace(/\\/g, '')])];
+};
+
+/** One glob word, as a list of single-character matchers and stars. */
+function globParts(glob) {
+  const g = String(glob).toLowerCase();
+  const out = [];
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === '*') { if (!out.length || out[out.length - 1].t !== 'star') out.push({ t: 'star' }); continue; }
+    if (c === '?') { out.push({ t: 'any' }); continue; }
+    const close = c === '[' ? g.indexOf(']', i + 2) : -1;
+    if (close > 0) {
+      let body = g.slice(i + 1, close);
+      const not = body[0] === '!' || body[0] === '^';
+      if (not) body = body.slice(1);
+      const set = new Set();
+      for (let k = 0; k < body.length; k++) {
+        if (body[k + 1] === '-' && k + 2 < body.length) {
+          for (let x = body.charCodeAt(k); x <= body.charCodeAt(k + 2); x++) set.add(String.fromCharCode(x));
+          k += 2;
+        } else set.add(body[k]);
+      }
+      out.push({ t: 'set', has: (ch) => set.has(ch) !== not });
+      i = close;
+      continue;
+    }
+    out.push({ t: 'lit', c });
+  }
+  return out;
+}
+
+/** Can ONE character satisfy both matchers? Two sets are assumed to: the strict reading. */
+const charsMeet = (x, y) => {
+  if (x.t === 'any' || y.t === 'any') return true;
+  if (x.t === 'lit' && y.t === 'lit') return x.c === y.c;
+  if (x.t === 'lit') return y.has(x.c);
+  if (y.t === 'lit') return x.has(y.c);
+  return true;
+};
+
+/** Is there any one filename BOTH globs match? Iterative over a memo: no payload can recurse it. */
+function globsMeet(a, b) {
+  const A = globParts(a);
+  const B = globParts(b);
+  const seen = new Set();
+  const stack = [[0, 0]];
+  while (stack.length) {
+    const [i, j] = stack.pop();
+    const key = i + ',' + j;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const x = A[i];
+    const y = B[j];
+    if (!x && !y) return true;
+    if (x && x.t === 'star') { stack.push([i + 1, j]); if (y) stack.push([i, j + 1]); continue; }
+    if (y && y.t === 'star') { stack.push([i, j + 1]); if (x) stack.push([i + 1, j]); continue; }
+    if (x && y && charsMeet(x, y)) stack.push([i + 1, j + 1]);
+  }
+  return false;
+}
+
+// A word ends at whitespace, quoting, a path separator or shell punctuation. `[`, `]`, `*` and
+// `?` stay inside it: they are what makes it a wildcard.
+const WORD_BREAK = /[\s"'`=,;:(){}<>|&/\\]+/;
+const TWIN_TAIL = new RegExp('\\.(?:' + TWINS.join('|') + ')$', 'i');
+
+/**
+ * WILDCARDS. `cat .en*` names no guarded file and opens one. So a word that carries a wildcard
+ * is tested the other way round: could it match a name a guarded pattern matches?
+ *
+ * THREE LIMITS, each there to keep this from refusing ordinary work:
+ *   - Only a guarded pattern whose FILENAME starts with a dot is covered, and only by a word
+ *     that starts with one too. A shell's `*` does not match a dotfile, so `rm *.log` and a
+ *     search for every `*.js` are not about a guarded dotfile and are never asked.
+ *   - A word whose second character is `*` is skipped. `.*` is how a regular expression says
+ *     "anything", and it is in half the sed and grep commands ever written.
+ *   - A word that ends in a twin suffix is skipped: `.e*.example` is the documented alternative.
+ * A guarded pattern that is not a dotfile (a key under a directory, say) gets no wildcard
+ * coverage here. Its literal name is still refused by spans().
+ */
+function wildcardHits(guarded, hay) {
+  const names = (guarded || []).map((p) => String(p).split(/[\\/]/).pop()).filter((n) => n[0] === '.');
+  if (!names.length) return [];
+  const out = [];
+  for (const w of new Set(unquoted(hay).split(WORD_BREAK))) {
+    if (w.length < 3 || w.length > 80 || w[0] !== '.' || w[1] === '*') continue;
+    if (!/[*?]|\[.+\]/.test(w) || TWIN_TAIL.test(w)) continue;
+    const pattern = names.find((n) => globsMeet(w, n));
+    if (pattern) out.push({ text: w, pattern });
+  }
+  return out;
+}
+
 /** A carve-out is live while it has not expired. `today` is injected so this is pure. */
 const isLive = (c, today) => Boolean(c && typeof c.until === 'string' && c.until >= today);
 
@@ -217,12 +333,12 @@ const UNPARSEABLE = [
  * with a list of shapes again. Iterative, not recursive: a hook that overflows its
  * stack on a deep payload has thrown, and a guard that throws has allowed.
  */
-function textOf(input) {
+function textOf(input, skip) {
   const parts = [];
   const stack = [input];
   while (stack.length) {
     const v = stack.pop();
-    if (typeof v === 'string') { parts.push(v); continue; }
+    if (typeof v === 'string') { if (!skip || !skip.includes(v)) parts.push(v); continue; }
     if (!v || typeof v !== 'object') continue;
     if (Array.isArray(v)) { for (const x of v) stack.push(x); continue; }
     for (const k of Object.keys(v)) { parts.push(k); stack.push(v[k]); }
@@ -248,14 +364,29 @@ function decide(event, state) {
   const guarded = Array.isArray(st.guarded) ? st.guarded : DEFAULTS.env.guarded;
   const today = String(st.today || '');
 
-  const hay = textOf((event && event.input) || {});
-  const hits = spans(guarded, hay, true);
-  if (!hits.length) return ALLOW;
+  /* THE BODY OF A WRITE IS NOT A PATH. A write the dialect vouches for says where it goes in
+     its path field, and that field is still read. What it puts there is prose or code that may
+     MENTION a guarded name without opening anything: an ignore-file line, a setup paragraph, a
+     compose file. Refusing those cost a write on every such edit, and a guard that refuses
+     ordinary work is one people learn to click through. An OPAQUE call keeps the whole reading:
+     nothing vouches for which of its fields is a body. */
+  const e = event || {};
+  const body = (e.action === 'write' && e.opaque !== true) ? [e.content, e.old].filter((x) => typeof x === 'string' && x) : null;
+  // The path is put back by hand: a body that happens to equal it must not take it out as well.
+  const hay = textOf(e.input || {}, body) + (body && typeof e.path === 'string' ? '\n' + e.path : '');
 
   // An EXPIRED carve-out suppresses nothing, so the guard re-arms itself on the day.
   // With no date in the state nothing can be shown to be live, so no carve-out opens anything.
-  const open = spans((today ? st.openCarveOuts || [] : []).filter((c) => isLive(c, today)).map((c) => c.path), hay, false);
-  const live = hits.filter((h) => !open.some((o) => o.start <= h.start && o.end >= h.end));
+  const carved = (today ? st.openCarveOuts || [] : []).filter((c) => isLive(c, today)).map((c) => c.path);
+  const live = [];
+  for (const text of readings(hay)) {
+    const open = spans(carved, text, false);
+    for (const h of spans(guarded, text, true)) {
+      if (!open.some((o) => o.start <= h.start && o.end >= h.end)) live.push(h);
+    }
+  }
+  // A wildcard is never opened by a carve-out: it names no one file for the carve-out to cover.
+  for (const h of wildcardHits(guarded, hay)) live.push(h);
   if (!live.length) return ALLOW;
 
   // The matched SPAN is named — a filename, which is the thing the reader has to
@@ -265,7 +396,8 @@ function decide(event, state) {
   const named = [...new Set(live.map((h) => h.text))].join(', ');
   const reason = [
     '*** SECRET FILE GUARD ***',
-    '(1) This call names ' + named + ', which the deny stance in harness.config.json guards.',
+    '(1) This call names ' + named + ', which the deny stance in harness.config.json guards'
+      + (live.some((h) => /[*?[]/.test(h.text)) ? ' (a wildcard that can match a guarded file counts as naming it).' : '.'),
     '(2) Reading it copies the secret VALUES into this transcript permanently — they cannot be un-read.',
     '(3) Committing it, or pasting it into an issue, publishes them. Neither can be undone by a revert.',
     '',
@@ -512,6 +644,54 @@ function selfTest() {
   must('a payload fifty thousand levels deep is read, not overflowed',
     (() => { let deep = BARE; for (let i = 0; i < 50000; i++) deep = [deep]; return textOf(deep); })(), BARE);
 
+  /* WHAT A SHELL DOES TO A NAME. Each of these opened the file and was a silent allow. The
+     fixtures are assembled so this file never spells a guarded name the way a shell would. */
+  const D = BARE[0]; const N = BARE.slice(1); // the dot, and the three letters after it
+  must('a quote pair inside the name is refused', verdict({ command: 'cat ' + D + N[0] + '""' + N.slice(1) }), 'deny');
+  must('a single-quoted half is refused', verdict({ command: "cat '" + D + N[0] + "'" + N.slice(1) }), 'deny');
+  must('a backslash inside the name is refused', verdict({ command: 'cat ' + D + N[0] + '\\' + N.slice(1) }), 'deny');
+  must('a trailing star is refused', verdict({ command: 'cat ' + D + N.slice(0, 2) + '*' }), 'deny');
+  must('a one-letter prefix and a star is refused', verdict({ command: 'head ' + D + N[0] + '*' }), 'deny');
+  must('a question mark is refused', verdict({ command: 'cat ' + D + '?' + N.slice(1) }), 'deny');
+  must('a bracket set is refused', verdict({ command: 'cat ' + D + '[' + N[0] + ']' + N.slice(1) }), 'deny');
+  must('a search glob that can match is refused', verdict({ pattern: 'KEY', glob: D + N[0] + '*' }), 'deny');
+  must('a wildcard under a directory is refused', verdict({ pattern: '**/' + D + N.slice(0, 2) + '*' }), 'deny');
+  must('a wildcard reaching a suffixed file is refused', verdict({ command: 'cat ' + BARE + '.l?cal' }), 'deny');
+  const wild = gate(JSON.stringify({ tool_input: { command: 'cat ' + D + N.slice(0, 2) + '*' } }), DENY_ALL, '2026-01-01');
+  must('...and the refusal says a wildcard counts', /a wildcard that can match/.test(wild.hookSpecificOutput.permissionDecisionReason), true);
+  // THE NEGATIVE HALF. A wildcard rule that refuses ordinary commands gets the hook removed.
+  must('a star that cannot match a dotfile is NOT refused', verdict({ command: 'rm *.log' }), null);
+  must('a bare star is NOT refused', verdict({ command: 'ls *' }), null);
+  must('a search for every script is NOT refused', verdict({ pattern: '**/*.js' }), null);
+  must('a regex that starts dot-star is NOT refused', verdict({ command: "sed -i 's/.*foo//' notes.txt" }), null);
+  must('...nor dot-star on its own', verdict({ command: 'grep -E ".*" notes.txt' }), null);
+  must('another dotfile with a star is NOT refused', verdict({ command: 'cat .eslintrc*' }), null);
+  must('...nor the git ones', verdict({ command: 'ls .git*' }), null);
+  must('a wildcard ending in a twin suffix is NOT refused', verdict({ command: 'cat ' + D + N[0] + '*.example' }), null);
+  must('a quoted word that merely ends the same is NOT refused', verdict({ command: 'echo "my"' + N }), null);
+  must('a wildcard is never opened by a carve-out',
+    verdict({ command: 'cat ' + BARE + '.l*' }, { guarded: [BARE, BARE + '.*'], fromConfig: true, openCarveOuts: [{ path: BARE + '.local', why: 'x', until: '2026-12-31' }] }, '2026-01-01'), 'deny');
+  must('a guarded pattern that is not a dotfile gets no wildcard reading', verdict({ command: 'ls keys/*' }, { guarded: ['keys/*.pem'], openCarveOuts: [], fromConfig: true }), null);
+  must('...and its literal name is still refused', verdict({ command: 'cat keys/prod.pem' }, { guarded: ['keys/*.pem'], openCarveOuts: [], fromConfig: true }), 'deny');
+  must('globsMeet: a literal meets itself', globsMeet('.abc', '.abc'), true);
+  must('globsMeet: two stars with nothing in common still meet', globsMeet('.a*', '.*z'), true);
+  must('globsMeet: a negated set excludes its letter', globsMeet('.[!e]bc', '.ebc'), false);
+  must('globsMeet: a range includes its letter', globsMeet('.[a-f]bc', '.ebc'), true);
+  must('globsMeet: lengths that cannot agree do not meet', globsMeet('.a?', '.abcd'), false);
+
+  /* THE BODY OF A WRITE IS NOT A PATH. Driven through decide(), which is where the action is. */
+  const NOW0 = { guarded: DENY_ALL.guarded, openCarveOuts: [], today: '2026-01-01' };
+  const wr = (input, extra) => decide(Object.assign({ event: 'pre-tool', action: 'write', opaque: false, input,
+    path: input.file_path || null, content: input.content != null ? input.content : (input.new_string != null ? input.new_string : null), old: input.old_string || null }, extra || {}), NOW0).deny;
+  must('a doc whose BODY mentions the name is NOT refused', wr({ file_path: 'README.md', content: 'copy the example to ' + BARE + ' and fill it in' }), false);
+  must('an ignore-file line naming it is NOT refused', wr({ file_path: '.gitignore', content: BARE + '\n' + BARE + '.*\n' }), false);
+  must('an in-place edit whose two sides mention it is NOT refused', wr({ file_path: 'compose.yml', old_string: 'env_file: x', new_string: 'env_file: ' + BARE }), false);
+  must('a write whose PATH is the guarded file is still refused', wr({ file_path: '/repo/' + BARE, content: 'A=1' }), true);
+  must('...and so is an edit of one', wr({ file_path: BARE + '.local', old_string: 'A=1', new_string: 'A=2' }), true);
+  must('a body equal to the name does not hide a path equal to it', wr({ file_path: BARE, content: BARE }), true);
+  must('an OPAQUE write keeps the whole reading', wr({ file_path: 'notes.md', content: 'see ' + BARE }, { opaque: true }), true);
+  must('a shell call is read whole, body or not', decide({ action: 'shell', opaque: false, command: 'cat ' + BARE, input: { command: 'cat ' + BARE } }, NOW0).deny, true);
+
   /* A guarded list that names one file does not guard the others. */
   const ONE = { guarded: ['.env.production'], openCarveOuts: [], fromConfig: true };
   must('a narrow stance refuses the named file', verdict({ command: 'cat .env.production' }, ONE), 'deny');
@@ -621,7 +801,7 @@ function main() {
   setTimeout(() => { try { process.stdin.destroy(); } catch {} finish(data); }, 2000).unref();
 }
 
-module.exports = { decide, decideSessionStart, stanceOf, gate, textOf, rearmFindings, compile, literalGuards, denySpellings };
+module.exports = { decide, decideSessionStart, stanceOf, gate, textOf, rearmFindings, compile, literalGuards, denySpellings, globsMeet, wildcardHits };
 
 if (require.main === module) {
   try { main(); } catch { process.exit(0); } // a guard failure must not take down the session
