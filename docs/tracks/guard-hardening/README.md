@@ -85,7 +85,8 @@ Phases 0 to 3 were done in one session at the owner's request and are committed 
 commits, not four: phases 2 and 3 edit the same two files, so they share one. Phases 4 to 7
 followed in a second session; decision 6 held against the tool, and what was measured is in
 `research/2026-10-08-stop-hook.md` and `research/2026-10-08-spawn-payload.md` (headless only).
-Every phase is done. What is left is the gate re-baseline and the archive. The receipt in
+Every phase is done and the gate baseline was re-recorded after them, in a commit of its own.
+The track is complete: what remains is the owner's merge and push. The receipt in
 this file's frontmatter names the last phase closed; trust it over this sentence. Nothing is
 pushed. This machine has no git identity configured: a commit passes one on the command line.
 The policy file was not edited: it sits within a few bytes of its context ceiling, and raising
