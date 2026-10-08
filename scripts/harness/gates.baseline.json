@@ -4,26 +4,26 @@
     "which refuses unless the suite is green. A re-baseline is a deliberate act, so its",
     "commit subject must start `gates:` — enforced at commit time, not here."
   ],
-  "generatedAt": "2026-10-08T01:49:05.673Z",
-  "commit": "ea091469ecff5db49f9f170433e061d6e805f49b",
+  "generatedAt": "2026-10-08T08:00:35.432Z",
+  "commit": "ef01126c32066d65a13ff3de0ee93fe81240627f",
   "dirty": false,
   "node": "v24.19.0",
   "gates": {
     "test": {
-      "pass": 667,
+      "pass": 689,
       "fail": 0,
       "skipped": 0,
-      "total": 667,
+      "total": 689,
       "exit": 0,
-      "ms": 463352
+      "ms": 695160
     },
     "docs": {
-      "pass": 622,
+      "pass": 632,
       "fail": 0,
       "skipped": 1,
-      "total": 623,
+      "total": 633,
       "exit": 0,
-      "ms": 2398
+      "ms": 2185
     },
     "context": {
       "pass": 6,
@@ -31,7 +31,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 391
+      "ms": 448
     },
     "hygiene": {
       "pass": 7,
@@ -39,7 +39,7 @@
       "skipped": 0,
       "total": 7,
       "exit": 0,
-      "ms": 338
+      "ms": 432
     },
     "skills": {
       "pass": 2,
@@ -47,7 +47,7 @@
       "skipped": 0,
       "total": 2,
       "exit": 0,
-      "ms": 251
+      "ms": 234
     },
     "tools": {
       "pass": 15,
@@ -55,7 +55,7 @@
       "skipped": 0,
       "total": 15,
       "exit": 0,
-      "ms": 242
+      "ms": 271
     },
     "mode": {
       "pass": 1,
@@ -63,7 +63,7 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 237
+      "ms": 272
     },
     "effects": {
       "pass": 1,
@@ -71,7 +71,7 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 7227
+      "ms": 7890
     },
     "carveouts": {
       "pass": 6,
@@ -79,7 +79,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 520
+      "ms": 591
     },
     "peers": {
       "pass": 1,
@@ -87,7 +87,7 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 1418
+      "ms": 1611
     },
     "reproducible-build": {
       "pass": 0,
