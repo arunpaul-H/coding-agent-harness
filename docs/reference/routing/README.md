@@ -47,6 +47,7 @@ BOUNDS:   what it must NOT do: other subtrees, rebuild artifacts, spawn further 
           shared or config files, commit.
 ```
 
+- **Checked** (*Claude Code*): `spawn-guard.cjs` denies a §4 agent's spawn lacking a name.
 - **Hoist the shared read.** If N agents would each open the same doc, open it once here and
   paste the distilled lines into every prompt. Every worker then sees the *same* distillation and
   cannot drift apart on interpretation.

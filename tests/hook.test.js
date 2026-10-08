@@ -233,14 +233,40 @@ describe('the dialect modules — fixtures built from the research file\'s proto
       }
     });
 
-    test('emit: session start is additionalContext, and a stop or prompt deny is exit 2 with the reason', () => {
+    test('emit: session start is additionalContext, and a prompt deny is exit 2 with the reason', () => {
       const out = d.emit({ deny: false, reason: '', context: 'report', message: 'm' }, start);
       assert.deepStrictEqual(JSON.parse(out.stdout), { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: 'report' }, systemMessage: 'm' });
-      for (const kind of ['prompt-submit', 'stop']) {
-        assert.deepStrictEqual(d.emit(deny, { event: kind }), { stdout: '', stderr: 'because', exitCode: 2 });
-        assert.strictEqual(d.emit(ask, { event: kind }).exitCode, 2, 'an ask with no spelling must not become an allow');
-        assert.deepStrictEqual(d.emit(allow, { event: kind }), { stdout: '', stderr: '', exitCode: 0 });
-      }
+      const kind = 'prompt-submit';
+      assert.deepStrictEqual(d.emit(deny, { event: kind }), { stdout: '', stderr: 'because', exitCode: 2 });
+      assert.strictEqual(d.emit(ask, { event: kind }).exitCode, 2, 'an ask with no spelling must not become an allow');
+      assert.deepStrictEqual(d.emit(allow, { event: kind }), { stdout: '', stderr: '', exitCode: 0 });
+      assert.deepStrictEqual(d.emit({ deny: false, reason: '', message: 'm' }, { event: kind }), { stdout: '', stderr: '', exitCode: 0 }, 'a line for the person is spelled at stop only');
+    });
+
+    test('emit: at stop a report is a systemMessage and exit 0, and a forced turn is `decision: block`', () => {
+      // The measured spelling: exit 2 with stderr alone forced nothing, the JSON is what forces.
+      const at = { event: 'stop' };
+      const told = d.emit({ deny: false, reason: '', message: 'm' }, at);
+      assert.deepStrictEqual([JSON.parse(told.stdout), told.stderr, told.exitCode], [{ systemMessage: 'm' }, '', 0]);
+      assert.deepStrictEqual(d.emit(allow, at), { stdout: '', stderr: '', exitCode: 0 });
+      const forced = d.emit(deny, at);
+      assert.deepStrictEqual([JSON.parse(forced.stdout), forced.stderr, forced.exitCode], [{ decision: 'block', reason: 'because', systemMessage: 'short' }, 'because', 2]);
+      assert.strictEqual(JSON.parse(d.emit(ask, at).stdout).decision, 'block', 'an ask with no spelling must not end the turn in silence');
+    });
+
+    test('parse: a spawn is the measured tool name, with the agent and the prompt handed on', () => {
+      const spawnOf = (input) => d.parse(JSON.stringify({ hook_event_name: 'PreToolUse', cwd: '/repo', tool_name: 'Agent', tool_input: input }));
+      const e = spawnOf({ description: 'd', prompt: 'OUTCOME: x', subagent_type: 'review', run_in_background: false });
+      assert.deepStrictEqual([e.action, e.opaque, e.spawn], ['spawn', false, { agent: 'review', prompt: 'OUTCOME: x' }]);
+      assert.deepStrictEqual(spawnOf({ prompt: 7 }).spawn, { agent: null, prompt: null }, 'a field that is not text must not be handed on as text');
+      assert.strictEqual(d.parse(claudePayload('Bash', { command: 'npm test' })).spawn, undefined, 'a call that is not a spawn carries no spawn');
+      assert.strictEqual(d.agents.dir, '.claude/agents');
+      assert.ok(d.wiring.entries(rowOf(DEFAULT_TOOL))[0].entry.matcher.split('|').includes('Agent'), 'the matcher does not name the spawn tool, so the entry is never called for one');
+    });
+
+    test('parse: a stop that follows a forced turn is marked, and only the boolean marks it', () => {
+      const stop = (extra) => d.parse(JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's' }, extra)));
+      assert.deepStrictEqual([stop({ stop_hook_active: false }).forced, stop({ stop_hook_active: true }).forced, stop({}).forced, stop({ stop_hook_active: 'true' }).forced], [false, true, false, false]);
     });
 
     test('the deny layer it names is the file the default tool registers its hooks in', () => {
@@ -547,13 +573,18 @@ describe('hook.js — the one entry, as a process', () => {
     assert.match(r.stderr, /registered with --event session-start and was handed a pre-tool payload/);
   });
 
-  test('prompt-submit and stop are wired end to end and carry no handler yet', () => {
-    // The seam a later track adds a handler to. With an empty list a readable payload allows.
+  test('prompt-submit and stop are wired end to end, and a root with no gate verdict is silent at both', () => {
+    // prompt-submit is the seam a later track adds a handler to: an empty list allows. The stop
+    // handler reads the verdict beside the entry it was loaded from, and this root has none of
+    // its own to be stale against; what it says when there is one is the block at the end.
     const root = mkRoot('seam');
-    for (const [event, name] of [['prompt-submit', 'UserPromptSubmit'], ['stop', 'Stop']]) {
-      const r = entry(root, DEFAULT_TOOL, event, JSON.stringify({ hook_event_name: name, session_id: 's' }));
-      assert.deepStrictEqual([r.status, r.stdout, r.stderr], [0, '', ''], event);
-    }
+    fs.cpSync(path.join(REPO, 'scripts', 'harness'), path.join(root, 'scripts', 'harness'), { recursive: true });
+    fs.rmSync(path.join(root, 'scripts', 'harness', 'gates.json'), { force: true });
+    const copy = path.join(root, 'scripts', 'harness', 'hook.js');
+    const stopped = spawn(root, copy, ['--tool', DEFAULT_TOOL, '--event', 'stop'], JSON.stringify({ hook_event_name: 'Stop', session_id: 's' }));
+    assert.deepStrictEqual([stopped.status, stopped.stdout, stopped.stderr], [0, '', ''], 'stop with no verdict');
+    const r = entry(root, DEFAULT_TOOL, 'prompt-submit', JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: 's' }));
+    assert.deepStrictEqual([r.status, r.stdout, r.stderr], [0, '', ''], 'prompt-submit');
     assert.strictEqual(entry(root, DEFAULT_TOOL, 'prompt-submit', 'junk').status, 2, 'an unreadable prompt payload was passed');
     const stop = entry(root, DEFAULT_TOOL, 'stop', 'junk');
     assert.strictEqual(stop.status, 0, 'an unreadable stop payload must end the turn, not loop it');
@@ -838,5 +869,153 @@ describe('session start through the entry — the reports say what the separate 
     assert.strictEqual(r.status, 0, 'a session start must exit 0 whatever it was handed');
     assert.match(contextOf(r), /payload of this session-start hook could not be read/);
     assert.match(contextOf(r), /permissions\.deny is missing/, 'the reports did not run');
+  });
+});
+
+/* ============================================================ */
+
+describe('guard hardening — what a shell opens, where a shell stands, and what a terminal prints', () => {
+  // Every guarded name below is assembled: this file is written through the guard it tests.
+  const D = DOTENV[0];
+  const N = DOTENV.slice(1);
+  const hardRoot = () => {
+    const root = mkRoot('harden', { env: { guarded: [DOTENV, DOTENV + '.*'], openCarveOuts: [] } });
+    put(root, 'docs/tracks/t/README.md', '---\nid: t\nkind: track\nstatus: open\nread_when: "x"\n---\n# t\n');
+    put(root, 'docs/tracks/t/handoff.md', '---\nid: t-handoff\nkind: handoff\nstatus: open\nread_when: "x"\n---\n# h\n');
+    return root;
+  };
+  const call = (root, tool, input, cwd) => entry(root, DEFAULT_TOOL, 'pre-tool', JSON.stringify({
+    session_id: 'test', cwd: cwd || root, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input, tool_use_id: 'u1',
+  }));
+  const refused = (r, why) => assert.strictEqual(r.status, 2, why + ' was not refused: ' + r.stdout + r.stderr);
+  const passed = (r, why) => assert.deepStrictEqual([r.status, r.stdout], [0, ''], why + ' was not allowed: ' + r.stdout + r.stderr);
+
+  test('a guarded file reached through a quote, a backslash or a wildcard is refused', () => {
+    const root = hardRoot();
+    for (const [why, tool, input] of [
+      ['a quote pair inside the name', 'Bash', { command: 'cat ' + D + N[0] + '""' + N.slice(1) }],
+      ['a backslash inside the name', 'Bash', { command: 'cat ' + D + N[0] + '\\' + N.slice(1) }],
+      ['a trailing star', 'Bash', { command: 'cat ' + D + N.slice(0, 2) + '*' }],
+      ['a question mark', 'Bash', { command: 'cat ' + D + '?' + N.slice(1) }],
+      ['a bracket set', 'Bash', { command: 'cat ' + D + '[' + N[0] + ']' + N.slice(1) }],
+      ['a search glob', 'Grep', { pattern: 'KEY', glob: D + N[0] + '*' }],
+      ['a file glob under any directory', 'Glob', { pattern: '**/' + D + N.slice(0, 2) + '*' }],
+      ['the same star in PowerShell', 'PowerShell', { command: 'Get-Content ' + D + N.slice(0, 2) + '*' }],
+    ]) refused(call(root, tool, input), why);
+  });
+
+  test('...and the wildcards of ordinary work are not', () => {
+    const root = hardRoot();
+    for (const [why, tool, input] of [
+      ['a star that cannot match a dotfile', 'Bash', { command: 'rm *.log' }],
+      ['a search for every script', 'Glob', { pattern: '**/*.js' }],
+      ['a regex that starts dot-star', 'Bash', { command: "sed -i 's/.*foo//' notes.txt" }],
+      ['another dotfile with a star', 'Bash', { command: 'cat .eslintrc*' }],
+      ['a wildcard ending in a twin suffix', 'Bash', { command: 'cat ' + D + N[0] + '*.example' }],
+    ]) passed(call(root, tool, input), why);
+  });
+
+  test('the BODY of a write may mention a guarded name; its path may not be one (MT-01)', () => {
+    const root = hardRoot();
+    passed(call(root, 'Write', { file_path: path.join(root, 'README.md'), content: 'copy the example to ' + DOTENV + ' and fill it in\n' }), 'a setup paragraph');
+    passed(call(root, 'Write', { file_path: path.join(root, '.gitignore'), content: DOTENV + '\n' + DOTENV + '.*\n' }), 'an ignore file');
+    passed(call(root, 'Edit', { file_path: path.join(root, 'compose.yml'), old_string: 'env_file: x', new_string: 'env_file: ' + DOTENV }), 'an in-place edit');
+    refused(call(root, 'Write', { file_path: path.join(root, DOTENV), content: 'A=1\n' }), 'a write TO the guarded file');
+    refused(call(root, 'Edit', { file_path: DOTENV + '.local', old_string: 'A=1', new_string: 'A=2' }), 'an edit OF one');
+    // A tool the dialect has no row for is opaque: nothing says which field is a body.
+    refused(call(root, 'NotebookEdit', { notebook_path: 'a.ipynb', new_source: 'open("' + DOTENV + '")' }), 'an opaque write naming it in a body');
+  });
+
+  test('a move into the archive is refused wherever the shell is standing', () => {
+    const root = hardRoot();
+    refused(call(root, 'Bash', { command: 'cd docs && mv tracks/t ' + 'archive/' }), 'a cd, then a relative move');
+    refused(call(root, 'Bash', { command: 'mv tracks/t ' + 'archive/' }, path.join(root, 'docs')), 'a relative move from a shell already in docs');
+    refused(call(root, 'Bash', { command: 'cp -r docs/tracks/t ' + ARCHIVE + '/ && rm -r docs/tracks/t' }), 'a copy in, then a delete');
+    passed(call(root, 'Bash', { command: 'cd docs && mv tracks/t/a.md tracks/t/b.md' }), 'a move that stays in the track');
+    passed(call(root, 'Bash', { command: 'mv tracks/t ' + 'archive/' }, os.tmpdir()), 'the same words from a shell outside the repo');
+  });
+
+  test('a gate line pasted into a track doc is refused; a sentence with a number in it is not', () => {
+    const root = hardRoot();
+    const into = (text) => call(root, 'Edit', { file_path: path.join(root, 'docs/tracks/t/handoff.md'), old_string: '# h', new_string: '# h\n' + text });
+    refused(into('GATE smoke pass=' + '42 fail=0 skipped=0'), 'a pasted verdict line');
+    passed(into('this phase added 20 tests'), 'a count in a sentence');
+    passed(into('the line ends pass=<n> fail=<n>'), 'the line format');
+  });
+
+  /* THE SPAWN CONTRACT, as a process: the payload is the measured one, the agent directory a
+     fixture. The contract is spelled across lines the way the routing reference gives it. */
+  const CONTRACT = 'OUTCOME: the callers of one function, listed.\nREAD-SET: None, everything you need is below.\nRETURN: one line per caller.\nBOUNDS: read only, spawn nothing.\n';
+  const spawnRoot = () => {
+    const root = hardRoot();
+    put(root, '.claude/agents/review.md', '---\nname: review\nmodel: inherit\n---\n\nYou find defects.\n');
+    return root;
+  };
+  const spawnOf = (root, agent, prompt, tool) => entry(root, tool || DEFAULT_TOOL, 'pre-tool', JSON.stringify({
+    session_id: 'test', cwd: root, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_use_id: 'u1',
+    tool_input: { description: 'a spawn', prompt: prompt, subagent_type: agent, run_in_background: false },
+  }));
+
+  test('a spawn of a registered agent with no contract is refused, and the reason names what is missing', () => {
+    const root = spawnRoot();
+    const none = spawnOf(root, 'review', 'Look at the diff and tell me what is wrong.');
+    refused(none, 'a spawn with no contract');
+    const out = JSON.parse(none.stdout).hookSpecificOutput;
+    assert.strictEqual(out.permissionDecision, 'deny');
+    assert.match(out.permissionDecisionReason, /^S1 SPAWN WITHOUT THE CONTRACT: the prompt for the registered agent `review` lacks OUTCOME, READ-SET, RETURN, BOUNDS\./);
+    const partial = spawnOf(root, 'review', CONTRACT.replace('BOUNDS:', 'Limits:'));
+    refused(partial, 'a spawn with three of the four fields');
+    assert.match(partial.stderr, /lacks BOUNDS\.\n/);
+  });
+
+  test('...and the ordinary spawns are not: the contract present, or an agent the harness did not define', () => {
+    const root = spawnRoot();
+    passed(spawnOf(root, 'review', CONTRACT + '\nThe diff is below.\n'), 'a registered agent with the four fields');
+    passed(spawnOf(root, 'review', 'OUTCOME:\nREAD-SET:\nRETURN:\nBOUNDS: none'), 'four fields whose content nothing judges');
+    passed(spawnOf(root, 'general-purpose', 'Look at the diff.'), 'a built-in agent with no contract');
+    passed(spawnOf(root, 'some-plugin:review', 'Look at the diff.'), 'a plugin agent with no contract');
+    passed(spawnOf(hardRoot(), 'review', 'Look at the diff.'), 'the same name in a repo that defines no agent');
+    // A prompt is prose: a guarded name or a gate line in it is not a path or a doc write.
+    passed(spawnOf(root, 'review', CONTRACT + 'Do not open ' + DOTENV + '. The line reads GATE smoke pass=' + '42 fail=0 skipped=0'), 'a contract whose text mentions a guarded name');
+  });
+
+  /* THE STOP REPORT, as a process. The handler reads the verdict BESIDE THE ENTRY IT WAS LOADED
+     FROM, so the harness scripts are copied into the root and the copy is what runs. A copy is
+     all new files, so the verdict is dated an hour ahead and an edit two hours ahead. */
+  const HOUR = 3600 * 1000;
+  const stopRoot = (tag, overrides) => {
+    const root = mkRoot(tag, overrides);
+    fs.cpSync(path.join(REPO, 'scripts', 'harness'), path.join(root, 'scripts', 'harness'), { recursive: true });
+    put(root, 'scripts/harness/gates.json', JSON.stringify({ generatedAt: new Date(Date.now() + HOUR).toISOString(), gates: {} }));
+    return root;
+  };
+  const edit = (root, rel) => { const at = (Date.now() + 2 * HOUR) / 1000; fs.utimesSync(put(root, rel, 'x\n'), at, at); };
+  const stopAt = (root, extra) => spawn(root, path.join(root, 'scripts', 'harness', 'hook.js'), ['--tool', DEFAULT_TOOL, '--event', 'stop'],
+    JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's', cwd: root, stop_hook_active: false }, extra)));
+
+  test('a turn that ends on edits no gate run saw is REPORTED, and the turn still ends', () => {
+    const root = stopRoot('stop-report');
+    passed(stopAt(root), 'a stop with nothing changed since the run');
+    edit(root, 'scripts/edited.js');
+    edit(root, 'elsewhere/unwatched.js');
+    const r = stopAt(root);
+    assert.strictEqual(r.status, 0, 'a report forced a turn: ' + r.stdout + r.stderr);
+    const out = JSON.parse(r.stdout);
+    assert.deepStrictEqual(Object.keys(out), ['systemMessage'], 'a report must not carry a decision');
+    assert.match(out.systemMessage, /^Gates NOT RUN on this tree: 1 gate-relevant file changed after the last gate run \(newest: scripts\/edited\.js\)\. Verify with: node scripts\/harness\/gates\.js --check/);
+  });
+
+  test('...and it forces a turn only under the opt-in key, and then once per stop', () => {
+    const root = stopRoot('stop-block', { stop: { block: true } });
+    passed(stopAt(root), 'a stop with nothing changed, under the key');
+    edit(root, 'docs/note.md');
+    const first = stopAt(root);
+    assert.strictEqual(first.status, 2, 'the first stop under `stop.block` did not force a turn: ' + first.stdout);
+    const out = JSON.parse(first.stdout);
+    assert.strictEqual(out.decision, 'block');
+    assert.match(out.reason, /^STOP CHECK[\s\S]*newest: docs\/note\.md[\s\S]*node scripts\/harness\/gates\.js --check/);
+    const second = stopAt(root, { stop_hook_active: true });
+    assert.strictEqual(second.status, 0, 'the stop after a forced turn forced another: that is a loop');
+    assert.deepStrictEqual(Object.keys(JSON.parse(second.stdout)), ['systemMessage']);
   });
 });

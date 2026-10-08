@@ -34,9 +34,9 @@
  *            whatever its action, because nothing can say which of them it concerns.
  *
  * ADDING A HANDLER IS ONE EDIT, IN ONE PLACE: the HANDLERS table below. That table is the seam
- * for a later track. `prompt-submit` and `stop` are wired end to end (flag, parse, run, emit)
- * and carry no handler yet; whoever owns one appends an entry to that event's list and changes
- * nothing else in this file.
+ * for a later track. `prompt-submit` is wired end to end (flag, parse, run, emit) and carries
+ * no handler yet; whoever owns one appends an entry to that event's list and changes nothing
+ * else in this file. `stop` carries one: the report of edits made after the last gate run.
  *
  * THE RULES OF REFUSAL.
  *   A deny is the dialect's JSON on stdout AND exit code 2. Several tools are documented to
@@ -64,6 +64,9 @@
  * after it still run), a context that could not be set up, and a stop payload handed to a
  * registration for another event. Forcing a turn because the entry failed is a loop, on every
  * stop, until somebody fixes a hook. Only a stop handler that RETURNS a deny forces a turn.
+ * A stop handler that does not deny may still have a LINE FOR THE PERSON (`message`): the turn
+ * ends and the line is carried to the dialect. Every such line is kept, in list order, unless
+ * a later handler denies, and then the deny is the whole verdict.
  *
  * Each guard keeps its own CLI (--self-test, --gate, --report, --check, --clear,
  * --rearm-check, --memory-check, --hook) and the gates call those directly. Run that way a
@@ -87,10 +90,12 @@ const WORKSPACE = 'worktree-create';
 const envGuard = () => require('./guards/env-guard.cjs');
 const commitHygiene = () => require('./guards/commit-hygiene.cjs');
 const phaseGuard = () => require('./guards/phase-guard.cjs');
+const spawnGuard = () => require('./guards/spawn-guard.cjs');
 const skillVerify = () => require('./guards/skill-verify.cjs');
 const docsLint = () => require('./guards/docs-lint.cjs');
 const branchSync = () => require('./branch-sync.js');
 const worktree = () => require('./worktree.js');
+const closePhase = () => require('./close-phase.js');
 
 /**
  * The declarative deny list that sits in front of the hooks, for the secret-file guard's
@@ -138,6 +143,15 @@ const HANDLERS = {
       gather: (event, ctx) => phaseGuard().gather(event, ctx.cfg()),
       decide: (event, state) => phaseGuard().decide(event, state),
     },
+    {
+      // A spawn of an agent this repo defines must carry the four contract fields. It is
+      // offered a spawn and nothing else, and the other three are not offered a spawn: a
+      // prompt is prose, and none of them has anything to read in it.
+      name: 'spawn-guard',
+      actions: ['spawn'],
+      gather: (event, ctx) => spawnGuard().gather(ctx.root, ctx.dialect && ctx.dialect.agents && ctx.dialect.agents.dir),
+      decide: (event, state) => spawnGuard().decide(event, state),
+    },
   ],
 
   /* Reporters. None can deny; each is silent when it has nothing to say. Same order as the
@@ -173,7 +187,18 @@ const HANDLERS = {
 
   /* THE SEAM, EMPTY ON PURPOSE. Append `{ name, gather, decide }` here; nothing else moves. */
   'prompt-submit': [],
-  stop: [],
+
+  /* A deny here is a FORCED TURN, not a refusal (the header). The one handler reports: it
+     denies only where the config says `stop.block: true`, and then once per stop. */
+  stop: [
+    {
+      // Edits made after the last gate run, by the staleness walk the close uses. It reads the
+      // tree and two files; it never runs the suite.
+      name: 'gate-staleness',
+      gather: (event, ctx) => closePhase().gatherStop(ctx.cfg(), ctx.root),
+      decide: (event, state) => closePhase().decideStop(event, state),
+    },
+  ],
 };
 
 /* ── running a list ─────────────────────────────────────────────────────────── */
@@ -198,10 +223,12 @@ function runOne(h, event, ctx) {
  * An event that can refuse: the list in order, the first DENY ends it, and otherwise the first
  * ASK stands. A handler that threw, or returned something that is not a verdict, is a deny.
  * EXCEPT AT `stop` (see the header): there it is skipped and named in `said`, the lines the
- * entry writes to stderr, because a deny at stop is a forced turn and not a refusal.
+ * entry writes to stderr, because a deny at stop is a forced turn and not a refusal. And at
+ * `stop` a handler that allows may carry a `message`: those are joined into the allow.
  */
 function runGate(list, event, ctx, said) {
   let ask = null;
+  const lines = [];
   for (const h of list) {
     if (!offered(h, event)) continue;
     const r = runOne(h, event, ctx);
@@ -220,8 +247,10 @@ function runGate(list, event, ctx, said) {
     }
     if (r.verdict.deny) return r.verdict;
     if (r.verdict.ask && !ask) ask = r.verdict;
+    else if (!r.verdict.ask && event.event === 'stop' && r.verdict.message) lines.push(String(r.verdict.message));
   }
-  return ask || ALLOW;
+  if (ask) return ask;
+  return lines.length ? { deny: false, reason: '', message: lines.join(' ') } : ALLOW;
 }
 
 /**
@@ -469,6 +498,7 @@ function selfTest() {
       if (e.event === 'session-start') return { stdout: text ? 'CTX ' + text + (v.message ? ' MSG ' + v.message : '') : '', stderr: '', exitCode: 0 };
       if (v.deny) return { stdout: 'DENY', stderr: v.reason, exitCode: 2 };
       if (v.ask) return { stdout: 'ASK', stderr: v.reason, exitCode: 0 };
+      if (e.event === 'stop' && v.message) return { stdout: 'SAY ' + v.message, stderr: '', exitCode: 0 };
       return { stdout: '', stderr: '', exitCode: 0 };
     },
   };
@@ -578,6 +608,12 @@ function selfTest() {
   const stopThrewThenDeny = run(stop, stopCall, { stop: [h('bad', new Error('kaboom')), h('s', deny)] });
   eq('...and the handler after it still runs, and its deny is honoured', [stopThrewThenDeny.exitCode, stopThrewThenDeny.stdout, /`bad` stop handler/.test(stopThrewThenDeny.stderr)], [2, 'DENY', true]);
   eq('runGate with nowhere to say it still skips a thrown stop handler', runGate([h('bad', new Error('x'))], { event: 'stop', action: 'other' }, {}), { deny: false, reason: '' });
+  // A REPORT IS NOT A FORCED TURN: a stop handler that allows may carry a line for the person.
+  const line = (m) => ({ deny: false, reason: '', message: m });
+  eq('a stop handler\'s line reaches the person, and the turn ends', run(stop, stopCall, { stop: [h('s', line('told'))] }), { stdout: 'SAY told', stderr: '', exitCode: 0 });
+  eq('...two handlers\' lines are joined in list order', run(stop, stopCall, { stop: [h('a', line('one')), h('q', allow), h('b', line('two'))] }).stdout, 'SAY one two');
+  eq('...a deny after a line is the whole verdict: the turn is forced', [run(stop, stopCall, { stop: [h('a', line('one')), h('s', deny)] }).stdout, run(stop, stopCall, { stop: [h('a', line('one')), h('s', deny)] }).exitCode], ['DENY', 2]);
+  eq('an allow with a message at PRE-TOOL is still silence', run(pre, call, { 'pre-tool': [h('a', line('chatty'))] }), { stdout: '', stderr: '', exitCode: 0 });
 
   // the flag against the payload
   const start = ['--tool', 'tool-a', '--event', 'session-start'];
@@ -693,10 +729,11 @@ function selfTest() {
 
   /* THE REAL TABLE. Order is the property: it is the order the guards were registered in. */
   eq('the table has one list per event and no other key', Object.keys(HANDLERS).sort(), EVENTS.slice().sort());
-  eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard']);
-  eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write']);
+  eq('pre-tool handlers, in order', HANDLERS['pre-tool'].map((x) => x.name), ['env-guard', 'commit-hygiene', 'phase-guard', 'spawn-guard']);
+  eq('...and what each is offered', HANDLERS['pre-tool'].map((x) => x.actions.join('+')), ['shell+read+search+write', 'shell', 'shell+write', 'spawn']);
   eq('session-start reporters, in order', HANDLERS['session-start'].map((x) => x.name), ['skill-verify', 'env-guard', 'docs-lint', 'branch-sync', 'worktree']);
-  eq('prompt-submit and stop are lists, ready for a handler', [Array.isArray(HANDLERS['prompt-submit']), Array.isArray(HANDLERS.stop)], [true, true]);
+  eq('prompt-submit is a list, ready for a handler', HANDLERS['prompt-submit'], []);
+  eq('stop handlers, in order', HANDLERS.stop.map((x) => x.name), ['gate-staleness']);
   eq('every handler is { name, decide } with gather a function where present',
     EVENTS.every((e) => HANDLERS[e].every((x) => typeof x.name === 'string' && typeof x.decide === 'function' && (x.gather === undefined || typeof x.gather === 'function'))), true);
 
@@ -709,6 +746,28 @@ function selfTest() {
   eq('a shell call that is not a git write and moves nothing is allowed', gate({ action: 'shell', command: 'npm test', input: { command: 'npm test' } }), { deny: false, reason: '' });
   const blindCall = gate({ action: 'other', opaque: true, tool: 'srv.q', input: { query: 'select 1' } });
   eq('an opaque call nothing can read is an ask, not an allow', [blindCall.deny, blindCall.ask], [false, true]);
+
+  /* THE SPAWN GUARD, through the real table. Which agents are registered is a literal here:
+     the directory walk is the guard's own self-test, on a throwaway tree. */
+  const withAgents = HANDLERS['pre-tool'].map((x) => (x.name === 'spawn-guard' ? Object.assign({}, x, { gather: () => ({ registered: ['review'] }) }) : x));
+  const spawned = (agent, prompt) => runGate(withAgents, { event: 'pre-tool', action: 'spawn', command: null, path: null, content: null, old: null, tool: 'Agent', input: {}, opaque: false, spawn: { agent, prompt } }, live);
+  const bare = spawned('review', 'look at the diff');
+  eq('a spawn of a registered agent with no contract is denied by the real list', [bare.deny, /^S1 SPAWN WITHOUT THE CONTRACT/.test(bare.reason)], [true, true]);
+  eq('...the same agent with the four fields is allowed, and no other guard is asked', spawned('review', 'OUTCOME: a\nREAD-SET: b\nRETURN: c\nBOUNDS: d'), { deny: false, reason: '' });
+  eq('...and an agent the harness did not define passes untouched', spawned('general-purpose', 'look at the diff'), { deny: false, reason: '' });
+  eq('with no agent directory to read, through the real gather, a spawn passes', runGate(HANDLERS['pre-tool'], { event: 'pre-tool', action: 'spawn', tool: 'Agent', input: {}, opaque: false, spawn: { agent: 'review', prompt: 'x' } }, live), { deny: false, reason: '' });
+
+  /* THE REAL STOP HANDLER, through the real table. Its disk half is close-phase.js's and is
+     driven there on a synthetic tree; here the state is a literal and the decision is watched. */
+  const edits = { at: 1, count: 3, newest: 'scripts/a.js', fix: 'CMD', block: false };
+  const stopWith = (state, event) => runGate([Object.assign({}, HANDLERS.stop[0], { gather: () => state })], Object.assign({ event: 'stop', action: 'other' }, event), live);
+  const reported = stopWith(edits);
+  eq('stop: edits after the last gate run are REPORTED, and the turn is not forced', [reported.deny, /3 gate-relevant files changed/.test(reported.message), /CMD$/.test(reported.message)], [false, true, true]);
+  eq('stop: nothing changed since the run is silence', stopWith(Object.assign({}, edits, { count: 0 })), { deny: false, reason: '' });
+  const forcedTurn = stopWith(Object.assign({}, edits, { block: true }));
+  eq('stop: under the opt-in key the first stop forces a turn', [forcedTurn.deny, /CMD/.test(forcedTurn.reason)], [true, true]);
+  eq('stop: ...and the stop that follows a forced turn only reports', stopWith(Object.assign({}, edits, { block: true }), { forced: true }).deny, false);
+  eq('stop: a config nothing could read is silence, through the real gather', runGate(HANDLERS.stop, { event: 'stop', action: 'other' }, live), { deny: false, reason: '' });
 
   /* THE REAL REGISTRY: every dialect it lists loads, and every row that names one resolves. */
   let reg = null;

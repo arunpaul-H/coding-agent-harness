@@ -123,6 +123,11 @@ const DEFAULTS = {
   // carry: ignored paths copied from the main checkout into a new workspace; setup: one command
   // run in it. Both are empty by default: a fresh folder then holds the tracked files and no more.
   worktrees: { root: null, branchPrefix: '', carry: [], setup: null },
+  // What the stop handler does when a turn ends on edits no gate run has seen (close-phase.js,
+  // through hook.js). block: false, the default, means it tells the person and the turn ends.
+  // true means it forces one more turn, once per stop, asking for the gate run. Only the
+  // boolean true does that: blocking on a suite that takes minutes is a decision, never a typo.
+  stop: { block: false },
 };
 
 /* The run modes, most to least autonomous: the keys of MODES in mode.js. Spelled here because
@@ -144,7 +149,8 @@ const routingDoc = (cfg) => String(cfg.project.docsRoot).replace(/\\/g, '/').rep
 // its default instead of your setting. `_readme` is a key, not a comment, because
 // JSON has no comments and the explanations have to live somewhere.
 const TOP_LEVEL = ['$schema', '_readme', 'project', 'gates', 'artifacts', 'env',
-  'commitHygiene', 'docs', 'context', 'tools', 'mode', 'worktrees'];
+  'commitHygiene', 'docs', 'context', 'tools', 'mode', 'worktrees', 'stop'];
+const STOP_KEYS = ['_readme', 'block'];
 const TOOLS_KEYS = ['_readme', 'enabled'];
 const MODE_KEYS = ['_readme', 'default'];
 const WORKTREES_KEYS = ['_readme', 'root', 'branchPrefix', 'carry', 'setup'];
@@ -360,6 +366,16 @@ function validate(cfg) {
     if (su !== null && !isStr(su)) errs.push('worktrees.setup must be one command line, or null to run nothing (got ' + JSON.stringify(su) + ')');
   }
 
+  if (!isPlain(cfg.stop)) errs.push('`stop` must be an object { block } — omit the key and a stop reports without forcing a turn');
+  else {
+    // Closed like `tools`: `blok` would otherwise leave the report-only default in force while
+    // the file reads as if it had asked for a forced turn.
+    for (const k of Object.keys(cfg.stop)) {
+      if (!STOP_KEYS.includes(k)) errs.push('stop: unknown key `' + k + '` (allowed: ' + STOP_KEYS.join(', ') + ')');
+    }
+    if (typeof cfg.stop.block !== 'boolean') errs.push('stop.block must be true or false (got ' + JSON.stringify(cfg.stop.block) + ')');
+  }
+
   return errs;
 }
 
@@ -556,6 +572,20 @@ function selfTest() {
     const badModeKey = err();
     ok('a misspelled mode sub-key is rejected rather than ignored', badModeKey && /mode: unknown key `defualt`/.test(badModeKey.message));
     ok('...with a fix line', badModeKey && isStr(badModeKey.fix));
+    // The stop section. Absent means a stop reports and never forces a turn.
+    write(minimal);
+    eq('an absent stop key means report-only', fresh().stop.block, false);
+    write(Object.assign({}, minimal, { stop: {} }));
+    eq('an empty stop section is report-only too', fresh().stop.block, false);
+    write(Object.assign({}, minimal, { stop: { block: true } }));
+    eq('stop.block true is carried through', fresh().stop.block, true);
+    write(Object.assign({}, minimal, { stop: { block: 'true' } }));
+    ok('a block that is not a boolean is rejected', /stop\.block must be true or false/.test(String((err() || {}).message)));
+    write(Object.assign({}, minimal, { stop: { blok: true } }));
+    ok('a misspelled stop sub-key is rejected rather than ignored', /stop: unknown key `blok`/.test(String((err() || {}).message)));
+    write(Object.assign({}, minimal, { stop: true }));
+    ok('a stop section that is not an object is rejected', /`stop` must be an object/.test(String((err() || {}).message)));
+
     write(Object.assign({ modes: { default: 'hitl' } }, minimal));
     ok('the section misspelled at the top level is rejected too', /unknown top-level key\(s\) `modes`/.test(String((err() || {}).message)));
 
@@ -612,7 +642,7 @@ function selfTest() {
   process.exit(fails.length ? 1 : 0);
 }
 
-module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, MODE_KEYS, WORKTREES_KEYS, RUN_MODES, ROUTING_DOC, routingDoc };
+module.exports = { load, ROOT, resolve, fatal, CONFIG_NAME, DEFAULTS, TOP_LEVEL, TOOLS_KEYS, MODE_KEYS, WORKTREES_KEYS, STOP_KEYS, RUN_MODES, ROUTING_DOC, routingDoc };
 
 if (require.main === module) {
   if (process.argv.slice(2).includes('--self-test')) selfTest();

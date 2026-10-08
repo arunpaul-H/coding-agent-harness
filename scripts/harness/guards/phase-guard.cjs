@@ -131,8 +131,11 @@ const RECEIPT_FIELDS = ['closed_phase', 'closed_at', 'gates_sha', 'block_sha', '
  * The same figure shape the doc linter bans, so the two mechanisms cannot disagree
  * about what a figure is. Two to four digits each side: `1/1` is a sentence, a date is
  * not a ratio, and a five-digit figure is not a gate total.
+ * THE SECOND SHAPE is a gate's own verdict line pasted in: a count of two digits or more after
+ * `pass=`, `fail=` or `skipped=`. That is how a figure really reaches a handoff, copied off a
+ * terminal, and the ratio shape never saw it. A one-digit count is left alone, as `1/1` is.
  */
-const GATE_FIGURE = /\b\d{2,4}\s*\/\s*\d{2,4}\b/;
+const GATE_FIGURE = /\b\d{2,4}\s*\/\s*\d{2,4}\b|\b(?:pass|fail|skipped)=\d{2,}\b/;
 
 /**
  * The frozen-evidence predicate and its helpers, IMPORTED rather than copied. See D3.
@@ -189,6 +192,57 @@ const pathsIn = (cmd) => [...String(cmd).matchAll(/(?:^|[\s'"`(=])((?:[\w.-]+\/)
 const movesToArchive = (cmd, P) => new RegExp(
   '\\b(?:git\\s+mv|mv|Move-Item|move)\\b[\\s\\S]*?' + anySep(P.archiveDir) + '(?![\\w.-])', 'i',
 ).test(String(cmd));
+
+/**
+ * A COPY of a track into the archive. The other half of a hand-made archive: copy the folder,
+ * then delete the original, and no move was ever typed. Only a copy that names BOTH the tracks
+ * directory and the archive is caught, so copying anything else anywhere is not asked about.
+ */
+const copiesTrackToArchive = (cmd, P) => new RegExp(
+  '\\b(?:cp|Copy-Item|copy|xcopy|robocopy|rsync)\\b[\\s\\S]*?' + anySep(P.tracksDir) + '[\\\\/][\\s\\S]*?'
+  + anySep(P.archiveDir) + '(?![\\w.-])', 'i',
+).test(String(cmd));
+
+const MOVER = /^\s*(?:git\s+mv|mv|Move-Item|move|cp|Copy-Item|copy|xcopy|robocopy|rsync)\b/i;
+const CHANGES_DIR = /^\s*(?:cd|pushd|chdir|Set-Location|sl)\s+(?:-\w+\s+)*(["']?)([^"'\s]+)\1\s*$/i;
+const absolute = (p) => /^(?:[A-Za-z]:)?[\\/]/.test(String(p));
+
+/**
+ * The chained commands of a line, each with its relative paths written out from the repo root.
+ *
+ * ⚠ D1 matched the archive directory as TEXT, so `cd <docs> && mv tracks/x archive/` named it
+ * nowhere and went through, and so did the same move typed after an earlier call had changed
+ * directory. Both are how an agent normally works, not a way round anything. So the directory
+ * is tracked: it starts where the tool says its shell is standing (`start`, repo-relative, ''
+ * for the root) and follows each `cd` the line chains. Only a move or a copy is rewritten;
+ * every other command is returned as typed.
+ *
+ * A directory outside the repo cannot be followed, so from there paths are left as typed. That
+ * is the old reading, not a new allow.
+ */
+function fromRoot(cmd, start, root) {
+  const inRepo = (d) => d != null && !absolute(d) && !/^\.\.(\/|$)/.test(d);
+  const step = (cwd, arg) => {
+    const a = String(arg).replace(/\\/g, '/');
+    if (absolute(a)) { const n = norm(a, root); return absolute(n) ? null : n; }
+    if (cwd == null) return null;
+    const n = path.posix.normalize((cwd ? cwd + '/' : '') + a).replace(/\/+$/, '');
+    return n === '.' ? '' : n;
+  };
+  let cwd = inRepo(start) ? String(start).replace(/\/+$/, '') : (start ? null : '');
+  const out = [];
+  for (const seg of shellSegments(cmd)) {
+    const cd = seg.match(CHANGES_DIR);
+    if (cd) { const n = step(cwd, cd[2]); cwd = inRepo(n) ? n : null; continue; }
+    if (!cwd || !MOVER.test(seg)) { out.push(seg); continue; }
+    out.push(seg.trim().split(/(\s+)/).map((w, i) => {
+      const bare = w.replace(/^["']|["']$/g, '');
+      if (i === 0 || !bare.trim() || /^-/.test(bare) || absolute(bare) || /^(?:git|mv)$/i.test(bare)) return w;
+      return step(cwd, bare) || w;
+    }).join(''));
+  }
+  return out;
+}
 
 /** A track doc: anything under a track folder. */
 const isTrackDoc = (p, P) => new RegExp('^' + esc(P.tracksDir) + '/[^/]+/.+\\.md$').test(String(p));
@@ -289,12 +343,14 @@ function rules(action, e, read, known, P, fz, root) {
   const write = action === 'write';
 
   /* D1 — archiving is a close */
-  if (shell && movesToArchive(cmd, P)) {
+  const start = e.cwd ? norm(e.cwd, root) : '';
+  const placed = shell ? [cmd].concat(fromRoot(cmd, start, root)) : [];
+  if (placed.some((c) => movesToArchive(c, P) || copiesTrackToArchive(c, P))) {
     return 'D1 ARCHIVING IS A CLOSE, NOT A MOVE.\n'
       + 'A track reaches ' + P.archiveDir + '/ through `node scripts/harness/close-phase.js <track-id> --archive`, '
       + 'which requires a green gates.json recorded at HEAD, a clean tree and a lint-clean handoff, writes the '
       + 'receipt, and regenerates the generated doc index.\n'
-      + 'A bare mv leaves a track archived with no receipt and an index that still routes to it.';
+      + 'A bare move or copy leaves a track archived with no receipt and an index that still routes to it.';
   }
 
   /* D6 — the run-mode receipt. The path field of a write, and only that. */
@@ -374,7 +430,8 @@ function rules(action, e, read, known, P, fz, root) {
     if (!hit) continue;
     const sourced = known.has(hit.replace(/\s+/g, ''));
     return 'D3 NO GATE FIGURE IN PROSE.\n' + t.file + ' would gain `' + hit + '`, which is '
-      + (sourced ? 'a real figure from the current gates.json — and it will be wrong the next time a gate moves.'
+      + (hit.includes('=') ? 'a count copied off a gate line — and it will be wrong the next time that gate moves.'
+        : sourced ? 'a real figure from the current gates.json — and it will be wrong the next time a gate moves.'
         : 'in no gates.json row at all, so nothing can check it.') + '\n'
       + 'Read it with `node scripts/harness/gates.js --check`. A figure lives in the two files that command '
       + 'writes and compares, scripts/harness/gates.json and gates.baseline.json, and nowhere else.\n'
@@ -546,7 +603,7 @@ function selfTest() {
     frozenEvidence: (p, fm) => FROZEN.frozenEvidence(p, fm, dirs),
   }));
   const FZ = pin(FIXTURE_DIRS);
-  const d = (action, e, fz) => rules(action, e, read, known, P, fz === undefined ? FZ : fz);
+  const d = (action, e, fz) => rules(action, e, read, known, P, fz === undefined ? FZ : fz, '/repo');
   const eq = (l, got, want) => { CHECKS++; if (JSON.stringify(got) !== JSON.stringify(want)) f.push(l + ': got ' + JSON.stringify(got) + ' want ' + JSON.stringify(want)); };
   const denied = (l, tool, input, code) => eq(l, String(d(tool, input) || '').slice(0, 2), code);
   const allowed = (l, tool, input) => { CHECKS++; const r = d(tool, input); if (r) f.push(l + ': DECIDED with ' + JSON.stringify(String(r).slice(0, 60))); };
@@ -558,6 +615,27 @@ function selfTest() {
   // destination directory with nothing after it, and it was the one form that got past.
   denied('a git mv INTO the archive directory', 'shell', { command: 'git mv docs/tracks/t docs/archive' }, 'D1');
   denied('...with a trailing separator and nothing after it', 'shell', { command: 'git mv docs/tracks/t docs/archive/' }, 'D1');
+  // ⚠ THE DIRECTORY IS FOLLOWED. Each of these names the archive nowhere as text, and went through.
+  denied('a cd, then a move with paths relative to it', 'shell', { command: 'cd docs && mv tracks/t archive/' }, 'D1');
+  denied('...with git mv and a semicolon', 'shell', { command: 'cd docs; git mv tracks/t archive/t' }, 'D1');
+  denied('...two cds deep', 'shell', { command: 'cd docs && cd tracks && mv t ../archive/' }, 'D1');
+  denied('...in PowerShell', 'shell', { command: 'Set-Location docs; Move-Item tracks\\t archive\\' }, 'D1');
+  denied('a shell already standing in the docs folder', 'shell', { command: 'mv tracks/t archive/', cwd: 'docs' }, 'D1');
+  denied('...given as an absolute folder', 'shell', { command: 'mv tracks/t archive/', cwd: '/repo/docs' }, 'D1');
+  allowed('a cd, then a move that stays out of the archive', 'shell', { command: 'cd docs && mv tracks/t/a.md tracks/t/b.md' });
+  allowed('a cd into the archive that moves nothing', 'shell', { command: 'cd docs/archive && ls' });
+  allowed('a shell standing OUTSIDE the repo is read as typed', 'shell', { command: 'mv tracks/t archive/', cwd: '/elsewhere/docs' });
+  allowed('a cd out of the repo is not followed back in', 'shell', { command: 'cd ../other && mv docs/tracks/t archived/' });
+  // The other half of a hand-made archive: copy the folder in, delete the original.
+  denied('a copy of a track into the archive', 'shell', { command: 'cp -r docs/tracks/t docs/archive/ && rm -r docs/tracks/t' }, 'D1');
+  denied('...in PowerShell', 'shell', { command: 'Copy-Item -Recurse docs\\tracks\\t docs\\archive\\t' }, 'D1');
+  denied('...after a cd', 'shell', { command: 'cd docs && cp -r tracks/t archive/' }, 'D1');
+  allowed('a copy that does not leave the tracks folder', 'shell', { command: 'cp docs/tracks/t/plan.md docs/tracks/t/plan.bak.md' });
+  allowed('a copy OUT of the archive, to read an old plan', 'shell', { command: 'cp docs/archive/t/plan.md /tmp/old-plan.md' });
+  eq('fromRoot: a line with no cd is returned as typed', fromRoot('mv a b && ls', '', '/repo'), ['mv a b ', ' ls']);
+  eq('fromRoot: a cd is consumed and the move after it is placed', fromRoot('cd docs && mv tracks/t archive/', '', '/repo'), ['mv docs/tracks/t docs/archive']);
+  eq('fromRoot: a flag and a quoted path', fromRoot('cd docs && mv -f "tracks/t" archive', '', '/repo'), ['mv -f docs/tracks/t docs/archive']);
+  eq('fromRoot: a command that moves nothing is left alone', fromRoot('cd docs && cat tracks/t/plan.md', '', '/repo'), [' cat tracks/t/plan.md']);
   denied('...spelled with a backslash, as PowerShell would', 'shell', { command: 'Move-Item docs/tracks/t docs\\archive' }, 'D1');
   allowed('close-phase --archive is the sanctioned path', 'shell', { command: 'node scripts/harness/close-phase.js t --archive' });
   allowed('reading the archive is not moving into it', 'shell', { command: 'cat docs/archive/traps.md' });
@@ -664,6 +742,14 @@ function selfTest() {
   } else {
     denied('an invented figure', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nsmoke 999/999 green\n' }, 'D3');
     denied('a REAL figure is denied too', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nsmoke 42/42 green\n' }, 'D3');
+    // The shape a figure really arrives in: a verdict line copied off a terminal.
+    denied('a pasted gate line', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nGATE smoke pass=42 fail=0 skipped=0\n' }, 'D3');
+    denied('...by its fail count alone', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nit ended fail=12\n' }, 'D3');
+    eq('...and the message says where it came from', /copied off a gate line/.test(String(d('write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nsmoke pass=42\n' }))), true);
+    allowed('a one-digit count is a sentence, like 1/1', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nthe line ends pass=1 fail=0 skipped=0\n' });
+    allowed('the line FORMAT, with placeholders, is not a figure', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nGATE name pass=<n> fail=<n> skipped=<n>\n' });
+    allowed('a count of tests in a sentence is not a gate line', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nthis phase added 20 tests\n' });
+    allowed('a pasted line inside a code span is quoting', 'write', { path: 'docs/tracks/t/plan.md', content: '---\nid: p\nstatus: open\n---\nit prints `GATE smoke pass=42 fail=0`\n' });
     denied('a figure into AGENTS.md', 'write', { path: 'AGENTS.md', old: 'a', content: 'suite 42/42' }, 'D3');
     // A subtree's policy file is governed wherever it sits, under either name (trap MT-12).
     denied('a figure into a NESTED AGENTS.md', 'write', { path: 'packages/api/AGENTS.md', content: 'suite 42/42' }, 'D3');

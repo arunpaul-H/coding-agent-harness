@@ -505,13 +505,13 @@ describe('the registration this repo runs under', () => {
     const reg = JSON.parse(fs.readFileSync(path.join(SRC, 'tools.json'), 'utf8'));
     const row = reg.tools.find((t) => t.id === 'claude-code');
     const entries = wiring.entries(row);
-    assert.deepStrictEqual(entries.map((e) => e.event), ['pre-tool', 'session-start', 'worktree-create']);
+    assert.deepStrictEqual(entries.map((e) => e.event), ['pre-tool', 'session-start', 'stop', 'worktree-create']);
     for (const e of entries) {
       const want = e.entry.hooks[0];
       const have = settings.hooks[e.at[1]].flatMap((x) => x.hooks);
       assert.ok(have.some((h) => h.command === want.command && h.timeout === want.timeout), e.event + ' is not registered as the dialect renders it: ' + want.command);
     }
-    assert.deepStrictEqual(wiring.entries(Object.assign({}, row, { worktreeCreate: undefined })).map((e) => e.event), ['pre-tool', 'session-start'],
+    assert.deepStrictEqual(wiring.entries(Object.assign({}, row, { worktreeCreate: undefined })).map((e) => e.event), ['pre-tool', 'session-start', 'stop'],
       'a row without the cell still got the workspace entry');
   });
 

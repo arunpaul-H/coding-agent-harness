@@ -7,7 +7,10 @@
  *
  *   event    'pre-tool' | 'session-start' | 'prompt-submit' | 'stop', or null when the payload
  *            does not say (hook.js then takes it from its --event flag, which is authoritative)
- *   action   'shell' | 'read' | 'search' | 'write' | 'other'
+ *   action   'shell' | 'read' | 'search' | 'write' | 'spawn' | 'other'
+ *   spawn    OPTIONAL, a `spawn` call only: `{ agent, prompt }`, the subagent's type and the
+ *            text it is handed, each a string or null. A dialect sets it after event(); only
+ *            the spawn guard reads it
  *   command  the shell text, or null. A STRING or nothing: a `command` spelled as a list or an
  *            object is not text a guard can judge, so it is null and the call is not readable
  *   path     the file the call targets, or null
@@ -19,6 +22,12 @@
  *            text, and the phase guard names its KEYS when it has to ask. An input that arrived
  *            as a string or a list is KEPT, under the one key `value`, so the text guard still
  *            reads it; it is never replaced by an empty object
+ *   cwd      OPTIONAL: the directory the tool's shell is standing in, where the envelope names
+ *            one. A dialect sets it after event(); absent or null, a relative path is read from
+ *            the repo root. Only the phase guard reads it
+ *   forced   OPTIONAL, stop only: true when this stop follows a turn a stop hook forced, where
+ *            the tool's payload says so. A dialect sets it after event(); absent, a handler
+ *            reads every stop as a first one
  *   opaque   true when the dialect cannot vouch for the input's shape: a server-defined tool, a
  *            tool name the dialect has no row for, an input that is not an object, or a known
  *            action whose needed field is absent (a shell call with no string `command`, a write
@@ -31,7 +40,9 @@
  *
  *   { deny: boolean, reason: string }      the whole contract; `{ deny: false, reason: '' }` allows
  *   ask: true        with deny false: a human decides. A dialect with no spelling for it denies
- *   message          one line for the person at the keyboard, where the dialect has a place for it
+ *   message          one line for the person at the keyboard, where the dialect has a place for it.
+ *                    At `stop` a verdict that does not deny may carry one: the turn ends and
+ *                    the person is told. A deny at `stop` is a forced turn, not a refusal
  *   context          session-start only: text for the model's context
  */
 

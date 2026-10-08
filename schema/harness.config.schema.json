@@ -319,6 +319,24 @@
           "default": null
         }
       }
+    },
+
+    "stop": {
+      "description": "What the stop handler does when a turn ends on edits no gate run has seen. It compares the gate-relevant trees with the moment the last verdict was recorded and never runs the suite itself. Absent, it reports to the person and the turn ends.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_readme": {
+          "description": "Prose about this section, as an array of lines.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "block": {
+          "description": "false: the handler tells the person which files changed after the last gate run, and the turn ends. true: it forces one more turn, once per stop, asking for the gate run or a plain statement that the gates were not run. Opt-in, because a suite that takes minutes makes a forced turn expensive.",
+          "type": "boolean",
+          "default": false
+        }
+      }
     }
   },
 

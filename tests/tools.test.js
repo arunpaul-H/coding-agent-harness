@@ -507,6 +507,11 @@ describe('the `tools` config key', () => {
     assert.deepStrictEqual(schema.properties.mode.properties.default.enum, C.RUN_MODES.concat([null]));
     assert.strictEqual(schema.properties.mode.properties.default.default, DEFAULTS.mode.default);
     assert.deepStrictEqual(C.RUN_MODES, require(path.join(SRC, 'mode.js')).MODE_IDS);
+    // ...and `stop`: one boolean, off unless the file says the boolean true.
+    assert.strictEqual(schema.properties.stop.additionalProperties, false);
+    assert.deepStrictEqual(Object.keys(schema.properties.stop.properties).sort(), C.STOP_KEYS.slice().sort());
+    assert.strictEqual(schema.properties.stop.properties.block.default, DEFAULTS.stop.block);
+    assert.strictEqual(DEFAULTS.stop.block, false, 'a stop that forces a turn by default would loop on a slow suite');
   });
 
   test('this repo\'s own config names its tools, and every one has a row', () => {

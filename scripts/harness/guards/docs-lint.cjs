@@ -96,7 +96,10 @@ const SLOP = /\b(delve|leverage|seamless|Certainly|robust solution|it'?s worth n
 /* A gate figure: a `nn/nn` pair. Gate figures belong in the two files gates.js writes and compares
    (gates.json, the last run; gates.baseline.json, the committed record) and nowhere else, because
    a figure in prose is a figure nobody re-measures and every reader believes. */
-const GATE_FIGURE = /\b\d{2,4}\s*\/\s*\d{2,4}\b/;
+/* ...or a count of two digits or more after `pass=`, `fail=` or `skipped=`: a gate's own verdict
+   line pasted in. The write guard spells the same two shapes, and its self-test and this one
+   hold each to them. */
+const GATE_FIGURE = /\b\d{2,4}\s*\/\s*\d{2,4}\b|\b(?:pass|fail|skipped)=\d{2,}\b/;
 
 const hard = [], warn = [];
 const fail = (f, msg) => hard.push(`${f}: ${msg}`);
@@ -149,7 +152,24 @@ try {
    its subject lives outside the repo, so on a box without the file it cannot run and declares a
    skip instead. Where the file is there it announces itself like any other rule. Either way it
    is exactly one check in the total; THE COUNT at the bottom says why that has to hold. */
-const TALLIED_RULES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12];
+const TALLIED_RULES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13];
+
+/**
+ * Rule 13, the decision: what is wrong with an archived track's README, or null. Pure.
+ * `fm` is its frontmatter, `recompute` is close-phase.js's receipt function or null where that
+ * file could not be loaded (the run then declares the recompute skipped, once, for rule 2 too).
+ */
+function archiveFinding(id, fm, recompute) {
+  if (!fm || fm.kind !== 'track') return null;
+  const how = ' Only `node scripts/harness/close-phase.js ' + id + ' --archive` puts a track here: move the folder back and close it.';
+  if (fm.status !== 'complete') return 'a track in the archive that says `status: ' + (fm.status || '(none)') + '` — it was moved by hand, with no close.' + how;
+  const missing = ['receipt', 'closed_phase', 'gates_sha', 'block_sha'].filter((k) => !fm[k]);
+  if (missing.length) return 'an archived track without ' + missing.map((k) => '`' + k + '`').join(', ') + ' — nothing shows it was closed.' + how;
+  if (recompute && recompute(id, fm.closed_phase, fm.gates_sha, fm.block_sha) !== fm.receipt) {
+    return 'an archived track whose `receipt:` does not recompute for the id `' + id + '` — a typed receipt, or a folder renamed after the close.' + how;
+  }
+  return null;
+}
 const seenRules = new Set();
 let applications = 0;
 const applied = (n) => { seenRules.add(n); applications += 1; };
@@ -714,6 +734,21 @@ function lint() {
       .filter((l) => l.startsWith('+') && !l.startsWith('+++') && SLOP.test(stripCode(l.slice(1))));
     if (hits.length) soft('git diff', `${hits.length} added line(s) carry slop markers (em-dash / delve / leverage / seamless), e.g. ${JSON.stringify(hits[0].slice(1, 90))}`);
   }
+  applied(13);
+  /* 13. A TRACK IN THE ARCHIVE WAS CLOSED, NOT MOVED. The write guard refuses a bare move or copy
+         into the archive, and a guard reads a command: a script, a file manager and a tool with no
+         hook all get past it. This reads the TREE, which none of them can talk their way round.
+         One application for the sweep, whatever it finds, like rule 11. Closed work that carries
+         no track frontmatter owes nothing here: it predates the contract. */
+  let archived = [];
+  try { archived = fs.readdirSync(resolve(ARCHIVE), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { /* no archive yet */ }
+  for (const id of archived) {
+    const f = ARCHIVE + '/' + id + '/README.md';
+    const text = readOrNull(resolve(f));
+    const msg = text == null ? null : archiveFinding(id, parseFrontmatter(text), receiptFor);
+    if (msg) fail(f, msg);
+  }
+
   // `memorySwept` is the ONE answer to "did rule 10 run", read by the skip below. Asking the
   // filesystem a second time there (it once did, with existsSync) let a file that exists and
   // cannot be read land in neither bucket: not applied, not skipped, and the total one short.
@@ -842,6 +877,11 @@ function selfTest() {
   eq('gate figure: spaced', GATE_FIGURE.test('377 / 377'), true);
   eq('NOT a gate figure: a date', GATE_FIGURE.test('on 2026-01-04'), false);
   eq('NOT a gate figure: single digits', GATE_FIGURE.test('1/1'), false);
+  eq('gate figure: a pasted verdict line', GATE_FIGURE.test('GATE smoke pass=264 fail=0 skipped=0'), true);
+  eq('gate figure: a fail count alone', GATE_FIGURE.test('it ended fail=12'), true);
+  eq('NOT a gate figure: one-digit counts', GATE_FIGURE.test('pass=1 fail=0 skipped=0'), false);
+  eq('NOT a gate figure: the line format with placeholders', GATE_FIGURE.test('pass=<n> fail=<n>'), false);
+  eq('NOT a gate figure: a count of tests in a sentence', GATE_FIGURE.test('this phase added 20 tests'), false);
   eq('code spans are quoting, not asserting', GATE_FIGURE.test(stripCode('`smoke 264/264`')), false);
   eq('fences are stripped too', stripCode('a\n```\n264/264\n```\nb').includes('264'), false);
   eq('headings: numbered', [...headingNums('## 3. Spawn\n### 7) Handoff\n')].sort(), ['3', '7']);
@@ -905,6 +945,17 @@ function selfTest() {
   // The decision that turns a deleted call site into a NAMED failure. Literals, because the live
   // sweep is what drives the real one and a self-test that drove it too would be asserting its own
   // conclusion.
+  // Rule 13, from literals. `rc` stands in for the imported receipt function.
+  const rc = (id, p, g, b) => [id, p, g, b].join('|');
+  const closed = { kind: 'track', status: 'complete', closed_phase: '3', gates_sha: 'g', block_sha: 'b', receipt: 't|3|g|b' };
+  eq('archive: a track closed by the script is clean', archiveFinding('t', closed, rc), null);
+  eq('archive: a track moved in while open is a finding', /moved by hand/.test(archiveFinding('t', { kind: 'track', status: 'open' }, rc)), true);
+  eq('archive: complete with no receipt is a finding', /without `receipt`/.test(archiveFinding('t', { kind: 'track', status: 'complete' }, rc)), true);
+  eq('archive: a receipt for another id is a finding', /does not recompute/.test(archiveFinding('renamed', closed, rc)), true);
+  eq('archive: with no receipt function the fields are still required', archiveFinding('t', { kind: 'track', status: 'complete', receipt: 'x' }, null) === null, false);
+  eq('archive: ...and a whole one is not failed on a check that cannot run', archiveFinding('t', closed, null), null);
+  eq('archive: closed work with no frontmatter owes nothing', archiveFinding('old', null, rc), null);
+  eq('archive: nor does a doc that is not a track', archiveFinding('old', { kind: 'reference', status: 'open' }, rc), null);
   eq('rules: a full sweep leaves nothing unapplied', rulesNotApplied([1, 2, 3], new Set([1, 2, 3])), []);
   eq('rules: a deleted call site is named', rulesNotApplied([1, 2, 3], new Set([1, 3])), [2]);
   eq('rules: an untallied rule that ran is not a finding', rulesNotApplied([1, 2], new Set([1, 2, 10])), []);

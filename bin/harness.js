@@ -600,10 +600,22 @@ function buildPlan(pkgRoot, target, d) {
   // THE SKILLS, once per root an enabled tool loads from: copied to the root they are written
   // for, rendered to any other. A rendered copy is pinned in the lock so the gate can hold it to
   // its source (scripts/harness/guards/skill-verify.cjs, RENDER-DRIFT).
+  // A COPIED skill is pinned too, as `shipped`: the bytes this package shipped, and no claim that
+  // anyone read them. Unpinned, it is named at every session start of every repo, for ever.
   const renderedLock = {};
+  const shippedLock = {};
   for (const root of TOOLS.skillRoots(REGISTRY, enabled)) {
     for (const s of SHIPPED_SKILLS) {
-      if (root === SKILL_SOURCE) { copyDir(SKILL_SOURCE + '/' + s); continue; }
+      if (root === SKILL_SOURCE) {
+        copyDir(SKILL_SOURCE + '/' + s);
+        // A package that lost its guards has no verifier to pin with. That is the guards' own
+        // ABSENT line below, and the run stops there: nothing is pinned and nothing is written.
+        let verifier = null;
+        try { verifier = SKILLS(); } catch { verifier = null; }
+        const bytes = verifier && verifier.skillFiles(path.join(pkgRoot, ...SKILL_SOURCE.split('/'), s));
+        if (bytes && Object.keys(bytes).length) shippedLock[s] = verifier.shippedLockEntry(SKILL_SOURCE + '/' + s, bytes);
+        continue;
+      }
       const map = SKILLS().renderSkillFiles(path.join(pkgRoot, ...SKILL_SOURCE.split('/'), s));
       if (!map || !Object.keys(map).length) { absent.push(SKILL_SOURCE + '/' + s + '/'); continue; }
       for (const rel of Object.keys(map).sort()) items.push({ dest: root + '/' + s + '/' + rel, content: map[rel], note: 'rendered from ' + SKILL_SOURCE + '/' + s + ', portable frontmatter only' });
@@ -630,11 +642,15 @@ function buildPlan(pkgRoot, target, d) {
 
   const cfg = buildConfig(d);
   items.push({ dest: CONFIG_NAME, content: JSON.stringify(cfg, null, 2) + '\n', note: 'generated from what was detected' });
-  if (!Object.keys(renderedLock).length) {
+  // The lock is keyed by name. A name both copied and rendered keeps the rendered entry under
+  // the name, as it always was, and the copied one beside it under `<name>.shipped`.
+  const pinned = Object.assign({}, renderedLock);
+  for (const s of Object.keys(shippedLock)) pinned[renderedLock[s] ? s + '.shipped' : s] = shippedLock[s];
+  if (!Object.keys(pinned).length) {
     items.push({ dest: 'skills-lock.json', content: JSON.stringify({ version: 2, skills: {} }, null, 2) + '\n', note: 'empty — a lock inherited from another machine pins another machine\'s review' });
   } else {
-    // A lock that exists is the user's: an entry is ADDED for a rendered copy that has none, and
-    // no entry already there is touched. A stale one is the gate's to report, after a read.
+    // A lock that exists is the user's: an entry is ADDED for a shipped or rendered copy that has
+    // none, and no entry already there is touched. A stale one is the gate's to report, after a read.
     merge('skills-lock.json', (text) => {
       let lock = { version: 2, skills: {} };
       if (text !== null) {
@@ -643,11 +659,11 @@ function buildPlan(pkgRoot, target, d) {
         if (lock.skills === undefined) lock.skills = {};
         if (!lock.skills || Array.isArray(lock.skills) || typeof lock.skills !== 'object') return { refuse: '`skills` is not an object' };
       }
-      const missing = Object.keys(renderedLock).filter((n) => !(n in lock.skills));
+      const missing = Object.keys(pinned).filter((n) => !(n in lock.skills));
       if (text !== null && !missing.length) return { text: text, changed: false };
-      for (const n of missing) lock.skills[n] = renderedLock[n];
+      for (const n of missing) lock.skills[n] = pinned[n];
       return { text: JSON.stringify(lock, null, 2) + '\n', changed: true };
-    }, 'pins the rendered skill copies to their source; nothing else is inherited');
+    }, 'pins the skills this package shipped, and the rendered copies to their source; no review is claimed or inherited');
   }
   items.push({ dest: '.gitignore', content: gitignoreText(cfg.env.guarded), note: 'the ignore rules the harness depends on' });
   for (const m of merges.values()) {
@@ -1671,7 +1687,7 @@ const HELP = [
   '      Copy the harness into a repo: .claude/{settings.json,helpers,agents,skills}, scripts/harness/,',
   '      schema/, templates/track/, templates/reference/, a ' + CONFIG_NAME + ' generated from what it detects (package manager,',
   '      test command, docs dir, default branch), AGENTS.md (the policy), its CLAUDE.md stub and the routing doc,',
-  '      an empty skills-lock.json, an empty gate baseline, an empty context report and a context',
+  '      a skills-lock.json pinning only the skills it copied, an empty gate baseline, an empty context report and a context',
   '      budget marked `placeholder`: no figure measured on another tree is inherited.',
   '      Never overwrites an existing file without --force. --dry-run prints the plan and writes nothing.',
   '      --only limits the run to one path or directory, e.g. --force --only .claude/helpers',
@@ -1916,7 +1932,11 @@ function selfTest() {
     eq('init: AGENTS.md is rendered with the target\'s name', readText(path.join(t, 'AGENTS.md')), '# web\n');
     eq('init: CLAUDE.md is the stub, byte for byte', readText(path.join(t, 'CLAUDE.md')), '@AGENTS.md\n');
     eq('init: the routing doc is rendered into the docs root', readText(path.join(t, 'doc', 'reference', 'routing', 'README.md')), '---\nid: routing\n---\n# Routing for web ({{mystery}})\n');
-    eq('init: the skill lock is empty', readJson(path.join(t, 'skills-lock.json')), { version: 2, skills: {} });
+    const initLock = readJson(path.join(t, 'skills-lock.json'));
+    eq('init: the skill lock pins what was copied, and only that', Object.keys(initLock.skills).sort(), SHIPPED_SKILLS.slice().sort());
+    eq('init: every pin is `shipped`, at the copy, with a digest and NO review date',
+      SHIPPED_SKILLS.map((s) => { const e = initLock.skills[s]; return [e.sourceType, e.skillDir, /^[0-9a-f]{64}$/.test(e.computedHash), 'reviewedAt' in e]; }),
+      SHIPPED_SKILLS.map((s) => ['shipped', '.claude/skills/' + s, true, false]));
     eq('init: the baseline carries no inherited figure', readJson(path.join(t, 'scripts', 'harness', 'gates.baseline.json')).gates, {});
     // The fake package's baseline is a RECORDED one (`_readme: ['why']`, a commit, a row). None
     // of it may arrive: prose about a recorded verdict does not describe a file with no rows.

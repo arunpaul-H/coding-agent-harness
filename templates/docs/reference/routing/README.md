@@ -44,6 +44,7 @@ BOUNDS:   what it must NOT do: <BOUNDS_EXAMPLES>, spawn further agents, commit.
 ```
 <!-- <BOUNDS_EXAMPLES>: the scopes a worker most often strays into here, e.g. "other packages, rebuild artifacts, edit shared config". -->
 
+- **Checked** (*Claude Code*): `spawn-guard.cjs` denies a §4 agent's spawn lacking a name.
 - **Hoist the shared read.** If N agents would each open the same doc, open it once here and
   paste the distilled lines into every prompt. Every worker then sees the *same* distillation and
   cannot drift apart on interpretation.

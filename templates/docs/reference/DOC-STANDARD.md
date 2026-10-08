@@ -93,7 +93,7 @@ Hard failures. Each exits 1 and reds the `docs` gate:
 
 - **The caps** of §4.
 - **Frontmatter**: the four required fields, the two enums, a unique `id`.
-- **No gate figure in prose.** A pair matching `\d{2,4}/\d{2,4}` outside a code span fails.
+- **No gate figure in prose.** Outside a code span a pair matching `\d{2,4}/\d{2,4}` fails, as does a pasted gate line (`pass=`, `fail=` or `skipped=` and two digits or more).
   `node scripts/harness/gates.js --check` is the only way to read one. For a figure that is
   historical or not a gate figure, tag the file `<!-- figure-ok: <reason> -->`; a bare tag or a reason of a few characters does not count.
 - **No bare `trap #n`** where the doc declares a `trap_prefix`.
@@ -104,7 +104,7 @@ Hard failures. Each exits 1 and reds the `docs` gate:
 - **Frozen evidence is frozen.** A `research` or `exploration` body that differs from its
   committed version fails; only frontmatter may change. Correct a finding with a new dated file.
 - **`status: complete` needs a receipt** that recomputes from `closed_phase`, `gates_sha` and
-  `block_sha`. The linter imports the formula from `close-phase.js`, so a typed receipt fails.
+  `block_sha`. The linter imports the formula from `close-phase.js`, so a typed receipt fails. So does a track folder in the archive that was moved there by hand.
 - **`source: external` needs a `⚠ UNTRUSTED` banner in the body.** Quoted outside text is data.
 - **Every rule must have run.** The gate tallies rule applications: a deleted rule is named.
 
@@ -115,7 +115,7 @@ in the auto-memory index, which lives outside the repo: `docs-lint.cjs --memory-
 at session start and it never moves the gate figure.
 
 The write-time half is `scripts/harness/guards/phase-guard.cjs`: it denies a gate figure, a hand-flipped
-`status:`, a typed receipt and a bare archive move, sharing `doc-frozen.cjs` with the linter.
+`status:`, a typed receipt and a bare archive move or copy, sharing `doc-frozen.cjs` with the linter.
 
 ## 6. Closing a phase
 
