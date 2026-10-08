@@ -162,7 +162,15 @@ describe('harness init (from the real package)', () => {
       fs.readFileSync(path.join(ROOT, 'templates', 'reference', 'README.md'), 'utf8'));
     assert.deepStrictEqual(files.filter((f) => f.startsWith('docs/reference/')), ['docs/reference/routing/README.md']);
     assert.ok(!files.includes('scripts/harness/gates.json'), 'run output must not be installed');
-    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'skills-lock.json'), 'utf8')), { version: 2, skills: {} });
+    // The lock pins the skills init copied, as `shipped`: the bytes, and no claim of a review.
+    const lock = JSON.parse(fs.readFileSync(path.join(dir, 'skills-lock.json'), 'utf8'));
+    const copied = files.filter((f) => /^\.claude\/skills\/[^/]+\/SKILL\.md$/.test(f)).map((f) => f.split('/')[2]).sort();
+    assert.ok(copied.length > 0, 'init copied no skill');
+    assert.deepStrictEqual(Object.keys(lock.skills).sort(), copied, 'the lock pins something init did not copy, or misses something it did');
+    for (const n of copied) {
+      assert.deepStrictEqual([lock.skills[n].sourceType, lock.skills[n].skillDir], ['shipped', '.claude/skills/' + n]);
+      assert.ok(!('reviewedAt' in lock.skills[n]), 'an installer is not a reviewer: no review date may be written');
+    }
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'scripts', 'harness', 'gates.baseline.json'), 'utf8')).gates, {});
     // ONE policy body: AGENTS.md carries the rendered policy, CLAUDE.md is the stub importing it.
     assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /^# acme-api/);

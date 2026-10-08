@@ -196,6 +196,44 @@ function renderedLockEntry(sourceRel, destRel, map) {
   };
 }
 
+/* A SHIPPED SKILL: one the harness itself wrote and its installer copied into the project's own
+   skill root. Left out of the lock it is named as unpinned at every session start, in every
+   repo, for ever, and a warning that never clears is one nobody reads. So the installer pins
+   it, under a kind of its own that SAYS ONLY THAT: these are the bytes the harness shipped.
+   It claims no review, carries no reviewedAt, and --update never writes one into it. It is
+   honoured only under the project's own root: under the vendored root the same words would be
+   a way to silence a third-party skill nobody read. */
+const SHIPPED = 'shipped';
+const isShipped = (entry) => !!entry && entry.sourceType === SHIPPED;
+
+/** A skill directory as `{ rel: bytes }`, unrendered. null if the directory is absent. */
+function skillFiles(dir) {
+  if (!fs.existsSync(dir)) return null;
+  const map = {};
+  for (const abs of walkFiles(dir)) map[relPosix(dir, abs)] = fs.readFileSync(abs);
+  return map;
+}
+
+/** The lock entry for a shipped skill. Like a rendered one it carries NO reviewedAt. */
+function shippedLockEntry(destRel, map) {
+  const digests = {};
+  for (const rel of Object.keys(map)) digests[rel] = crypto.createHash('sha256').update(normalise(map[rel])).digest('hex');
+  return {
+    source: 'agent-harness', sourceType: SHIPPED, skillDir: destRel,
+    computedHash: hashFileMap(map), fileDigests: digests, hashAlgo: HASH_ALGO,
+  };
+}
+
+/** Why a shipped entry may not be honoured, or null. Pure: the entry and nothing else. */
+function shippedMisplaced(entry) {
+  if (!isShipped(entry)) return null;
+  const dir = String(entry.skillDir || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const live = SKILL_ROOTS[1].rel + '/';
+  if (dir.startsWith(live) && dir.length > live.length && !dir.slice(live.length).includes('/') && !dir.includes('..')) return null;
+  return 'SHIPPED-MISPLACED — a `' + SHIPPED + '` entry pins a skill the harness wrote, under ' + SKILL_ROOTS[1].rel +
+    '/ and nowhere else; this one points at ' + (dir || 'no directory') + '. A skill from anywhere else needs a review and an entry that says so';
+}
+
 /** Per-file digests. These are what let a drift report NAME the changed file. */
 function fileDigests(dir) {
   const map = {};
@@ -258,6 +296,12 @@ function resolveSkillDir(name, entry) {
 function verifySkills(lock, rep, only) {
   for (const [name, entry] of Object.entries((lock && lock.skills) || {})) {
     if (only && name !== only) continue;
+    const misplaced = shippedMisplaced(entry);
+    if (misplaced) {
+      finding(rep, { kind: 'skill', name, severity: 'error', message: misplaced });
+      grade(rep, 'skill:' + name, 'fail');
+      continue;
+    }
     const dir = resolveSkillDir(name, entry);
     const actual = hashSkillDir(dir);
 
@@ -290,7 +334,8 @@ function verifySkills(lock, rep, only) {
     if (entry.computedHash !== actual) {
       finding(rep, {
         kind: 'skill', name, severity: 'error',
-        message: 'DRIFT — expected ' + String(entry.computedHash).slice(0, 12) + '… got ' + actual.slice(0, 12) + '…',
+        message: 'DRIFT — expected ' + String(entry.computedHash).slice(0, 12) + '… got ' + actual.slice(0, 12) + '…' +
+          (isShipped(entry) ? '; these are no longer the bytes the harness shipped' : ''),
         changed: diffFiles(entry.fileDigests, fileDigests(dir)),
       });
       grade(rep, 'skill:' + name, 'fail');
@@ -641,8 +686,13 @@ function verifyAll(lock) {
  * So: today only when today's run actually has something to say — the digest
  * changed (reading that change IS the review), or the entry carries no date at
  * all (nothing to preserve). Otherwise the old date stands.
+ *
+ * A SHIPPED entry gets NO date, ever: undefined, which rebaseline() writes as no key at all.
+ * Its whole claim is "the bytes the harness shipped", and re-pinning it is a fact about bytes.
+ * A person who read the skill and wants that recorded changes the entry's kind and dates it.
  */
 function nextReviewedAt(entry, digest, stamp) {
+  if (isShipped(entry)) return undefined;
   if (!entry || !entry.reviewedAt) return stamp;   // never dated: record when it entered the lock
   if (entry.computedHash !== digest) return stamp; // bytes changed: this run is the real review
   return entry.reviewedAt;                         // unchanged: keep the date it was really read
@@ -667,7 +717,7 @@ function rebaseline(lock) {
     if (reviewedAt !== entry.reviewedAt) stamped++;
     entry.computedHash = h;
     entry.fileDigests = fileDigests(dir);
-    entry.reviewedAt = reviewedAt;
+    if (reviewedAt === undefined) delete entry.reviewedAt; else entry.reviewedAt = reviewedAt;
     entry.hashAlgo = HASH_ALGO;
   }
   lock.version = 2;
@@ -1100,11 +1150,26 @@ function selfTest() {
     [entry.sourceType, entry.renderedFrom, entry.skillDir, 'reviewedAt' in entry], ['rendered', '.live/a', '.shared/a', false]);
   must('...and its digest is the directory digest of the same bytes', entry.computedHash, hashFileMap({ 'SKILL.md': Buffer.from('# a\r\n') }));
 
+  /* a shipped skill: pinned, and saying only that */
+  const shippedEntry = shippedLockEntry('.claude/skills/a', { 'SKILL.md': Buffer.from('# a\n') });
+  must('a shipped entry names its kind and its copy, and claims no review',
+    [shippedEntry.sourceType, shippedEntry.skillDir, 'reviewedAt' in shippedEntry, 'renderedFrom' in shippedEntry], ['shipped', '.claude/skills/a', false, false]);
+  must('...and its digest is the directory digest of the same bytes', shippedEntry.computedHash, hashFileMap({ 'SKILL.md': Buffer.from('# a\r\n') }));
+  must('a shipped entry under the project\'s own root is honoured', shippedMisplaced(shippedEntry), null);
+  must('...with a backslash path too', shippedMisplaced({ sourceType: 'shipped', skillDir: '.claude\\skills\\a' }), null);
+  for (const dir of ['.agents/skills/a', '.claude/skills', '.claude/skills/a/b', '.claude/skills/../x', 'elsewhere/a', undefined]) {
+    must('a shipped entry pointing at ' + JSON.stringify(dir) + ' is refused', /^SHIPPED-MISPLACED /.test(String(shippedMisplaced({ sourceType: 'shipped', skillDir: dir }))), true);
+  }
+  must('an entry of another kind is never judged by that rule', shippedMisplaced({ sourceType: 'local', skillDir: '.agents/skills/a' }), null);
+  must('--update writes NO review date into a shipped entry, changed or not',
+    [nextReviewedAt({ sourceType: 'shipped', computedHash: 'h1' }, 'h1', TODAY), nextReviewedAt({ sourceType: 'shipped', computedHash: 'h1' }, 'h2', TODAY), nextReviewedAt({ sourceType: 'shipped' }, 'h1', TODAY)],
+    [undefined, undefined, undefined]);
+
   for (const f of fails) console.log('  x ' + f);
   console.log(fails.length
     ? 'FAIL — skill-verify self-test: ' + fails.length + ' of ' + n + ' assertion(s)'
     : 'PASS — skill-verify self-test (' + n + ' assertions: drift diff, tool scope, payload parsing, ' +
-      'plugin verdicts, review dates, GATE arithmetic, directory digest, rendering)');
+      'plugin verdicts, review dates, GATE arithmetic, directory digest, rendering, shipped pins)');
   process.exit(fails.length ? 1 : 0);
 }
 
@@ -1200,6 +1265,7 @@ module.exports = {
   pluginFindings, nextReviewedAt, verifyAll, GATE_NAME, HASH_ALGO,
   decideSessionStart, gatherSessionStart,
   renderSkillText, renderSkillFiles, renderedLockEntry, hashFileMap, PORTABLE_KEYS,
+  skillFiles, shippedLockEntry, shippedMisplaced, SHIPPED,
 };
 
 if (require.main === module) {

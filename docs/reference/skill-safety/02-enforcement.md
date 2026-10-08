@@ -122,6 +122,16 @@ the act of saying you read it, so the tool prints a ready-to-paste stub and stop
 reports digests changed and review dates stamped as two separate numbers, because one is a
 fact about bytes and the other is an assertion about a person.
 
+## A shipped skill is pinned, and says only that
+
+The skills the harness wrote sit in `.claude/skills/`, and unpinned each is named at every
+session start for ever. So `harness init` writes one entry per skill it copies, of the kind
+`sourceType: shipped`: the directory and its digests, and **no `reviewedAt`**. It asserts that
+these are the bytes the harness shipped, not that anyone read them. Matching, it is silent;
+drifted, it is a `DRIFT` error like any other. `--update` re-pins one and never dates it. An
+entry of this kind pointing anywhere but `.claude/skills/<name>` is `SHIPPED-MISPLACED`, an
+error: under the vendored root the same words would silence a skill nobody read.
+
 ## Nothing passes by absence
 
 An empty lock and an empty tree grade nothing, so the check **declares itself**: it reports

@@ -3,7 +3,7 @@ id: guard-hardening-handoff
 kind: handoff
 status: open
 read_when: "starting or resuming guard-hardening"
-phase_next: 5
+phase_next: 6
 ---
 
 # Guard hardening: the next step
@@ -11,22 +11,23 @@ phase_next: 5
 ## ▶ THE NEXT SESSION: paste this into a new chat
 
 ```
-PHASES 5 TO 7, THEN CLOSE THE TRACK: the owner asked for the rest in one session
+PHASES 6 AND 7, THEN CLOSE THE TRACK: the owner asked for the rest in one session
 
 You are in the folder Agent-Harness-worktrees, on branch `worktrees`. Run `git status --short`
 first: the tree must be clean. If it is not, say what is there and stop.
 
 Read, in this order:
   docs/tracks/guard-hardening/README.md   (State, Locked decisions, Invariants, How to work)
-  docs/tracks/guard-hardening/plan.md     (Phases 5 to 7)
+  docs/tracks/guard-hardening/plan.md     (Phases 6 and 7)
   docs/tracks/guard-hardening/traps.md
-  docs/reference/skill-safety/README.md   (before phase 5 touches the lock)
+  docs/reference/routing/README.md        (before phase 6: the four contract fields)
   docs/reference/DOC-STANDARD.md          (section 6: closing, and the archive route)
 Nothing else until a phase names a file.
 
-SCOPE: in: phase 5 (pins for the shipped skills), phase 6 (the spawn contract check), phase 7
-(the test-time measurement), then the re-baseline and the archive.
-Out: the three pre-tool guards phases 1 to 3 changed; the stop report of phase 4; merging; pushing.
+SCOPE: in: phase 6 (the spawn contract check), phase 7 (the test-time measurement), then the
+re-baseline and the archive.
+Out: the three pre-tool guards phases 1 to 3 changed; the stop report of phase 4; the skill
+lock and its verifier, phase 5; merging; pushing.
 
 DO THEM IN ORDER, ONE AT A TIME. For each phase:
   1. Where plan.md says measure first, measure in a throwaway repo in the scratchpad and freeze
@@ -52,8 +53,7 @@ AFTER PHASE 7:
 Do NOT re-run the probe or the stop-hook measurement: both are frozen under research/.
 Do NOT re-open the six locked decisions in the README.
 Do NOT flip a status: line, type a receipt or move the track by hand: close-phase.js does all three.
-Do NOT write a review date for a shipped skill that no person earned.
-Do NOT pin a skill the installer did not render.
+Do NOT edit a skill under .claude/skills without re-pinning it in the same commit (GH-11).
 Do NOT judge the content of a spawn's contract field, or touch a spawn the harness did not define.
 Do NOT merge `worktrees` into the source branch or push: the owner does.
 No inline node -e, and no backslash inside a here-document (GH-01): write a file.
@@ -62,7 +62,7 @@ Provenance: every figure comes from `node scripts/harness/gates.js --check`, and
 scripts/harness/gates.json and gates.baseline.json. Never copy one out of prose.
 
 Inherited state:
-  Phases 0 to 4 are committed and closed: the receipt in README.md's frontmatter names the
+  Phases 0 to 5 are committed and closed: the receipt in README.md's frontmatter names the
   last one. Trust the receipt over this sentence. Nothing is pushed.
   WHAT EXISTS: see README.md State and the Delivered lines in plan.md.
   WHAT IS OWED: the gate baseline predates the tests this track added, so the suite is green
@@ -73,8 +73,8 @@ Inherited state:
   A stop hook is now registered in this repo's settings file: a session started after that
   commit is told at each stop when files changed after the last gate run. It forces no turn.
 
-First commit: `skills: pin what the harness ships, and say only that`
-Exit: `node scripts/harness/guards/skill-verify.cjs --self-test && node bin/harness.js gates --check`
+First commit: `guards: a spawn of a registered agent carries the contract`
+Exit: `node scripts/harness/hook.js --self-test && node bin/harness.js gates --check`
 
 How to work: follow "How to work" in the track README, except that the owner asked for every
 remaining phase in this one session.

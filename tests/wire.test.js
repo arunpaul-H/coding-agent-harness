@@ -109,7 +109,9 @@ describe('the shipped hook config, through the new code path', () => {
     const row = TOOLS.enabledRows(REG, DEFAULT)[0];
     assert.ok(fs.readFileSync(at(dir, row.hookConfig)).equals(fs.readFileSync(path.join(ROOT, ...row.hookConfig.split('/')))));
     assert.ok(!('tools' in JSON.parse(read(dir, 'harness.config.json'))));
-    assert.deepStrictEqual(JSON.parse(read(dir, 'skills-lock.json')), { version: 2, skills: {} });
+    // The lock holds the copied skills, each as `shipped`, and nothing that claims a review.
+    const entries = Object.values(JSON.parse(read(dir, 'skills-lock.json')).skills);
+    assert.ok(entries.length > 0 && entries.every((e) => e.sourceType === 'shipped' && !('reviewedAt' in e)), JSON.stringify(entries));
   });
 });
 
@@ -165,8 +167,12 @@ describe('harness init --tools', () => {
     assert.strictEqual(run(['init', '--into', dir, '--tools', ids.join(',')]).code, 0);
 
     const lock = JSON.parse(read(dir, 'skills-lock.json'));
-    const names = Object.keys(lock.skills);
+    // The default tool's root gets the copies, pinned as `shipped` beside the rendered entries.
+    const copies = Object.keys(lock.skills).filter((n) => lock.skills[n].sourceType === 'shipped');
+    const names = Object.keys(lock.skills).filter((n) => !copies.includes(n));
     assert.ok(names.length > 0);
+    assert.deepStrictEqual(copies.sort(), names.map((n) => n + '.shipped').sort(), 'a copied skill and its rendered twin must both be pinned');
+    for (const n of copies) assert.strictEqual(lock.skills[n].skillDir, lock.skills[n.replace(/\.shipped$/, '')].renderedFrom);
     for (const n of names) {
       const entry = lock.skills[n];
       assert.strictEqual(entry.sourceType, 'rendered');
@@ -197,6 +203,7 @@ describe('harness init --tools', () => {
     const moved = sv();
     assert.strictEqual(moved.status, 1);
     assert.match(moved.stdout + moved.stderr, new RegExp('"' + one + '": RENDER-DRIFT'));
+    assert.match(moved.stdout + moved.stderr, new RegExp('"' + one + '\\.shipped": DRIFT'), 'the edited source is itself a shipped skill that drifted');
   });
 
   test('a second run changes nothing, on any file', () => {

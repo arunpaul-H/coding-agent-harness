@@ -8,8 +8,14 @@
     "prompt than to `npm install`. This file cannot make a skill safe. It guarantees one narrower",
     "thing: nothing changes SILENTLY. Read docs/reference/skill-safety/ before adding an entry.",
     "",
-    "SHIPPED EMPTY, ON PURPOSE. A lock inherited from someone else's machine pins someone else's",
-    "review. `skills` is yours to fill as you vendor skills, and it stays empty until you do.",
+    "IT SHIPS WITH NO REVIEW IN IT, ON PURPOSE. A lock inherited from someone else's machine pins",
+    "someone else's review. What it does carry is one entry per skill the harness itself wrote,",
+    "of the kind `shipped`: `sourceType: shipped`, a skillDir under .claude/skills/, the digests,",
+    "and NO reviewedAt. That entry says one thing: these are the bytes the harness shipped. It",
+    "is silent while they match and a DRIFT error when they do not. `harness init` writes the same",
+    "entries for the skills it copies. --update re-pins one and never dates it; an entry of this",
+    "kind pointing anywhere but .claude/skills/ is refused. Everything else in `skills` is yours",
+    "to fill as you vendor skills.",
     "",
     "ENTRY SHAPE — hand-write the first five fields, then let --update compute the rest:",
     "  source        where the skill came from: a repository URL, or `local`",
@@ -39,5 +45,46 @@
     "  node scripts/harness/guards/skill-verify.cjs --check     the verdict, with a GATE line",
     "  node scripts/harness/guards/skill-verify.cjs --update    re-baseline, AFTER reading the diff"
   ],
-  "skills": {}
+  "skills": {
+    "plan": {
+      "source": "agent-harness",
+      "sourceType": "shipped",
+      "skillDir": ".claude/skills/plan",
+      "computedHash": "9a4c3a58ef6f83eece70e2ff8f06214f63cae962fa1405cae134e921740edb91",
+      "fileDigests": {
+        "SKILL.md": "6e20c159ce7cadb2cbc21df47a17d1efbc9615eea201954a7b1077baa47e4a59"
+      },
+      "hashAlgo": "sha256-dir-v2"
+    },
+    "research": {
+      "source": "agent-harness",
+      "sourceType": "shipped",
+      "skillDir": ".claude/skills/research",
+      "computedHash": "5a34257b991ebc174bb6c2fc96223dcb0adbae9672b86139a4e251e8e669d620",
+      "fileDigests": {
+        "SKILL.md": "5f26ff0bf1db8ea920db2323f9a544a6d67ea6d6e7f006251de65eacdf2450d8"
+      },
+      "hashAlgo": "sha256-dir-v2"
+    },
+    "implement": {
+      "source": "agent-harness",
+      "sourceType": "shipped",
+      "skillDir": ".claude/skills/implement",
+      "computedHash": "8c7d8891d2ac0ae59c1c208368939aa005b3e31ded91d9cfdb639ed60b8ad4d1",
+      "fileDigests": {
+        "SKILL.md": "f8f82988013e41487c6d9dec261e863dfeea9f41027a102a701267f3e05ba8c3"
+      },
+      "hashAlgo": "sha256-dir-v2"
+    },
+    "guide": {
+      "source": "agent-harness",
+      "sourceType": "shipped",
+      "skillDir": ".claude/skills/guide",
+      "computedHash": "9d4f48ed91745677870e9b8c024aaebcb5ab5ee13d7ccc81083ca4192ec1352c",
+      "fileDigests": {
+        "SKILL.md": "f4cc15c502d14c4671d873201bc9bd47b88e4dbfa22a7c0dca9b4c1bffb86815"
+      },
+      "hashAlgo": "sha256-dir-v2"
+    }
+  }
 }

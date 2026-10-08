@@ -3,7 +3,7 @@ id: guard-hardening-plan
 kind: plan
 status: open
 read_when: "guard-hardening: the phases, each with its exit command and first commit"
-first_commit: "guards: report at stop when edits outran the gates"
+first_commit: "skills: pin what the harness ships, and say only that"
 ---
 
 # Guard hardening: the phases
@@ -103,7 +103,14 @@ for one that drifted. Read `docs/reference/skill-safety/README.md` first.
 **First commit:** `skills: pin what the harness ships, and say only that`
 **Exit:** `node scripts/harness/guards/skill-verify.cjs --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** A lock entry kind `shipped` in `scripts/harness/guards/skill-verify.cjs`: the
+directory, its digests, no review date. Matching it is silent, drifted it is a `DRIFT` error,
+and pointed anywhere but the project's own skill root it is refused, so it cannot silence a
+vendored skill. `--update` re-pins one and never dates it. `bin/harness.js` init writes one
+per skill it copies; a name that is also rendered keeps its rendered entry and gains
+`<name>.shipped`. This repo's `skills-lock.json` pins its own four the same way, so a clone
+starts silent. Deviations: the lock no longer ships empty, which two tests and the lock's own
+note asserted; a rendered entry is untouched, including the date `--update` gives it.
 
 ## Phase 6: a spawn of a registered agent carries the contract
 
