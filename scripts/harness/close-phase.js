@@ -264,12 +264,19 @@ const hygieneGate = (cfg) => (cfg.gates || []).find((g) => HYGIENE_GATE_NAMES.in
  *  only proved to walk it by watching it find something there, and a fixture pointed
  *  at the real tree asserts whatever that tree happens to contain today. */
 function newestSource(dirs, files, root) {
-  const base = root || ROOT;
   let best = { file: null, ms: 0 };
+  walkSources(dirs, files, root, (p, ms) => { if (ms > best.ms) best = { file: p, ms: ms }; });
+  return best;
+}
+
+/** THE WALK ITSELF: every gate-relevant file, handed to `visit` with its mtime. One walk, two
+ *  readers: the close asks for the newest file, the stop report counts the ones past a moment. */
+function walkSources(dirs, files, root, visit) {
+  const base = root || ROOT;
   const consider = (p) => {
     let st;
     try { st = fs.statSync(path.join(base, p)); } catch { return; }
-    if (st.mtimeMs > best.ms) best = { file: p, ms: st.mtimeMs };
+    visit(p, st.mtimeMs);
   };
   const walk = (dir) => {
     let entries;
@@ -283,7 +290,57 @@ function newestSource(dirs, files, root) {
   };
   for (const d of dirs || []) walk(d);
   for (const f of files || []) consider(f);
-  return best;
+}
+
+/* ---------- the stop report ----------
+   "Done means verified" as a mechanism: when a turn ends, the same walk the close uses says
+   whether a gate-relevant file is newer than the recorded verdict. scripts/harness/hook.js runs
+   these two as its one `stop` handler. IT REPORTS. It forces another turn only where the config
+   says `stop.block: true`, and then once per stop: the tool marks the stop that follows a forced
+   turn, and that one only reports (measured: the track's research file on the stop hook).
+   IT NEVER RUNS THE SUITE. A suite takes minutes and a stop hook has seconds.
+   SILENT where it has nothing to compare: no readable config, or no verdict with a usable
+   `generatedAt`. A repo that never ran its gates is the health check's finding, and a line on
+   every stop of every session there is a line nobody reads.
+   An mtime is what it reads, so a checkout that rewrites files counts as an edit, exactly as
+   it makes the verdict stale for the close. */
+
+/** The disk half. `gatesFile` and `baselineFile` are parameters for the self-test alone. */
+function gatherStop(cfg, root, gatesFile, baselineFile) {
+  if (!cfg) return {};
+  let gates = null;
+  let baseline = null;
+  try { gates = JSON.parse(fs.readFileSync(gatesFile || GATES_JSON, 'utf8')); } catch { /* silent: see above */ }
+  try { baseline = JSON.parse(fs.readFileSync(baselineFile || BASELINE_JSON, 'utf8')); } catch { /* the fix line then carries no flags */ }
+  const at = gates ? Date.parse(gates.generatedAt) : NaN;
+  if (!Number.isFinite(at)) return {};
+  let count = 0;
+  let newest = { file: null, ms: 0 };
+  walkSources(sourceTrees(cfg), sourceFiles(cfg, cfg.configFile), root, (p, ms) => {
+    if (ms <= at) return;
+    count++;
+    if (ms > newest.ms) newest = { file: p, ms: ms };
+  });
+  return { at: at, count: count, newest: newest.file, fix: checkCommand(baseline), block: !!cfg.stop && cfg.stop.block === true };
+}
+
+/** The pure half: the neutral verdict. A `message` is the line for the person; a deny at stop
+ *  is a forced turn, and its `reason` is what the model is handed. */
+function decideStop(event, state) {
+  const s = state || {};
+  if (!Number.isFinite(s.at) || !(s.count > 0)) return { deny: false, reason: '' };
+  const what = s.count + ' gate-relevant file' + (s.count === 1 ? '' : 's') + ' changed after the last gate run (newest: ' + s.newest + ')';
+  const message = 'Gates NOT RUN on this tree: ' + what + '. Verify with: ' + s.fix;
+  if (s.block === true && !(event && event.forced === true)) {
+    return {
+      deny: true,
+      message: message,
+      reason: 'STOP CHECK (`stop.block` is on in harness.config.json): ' + what + ', so no gate has seen the tree this turn ends on.\n'
+        + 'Run `' + s.fix + '` in the foreground and paste its output, or tell the person in plain words that the gates were NOT RUN.\n'
+        + 'This is asked once: the next stop only reports.',
+    };
+  }
+  return { deny: false, reason: '', message: message };
 }
 
 /* ---------- the preconditions ----------
@@ -523,6 +580,29 @@ function selfTest() {
     eq('editing the suite itself moves it too', newestSource(dirs, files, dir).file, 'harness.config.json');
     eq('an excluded tree is not the newest, however fresh', newestSource(dirs, files, dir).file === 'scripts/node_modules/dep/index.js', false);
     eq('an unwatched tree is invisible', newestSource(['tests'], [], dir).file, null);
+
+    /* THE STOP REPORT, on the same synthetic tree. The verdict's moment is a parameter here. */
+    const cfgOf = (block) => ({ commitHygiene: { workDirs: ['scripts'] }, project: { docsRoot: 'docs', tracksDir: 'docs/tracks' }, docs: { caps: { 'AGENTS.md': 80 } }, stop: { block: block } });
+    const verdict = (ms) => { put('state/gates.json', T0); fs.writeFileSync(path.join(dir, 'state/gates.json'), JSON.stringify({ generatedAt: new Date(ms).toISOString() })); return path.join(dir, 'state/gates.json'); };
+    const none = path.join(dir, 'state/absent.json');
+    const fresh = gatherStop(cfgOf(false), dir, verdict(T0 + 50000), none);
+    eq('stop: a verdict newer than every watched file counts nothing', [fresh.count, fresh.newest], [0, null]);
+    eq('stop: ...and that is silence', decideStop({ event: 'stop' }, fresh), { deny: false, reason: '' });
+    const stale = gatherStop(cfgOf(false), dir, verdict(T0 + 3000), none);
+    eq('stop: files past the verdict are counted, the newest named, the excluded trees not', [stale.count, stale.newest, stale.block], [2, 'harness.config.json', false]);
+    eq('stop: with no baseline the fix line carries no flags', stale.fix, 'node scripts/harness/gates.js --check');
+    const said = decideStop({ event: 'stop' }, stale);
+    eq('stop: BY DEFAULT it reports and does not force a turn', [said.deny, /^Gates NOT RUN on this tree: 2 gate-relevant files changed/.test(said.message), said.message.endsWith(stale.fix)], [false, true, true]);
+    const forcing = gatherStop(cfgOf(true), dir, verdict(T0 + 3000), none);
+    const forced = decideStop({ event: 'stop' }, forcing);
+    eq('stop: under `stop.block` the first stop forces a turn, with the command in the reason', [forced.deny, forced.reason.includes(forcing.fix), forced.message === said.message], [true, true, true]);
+    eq('stop: ...and the stop after a forced turn only reports', decideStop({ event: 'stop', forced: true }, forcing), said);
+    eq('stop: a truthy block that is not the boolean forces nothing', decideStop({ event: 'stop' }, Object.assign({}, stale, { block: 'true' })).deny, false);
+    eq('stop: no verdict file is silence, not a report', decideStop({ event: 'stop' }, gatherStop(cfgOf(true), dir, none, none)), { deny: false, reason: '' });
+    fs.writeFileSync(path.join(dir, 'state/gates.json'), JSON.stringify({ generatedAt: 'yesterday' }));
+    eq('stop: a verdict with no usable moment is silence', gatherStop(cfgOf(true), dir, path.join(dir, 'state/gates.json'), none), {});
+    eq('stop: a config that could not be read is silence', gatherStop(null, dir, verdict(T0), none), {});
+    eq('stop: one file is singular', /1 gate-relevant file changed/.test(decideStop({}, { at: 1, count: 1, newest: 'a', fix: 'CMD' }).message), true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -530,7 +610,7 @@ function selfTest() {
   for (const line of f) console.log('  x ' + line);
   console.log(f.length ? '\nFAIL — close-phase.js self-test: ' + f.length + ' assertion(s) of ' + checks
     : 'PASS — close-phase.js self-test (' + checks + ' checks: receipt, ▶ block, frontmatter, declared skips, '
-      + 'clean-tree flag, watched trees, staleness walk)');
+      + 'clean-tree flag, watched trees, staleness walk, stop report)');
   process.exit(f.length ? 1 : 0);
 }
 
@@ -611,7 +691,7 @@ function main() {
 module.exports = {
   receiptFor, blockOf, parseFrontmatter, setFrontmatter, allowedSkips, checkCommand,
   dirtyViolations, sourceTrees, sourceFiles, newestSource, hygieneGate, positionals,
-  preconditions, NOT_SOURCE, HYGIENE_GATE_NAMES,
+  preconditions, NOT_SOURCE, HYGIENE_GATE_NAMES, walkSources, gatherStop, decideStop,
 };
 
 if (require.main === module) {

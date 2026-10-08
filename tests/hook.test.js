@@ -233,14 +233,30 @@ describe('the dialect modules — fixtures built from the research file\'s proto
       }
     });
 
-    test('emit: session start is additionalContext, and a stop or prompt deny is exit 2 with the reason', () => {
+    test('emit: session start is additionalContext, and a prompt deny is exit 2 with the reason', () => {
       const out = d.emit({ deny: false, reason: '', context: 'report', message: 'm' }, start);
       assert.deepStrictEqual(JSON.parse(out.stdout), { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: 'report' }, systemMessage: 'm' });
-      for (const kind of ['prompt-submit', 'stop']) {
-        assert.deepStrictEqual(d.emit(deny, { event: kind }), { stdout: '', stderr: 'because', exitCode: 2 });
-        assert.strictEqual(d.emit(ask, { event: kind }).exitCode, 2, 'an ask with no spelling must not become an allow');
-        assert.deepStrictEqual(d.emit(allow, { event: kind }), { stdout: '', stderr: '', exitCode: 0 });
-      }
+      const kind = 'prompt-submit';
+      assert.deepStrictEqual(d.emit(deny, { event: kind }), { stdout: '', stderr: 'because', exitCode: 2 });
+      assert.strictEqual(d.emit(ask, { event: kind }).exitCode, 2, 'an ask with no spelling must not become an allow');
+      assert.deepStrictEqual(d.emit(allow, { event: kind }), { stdout: '', stderr: '', exitCode: 0 });
+      assert.deepStrictEqual(d.emit({ deny: false, reason: '', message: 'm' }, { event: kind }), { stdout: '', stderr: '', exitCode: 0 }, 'a line for the person is spelled at stop only');
+    });
+
+    test('emit: at stop a report is a systemMessage and exit 0, and a forced turn is `decision: block`', () => {
+      // The measured spelling: exit 2 with stderr alone forced nothing, the JSON is what forces.
+      const at = { event: 'stop' };
+      const told = d.emit({ deny: false, reason: '', message: 'm' }, at);
+      assert.deepStrictEqual([JSON.parse(told.stdout), told.stderr, told.exitCode], [{ systemMessage: 'm' }, '', 0]);
+      assert.deepStrictEqual(d.emit(allow, at), { stdout: '', stderr: '', exitCode: 0 });
+      const forced = d.emit(deny, at);
+      assert.deepStrictEqual([JSON.parse(forced.stdout), forced.stderr, forced.exitCode], [{ decision: 'block', reason: 'because', systemMessage: 'short' }, 'because', 2]);
+      assert.strictEqual(JSON.parse(d.emit(ask, at).stdout).decision, 'block', 'an ask with no spelling must not end the turn in silence');
+    });
+
+    test('parse: a stop that follows a forced turn is marked, and only the boolean marks it', () => {
+      const stop = (extra) => d.parse(JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's' }, extra)));
+      assert.deepStrictEqual([stop({ stop_hook_active: false }).forced, stop({ stop_hook_active: true }).forced, stop({}).forced, stop({ stop_hook_active: 'true' }).forced], [false, true, false, false]);
     });
 
     test('the deny layer it names is the file the default tool registers its hooks in', () => {
@@ -547,13 +563,18 @@ describe('hook.js — the one entry, as a process', () => {
     assert.match(r.stderr, /registered with --event session-start and was handed a pre-tool payload/);
   });
 
-  test('prompt-submit and stop are wired end to end and carry no handler yet', () => {
-    // The seam a later track adds a handler to. With an empty list a readable payload allows.
+  test('prompt-submit and stop are wired end to end, and a root with no gate verdict is silent at both', () => {
+    // prompt-submit is the seam a later track adds a handler to: an empty list allows. The stop
+    // handler reads the verdict beside the entry it was loaded from, and this root has none of
+    // its own to be stale against; what it says when there is one is the block at the end.
     const root = mkRoot('seam');
-    for (const [event, name] of [['prompt-submit', 'UserPromptSubmit'], ['stop', 'Stop']]) {
-      const r = entry(root, DEFAULT_TOOL, event, JSON.stringify({ hook_event_name: name, session_id: 's' }));
-      assert.deepStrictEqual([r.status, r.stdout, r.stderr], [0, '', ''], event);
-    }
+    fs.cpSync(path.join(REPO, 'scripts', 'harness'), path.join(root, 'scripts', 'harness'), { recursive: true });
+    fs.rmSync(path.join(root, 'scripts', 'harness', 'gates.json'), { force: true });
+    const copy = path.join(root, 'scripts', 'harness', 'hook.js');
+    const stopped = spawn(root, copy, ['--tool', DEFAULT_TOOL, '--event', 'stop'], JSON.stringify({ hook_event_name: 'Stop', session_id: 's' }));
+    assert.deepStrictEqual([stopped.status, stopped.stdout, stopped.stderr], [0, '', ''], 'stop with no verdict');
+    const r = entry(root, DEFAULT_TOOL, 'prompt-submit', JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: 's' }));
+    assert.deepStrictEqual([r.status, r.stdout, r.stderr], [0, '', ''], 'prompt-submit');
     assert.strictEqual(entry(root, DEFAULT_TOOL, 'prompt-submit', 'junk').status, 2, 'an unreadable prompt payload was passed');
     const stop = entry(root, DEFAULT_TOOL, 'stop', 'junk');
     assert.strictEqual(stop.status, 0, 'an unreadable stop payload must end the turn, not loop it');
@@ -910,5 +931,45 @@ describe('guard hardening — what a shell opens, where a shell stands, and what
     refused(into('GATE smoke pass=' + '42 fail=0 skipped=0'), 'a pasted verdict line');
     passed(into('this phase added 20 tests'), 'a count in a sentence');
     passed(into('the line ends pass=<n> fail=<n>'), 'the line format');
+  });
+
+  /* THE STOP REPORT, as a process. The handler reads the verdict BESIDE THE ENTRY IT WAS LOADED
+     FROM, so the harness scripts are copied into the root and the copy is what runs. A copy is
+     all new files, so the verdict is dated an hour ahead and an edit two hours ahead. */
+  const HOUR = 3600 * 1000;
+  const stopRoot = (tag, overrides) => {
+    const root = mkRoot(tag, overrides);
+    fs.cpSync(path.join(REPO, 'scripts', 'harness'), path.join(root, 'scripts', 'harness'), { recursive: true });
+    put(root, 'scripts/harness/gates.json', JSON.stringify({ generatedAt: new Date(Date.now() + HOUR).toISOString(), gates: {} }));
+    return root;
+  };
+  const edit = (root, rel) => { const at = (Date.now() + 2 * HOUR) / 1000; fs.utimesSync(put(root, rel, 'x\n'), at, at); };
+  const stopAt = (root, extra) => spawn(root, path.join(root, 'scripts', 'harness', 'hook.js'), ['--tool', DEFAULT_TOOL, '--event', 'stop'],
+    JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's', cwd: root, stop_hook_active: false }, extra)));
+
+  test('a turn that ends on edits no gate run saw is REPORTED, and the turn still ends', () => {
+    const root = stopRoot('stop-report');
+    passed(stopAt(root), 'a stop with nothing changed since the run');
+    edit(root, 'scripts/edited.js');
+    edit(root, 'elsewhere/unwatched.js');
+    const r = stopAt(root);
+    assert.strictEqual(r.status, 0, 'a report forced a turn: ' + r.stdout + r.stderr);
+    const out = JSON.parse(r.stdout);
+    assert.deepStrictEqual(Object.keys(out), ['systemMessage'], 'a report must not carry a decision');
+    assert.match(out.systemMessage, /^Gates NOT RUN on this tree: 1 gate-relevant file changed after the last gate run \(newest: scripts\/edited\.js\)\. Verify with: node scripts\/harness\/gates\.js --check/);
+  });
+
+  test('...and it forces a turn only under the opt-in key, and then once per stop', () => {
+    const root = stopRoot('stop-block', { stop: { block: true } });
+    passed(stopAt(root), 'a stop with nothing changed, under the key');
+    edit(root, 'docs/note.md');
+    const first = stopAt(root);
+    assert.strictEqual(first.status, 2, 'the first stop under `stop.block` did not force a turn: ' + first.stdout);
+    const out = JSON.parse(first.stdout);
+    assert.strictEqual(out.decision, 'block');
+    assert.match(out.reason, /^STOP CHECK[\s\S]*newest: docs\/note\.md[\s\S]*node scripts\/harness\/gates\.js --check/);
+    const second = stopAt(root, { stop_hook_active: true });
+    assert.strictEqual(second.status, 0, 'the stop after a forced turn forced another: that is a loop');
+    assert.deepStrictEqual(Object.keys(JSON.parse(second.stdout)), ['systemMessage']);
   });
 });

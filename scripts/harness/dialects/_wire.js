@@ -22,6 +22,9 @@
  *   cwd      OPTIONAL: the directory the tool's shell is standing in, where the envelope names
  *            one. A dialect sets it after event(); absent or null, a relative path is read from
  *            the repo root. Only the phase guard reads it
+ *   forced   OPTIONAL, stop only: true when this stop follows a turn a stop hook forced, where
+ *            the tool's payload says so. A dialect sets it after event(); absent, a handler
+ *            reads every stop as a first one
  *   opaque   true when the dialect cannot vouch for the input's shape: a server-defined tool, a
  *            tool name the dialect has no row for, an input that is not an object, or a known
  *            action whose needed field is absent (a shell call with no string `command`, a write
@@ -34,7 +37,9 @@
  *
  *   { deny: boolean, reason: string }      the whole contract; `{ deny: false, reason: '' }` allows
  *   ask: true        with deny false: a human decides. A dialect with no spelling for it denies
- *   message          one line for the person at the keyboard, where the dialect has a place for it
+ *   message          one line for the person at the keyboard, where the dialect has a place for it.
+ *                    At `stop` a verdict that does not deny may carry one: the turn ends and
+ *                    the person is told. A deny at `stop` is a forced turn, not a refusal
  *   context          session-start only: text for the model's context
  */
 

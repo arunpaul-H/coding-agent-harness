@@ -79,7 +79,14 @@ process tests of all three phases.
 **First commit:** `guards: report at stop when edits outran the gates`
 **Exit:** `node scripts/harness/hook.js --self-test && node bin/harness.js gates --check`
 
-**Delivered.** not started
+**Delivered.** Measured first: `research/2026-10-08-stop-hook.md`. The `stop` list in
+`scripts/harness/hook.js` holds one handler, `gate-staleness`; its two halves are `gatherStop`
+and `decideStop` in `scripts/harness/close-phase.js`, over the walk the close already used. It
+tells the person how many gate-relevant files are newer than the recorded verdict and ends the
+turn. `stop.block` in the config, default false, forces one turn per stop. The `claude` dialect
+spells a report as a system message and a forced turn as a block decision, and registers `Stop`
+through its wiring, so the installer renders it. Deviations: the entry now carries an allowing
+stop handler's line to the dialect, which it dropped before; silent with no recorded verdict.
 
 ## Phase 5: the installer pins the skills the harness ships
 

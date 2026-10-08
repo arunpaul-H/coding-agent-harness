@@ -57,7 +57,7 @@ Evidence: `research/2026-10-08-guard-probe.md`.
    splitting the long scripts (single-file and dependency-free is what makes them copyable).
    Owner's rule, 2026-10-08.
 6. **A stop check reports by default and blocks only on opt-in.** Blocking a turn on a suite that
-   takes minutes would loop. Lead, 2026-10-08; phase 4 confirms it against the tool.
+   takes minutes would loop. Lead, 2026-10-08; phase 4 confirmed it against the tool.
 
 ## Invariants
 
@@ -76,13 +76,15 @@ Evidence: `research/2026-10-08-guard-probe.md`.
 | 1 | the secret guard reads a name as a shell opens it; a write's body is not a path | closed |
 | 2 | a move or copy into the archive is refused wherever the shell stands; the linter fails a track archived by hand | closed |
 | 3 | a pasted gate line is a figure, in the guard and the linter | closed |
-| 4 | a stop handler that reports edits made after the last gate run | open |
+| 4 | a stop handler that reports edits made after the last gate run; forcing a turn is the opt-in key `stop.block` | closed |
 | 5 | the installer pins the skills the harness ships | open |
 | 6 | a spawn of a registered agent must carry the four contract fields | open |
 | 7 | where the test gate's minutes go, measured | open |
 
 Phases 0 to 3 were done in one session at the owner's request and are committed in three
-commits, not four: phases 2 and 3 edit the same two files, so they share one. The receipt in
+commits, not four: phases 2 and 3 edit the same two files, so they share one. Phase 4 followed
+in a second session; decision 6 held against the tool, and what was measured is in
+`research/2026-10-08-stop-hook.md` (a headless session only). The receipt in
 this file's frontmatter names the last phase closed; trust it over this sentence. Nothing is
 pushed. This machine has no git identity configured: a commit passes one on the command line.
 The policy file was not edited: it sits within a few bytes of its context ceiling, and raising

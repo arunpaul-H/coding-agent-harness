@@ -26,6 +26,18 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "_comment": "The one stop entry. ONE HANDLER, AND IT REPORTS: when a turn ends it walks the trees the gates read (the same walk scripts/harness/close-phase.js uses for staleness) and, where a file there is newer than the verdict in scripts/harness/gates.json, tells the person how many changed, which is newest and the command that verifies. The turn still ends. It never runs the suite: a suite takes minutes and this has seconds. It is silent where it has nothing to compare, which is a repo with no recorded verdict or an unreadable config. FORCING A TURN IS OPT-IN: `stop.block: true` in harness.config.json makes the first stop of a turn hand the model that command, once; the tool marks the stop that follows a forced turn (`stop_hook_active`), and that one only reports. A deny at this event is a forced turn and not a refusal, so a failure of the entry itself (an unreadable payload, a handler that threw) ENDS the turn with the reason on stderr and never loops it. What the tool does with each answer was measured in a headless session; an interactive one was not watched.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js\" --tool claude-code --event stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "WorktreeCreate": [
       {
         "_comment": "The agent's own worktree flag, routed. This hook REPLACES how the flag makes its folder: the entry hands the payload (`name`, `cwd`) to scripts/harness/worktree.js, which creates the workspace exactly as `harness worktree new <name>` does (outside every checkout, cut from the source branch, with `worktrees.carry` copied in and `worktrees.setup` run) and prints the folder path ALONE on stdout. Everything else it says, and all setup output, goes to stderr, because the agent reads every byte of stdout as the path. A bad name or an existing one is exit 2 with the reason on stderr and no folder. The agent stops copying the ignored local settings file once this hook exists: list it in `worktrees.carry` if a workspace should start with it. The timeout is the setup command's, not a guard's.",

@@ -26,8 +26,15 @@
  *     ask ONLY for the row whose hook config is this dialect's permissions file, which is the
  *     one tool this spelling was ever run against; for every other row an ask is a DENY. Such a
  *     tool's calls that no guard can read (a patch tool, a server-defined tool) are refused.
- *   - how a prompt-submit or stop hook blocks. emit() uses exit 2 with the reason on stderr and
- *     prints no JSON for those two events.
+ *   - how a prompt-submit hook blocks. emit() uses exit 2 with the reason on stderr and prints
+ *     no JSON for that event.
+ *   - the stop spelling, for any row but the first. It was MEASURED for Claude Code alone, in a
+ *     headless session (the guard-hardening track's research file `2026-10-08-stop-hook.md`,
+ *     under the docs root): a line for the person is `systemMessage` at exit 0, and
+ *     a forced turn is `decision: "block"` with the reason. Exit 2 with stderr alone forced
+ *     NOTHING there, so the JSON is what forces; the exit code stays 2 because the entry's rule
+ *     is that a deny leaves with it, and the JSON was read at exit 2. The stop that follows a
+ *     forced turn carries `stop_hook_active: true`, which parse() hands on as `forced`.
  *   - the session-start output shape. It is the one this repo's reporters have always printed.
  */
 
@@ -67,6 +74,8 @@ function parse(stdin) {
   // Where the tool's shell is standing, when the envelope says. All three cells name `cwd`. The
   // phase guard resolves a relative path against it; absent, a path is read from the repo root.
   e.cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : null;
+  // A stop that follows a turn a stop hook forced. Only the boolean counts: see the header.
+  e.forced = p.stop_hook_active === true;
   // A name this file maps is vouched for only when the field that action is decided from is there.
   if (needsField(action, e)) e.opaque = true;
   return e;
@@ -95,7 +104,13 @@ function emit(verdict, ev, row) {
     }
     return QUIET;
   }
-  // prompt-submit and stop: no ask spelling is established, so an ask is a deny.
+  if (kind === 'stop') {
+    // A deny is a forced turn; no ask spelling is established, so an ask is one too. Anything
+    // else ends the turn, with the handler's line for the person when it has one.
+    if (v.deny || v.ask) return say({ decision: 'block', reason: v.reason, systemMessage: v.message }, v.reason, 2);
+    return v.message ? say({ systemMessage: v.message }, '', 0) : QUIET;
+  }
+  // prompt-submit: no ask spelling is established, so an ask is a deny.
   return (v.deny || v.ask) ? say(null, v.reason, 2) : QUIET;
 }
 
@@ -135,6 +150,9 @@ const permissions = {
  * THE WORKSPACE ENTRY is added only for a row whose `worktreeCreate` cell is true. It answers
  * the tool's own worktree flag with a folder path, so its timeout is the setup command's, not
  * a guard's.
+ *
+ * THE STOP ENTRY has no matcher and the guard timeout: its one handler walks the tree and reads
+ * two files, and never runs the suite.
  */
 const HOOK = (id, ev) => 'node "${CLAUDE_PROJECT_DIR}/scripts/harness/hook.js" --tool ' + id + ' --event ' + ev;
 const wiring = {
@@ -147,6 +165,7 @@ const wiring = {
     const one = (ev) => ({ type: 'command', command: HOOK(row.id, ev), timeout: 30 });
     const out = [{ at: ['hooks', 'PreToolUse'], event: 'pre-tool', entry: { matcher: Object.keys(ACTION_OF).concat('mcp__.*').join('|'), hooks: [one('pre-tool')] } }];
     if (row.sessionStart === true) out.push({ at: ['hooks', 'SessionStart'], event: 'session-start', entry: { hooks: [one('session-start')] } });
+    out.push({ at: ['hooks', 'Stop'], event: 'stop', entry: { hooks: [one('stop')] } });
     if (row.worktreeCreate === true) out.push({ at: ['hooks', 'WorktreeCreate'], event: 'worktree-create', entry: { hooks: [Object.assign(one('worktree-create'), { timeout: 600 })] } });
     return out;
   },
