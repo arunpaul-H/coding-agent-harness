@@ -9,11 +9,11 @@ verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/hando
 last_verified: 2026-10-07
 max_age_days: 30
 blocked_on: "the owner: whether to reconsider an interview skill (decision 6), then whether to archive"
-closed_phase: 2
+closed_phase: 3
 closed_at: 2026-10-08
-gates_sha: 3ab8dd620797a2009f55e524efcc1c9f74eac0239a67be3bd2e5515470cf6900
-block_sha: 30d240f726393b6c810a445008cb7d616dc4c9a1fbe2ba3fe0f554abc474ec6d
-receipt: ebac53bf11ee5793a14bb16eaa4d21543460eccc2663a047baea212933132fd9
+gates_sha: f300539b339c8f6bf7076f9e764a0a4bcc6853da305e77b39f709d749d00d695
+block_sha: fce138604b81b1313be75160c67d144ac779b6c42e7010d2e9c76936e5b16de0
+receipt: 485995c06f0261706d1ca4ae733a3a05fa7ac6e2c0580080cce8fa8d54cc84e4
 ---
 
 # Project reference docs: asked for by name, and never stale in silence
@@ -75,7 +75,7 @@ It deliberately does NOT generate doc content from code, does NOT create a fixed
 | 0 | The track opened: research frozen, plan and handoff written | closed |
 | 1 | `templates/reference/README.md` and `harness reference new <subsystem>` | closed |
 | 2 | A paths-against-history drift warning, and a warning for an unreadable date | closed |
-| 3 | One measured task with and without a reference doc, and the adopter guidance it supports | built |
+| 3 | One measured task with and without a reference doc, and the adopter guidance it supports | closed |
 
 Branch `project-reference`, commits only: no push, no PR. All three pieces are in the tree: the
 command and its template, the two warnings, and one measurement with the adopter section in the
