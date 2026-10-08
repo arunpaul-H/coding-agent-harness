@@ -17,11 +17,6 @@
 | [project-reference-research-project-reference-docs](tracks/project-reference/research/2026-10-07-project-reference-docs.md) | planning how the harness helps an adopter create project reference docs, or adding a paths-based drift check to the doc gate | frozen |
 | [project-reference-research-one-task-with-and-without-a-reference-doc](tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md) | deciding whether a reference doc saves an agent anything, or what to tell an adopter about harness reference new | frozen |
 | [project-reference-traps](tracks/project-reference/traps.md) | something behaves oddly while working on project-reference | open |
-| [worktrees-handoff](tracks/worktrees/handoff.md) | asking what the workspaces track left behind | open |
-| [worktrees-plan](tracks/worktrees/plan.md) | worktrees: the phases, each with its exit command and first commit | open |
-| [worktrees](tracks/worktrees/README.md) | changing how an agent gets its own workspace folder, how workspaces announce themselves, or how one is landed and removed | open |
-| [worktrees-research-what-claude-worktree-does-here](tracks/worktrees/research/2026-10-08-what-claude-worktree-does-here.md) | planning or reviewing where an agent workspace folder goes, what a fresh one lacks, or which folder a hook sees inside one | frozen |
-| [worktrees-traps](tracks/worktrees/traps.md) | something behaves oddly while working on worktrees | open |
 
 ## Methods
 
@@ -50,10 +45,9 @@
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
 | [project-reference](tracks/project-reference/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js project-reference` | 2026-10-07 |
-| [worktrees](tracks/worktrees/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees` | 2026-10-08 |
 
 ## Blocked: waiting on someone outside the code
 
 Nothing is blocked.
 
-<!-- 17 live docs -->
+<!-- 12 live docs -->

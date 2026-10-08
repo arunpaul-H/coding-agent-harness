@@ -1,18 +1,18 @@
 ---
 id: worktrees
 kind: track
-status: open
+status: complete
 read_when: "changing how an agent gets its own workspace folder, how workspaces announce themselves, or how one is landed and removed"
 trap_prefix: WT
 paths: ["scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "harness.config.json", ".claude/settings.json", ".gitignore"]
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees"
 last_verified: 2026-10-08
 max_age_days: 30
-closed_phase: 5
+closed_phase: 6
 closed_at: 2026-10-08
-gates_sha: 92106b35679da328e78936619f7b10b5c4b3f80b014570571f20b03b8a1bf542
-block_sha: 7d892976ed8f1e25a61afbda48b9e5bf8908f888d208da8c23355d5b52bb57ed
-receipt: 0d3d2931493d4a4c4a0c4a6256ca81b869360f70b9116548ec6e2b2b6c9bea2d
+gates_sha: 0824d8de823cf3e9f747085a2ae89e1489ef49934dd3955208614e65af875fda
+block_sha: 4ab33793a37eb4fca31c5db4c9c12fbfb2ecbb3333e8b2dd78e13f51131e8407
+receipt: 7a20ea0f396ea9cce8af14c778f669ab1a5e22925593a9f4573a95217cc3758b
 ---
 
 # Workspaces: several agents in one project on one computer, without collisions
