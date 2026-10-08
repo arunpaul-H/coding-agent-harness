@@ -8,11 +8,11 @@ paths: ["scripts/harness/guards/**", "scripts/harness/hook.js", "scripts/harness
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js guard-hardening"
 last_verified: 2026-10-08
 max_age_days: 30
-closed_phase: 6
+closed_phase: 7
 closed_at: 2026-10-08
-gates_sha: 3b27ea3fd027dcce6fbb7296d23d49c17fcf64afa0b4e60f98965c041e49a9fc
-block_sha: 17fa5170c1b836e4f49a94fe7f818f64e23a2d0fe5fb3df4ba2c8da1bfe228df
-receipt: 2448c729557dee45452c48713e8b5f366e9bb794eb9be9f6a3c5f7688f985af0
+gates_sha: b0a4adb7592cf03ed825f4f78d6f249e0d2f5cd1c0068b2210cba6b17c2670e7
+block_sha: 4c000271477f6c9f025d7f28765b717f7b01c1661ec1167fcada96b510bb09a8
+receipt: 1b970e736691abb2ff4b25c7b158041b6a8e2448e40604e84ec99dcb65e9a304
 ---
 
 # Guard hardening: close the gaps an agent reaches by accident
