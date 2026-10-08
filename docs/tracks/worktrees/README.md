@@ -8,11 +8,11 @@ paths: ["scripts/harness/**", "bin/harness.js", "templates/**", "schema/**", "ha
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js worktrees"
 last_verified: 2026-10-08
 max_age_days: 30
-closed_phase: 4
+closed_phase: 5
 closed_at: 2026-10-08
-gates_sha: 2eaec0aa8c1abf7e1a53f42dee06b2de9175426e366798fde313203c07fc2136
-block_sha: 2aa23d549a4adff586f180eb781070b85b91f42ecb709f78f055965e72b0683b
-receipt: 9827692665ef6313ca26e1a245473db2f688c59502912a22771e8e946c8f2d9b
+gates_sha: 92106b35679da328e78936619f7b10b5c4b3f80b014570571f20b03b8a1bf542
+block_sha: 7d892976ed8f1e25a61afbda48b9e5bf8908f888d208da8c23355d5b52bb57ed
+receipt: 0d3d2931493d4a4c4a0c4a6256ca81b869360f70b9116548ec6e2b2b6c9bea2d
 ---
 
 # Workspaces: several agents in one project on one computer, without collisions
@@ -77,7 +77,7 @@ It does NOT change the path-claim registry in `scripts/harness/peers.js`, which 
 | 2 | a new folder is ready: carried local files, setup command, the flag routed by hook | closed |
 | 3 | the announce note, the generated overview, the overlap warning, a session-start line | closed |
 | 4 | `--land` and `--prune`, refusing a dirty or unmerged folder | closed |
-| 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | landed |
+| 5 | packaging: `harness init`, the parent layout for new downloads, the reference doc | closed |
 
 Nothing is pushed. `node scripts/harness/worktree.js --list` is the overview: every checkout, what
 each branch's note says it is doing, announced branches with no folder here, and files changed
