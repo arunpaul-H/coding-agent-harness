@@ -8,11 +8,11 @@ paths: [".claude/settings.json", ".claude/agents/**", ".claude/skills/**", ".cla
 verify: "node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js claude-code-uptake"
 last_verified: 2026-10-09
 max_age_days: 30
-closed_phase: 2
+closed_phase: 3
 closed_at: 2026-10-09
-gates_sha: 310c1dc9d0443430f52d9e060cc6adc6e4d2b02d7c09bd7c1ba1c8fc95a231a6
-block_sha: 282baa2b10c07e3227e334a4f5b3c1c7add2a6756bf196114b204d7076395b17
-receipt: 7121f382d3e737f486681231f0f0039ea5013e5eaa2ee6e7197588723dede18d
+gates_sha: f3844e3702fea2a42d65fde993c0952a53af1a3f446bbfdfc06fcebfd355c363
+block_sha: 0c2bb531638d2283be722551ddd7b612c8f849939fa1c7c009741d258c1f0099
+receipt: b8c64841ad4803a9875709985a3d71ba468109089bfbdb57a112125ab9d627ec
 ---
 
 # Claude Code uptake: what we leverage, and what we build as mods
@@ -79,14 +79,14 @@ spawn. It does NOT change a guard's decision, the gate protocol, or any other to
 |---|---|---|
 | 0 | The dated evidence | done |
 | 1 | Leverage: hook entry, matcher, agent and skill files brought up to the tool as it is | done |
-| 2 | Build: the `harness` mod, a panel and `/gates` | closed, receipt above |
-| 3 | Build: the track lifecycle as commands | done |
+| 2 | Build: the `harness` mod, a panel and `/gates` | done |
+| 3 | Build: the track lifecycle as commands | closed, receipt above |
 | 4 | Build: the `harness-guard` mod | open |
 | 5 | Leverage: the skill gate vets mods | open |
 | 6 | Build: the harness ships as a plugin | open |
 
-Phases 0 to 2 are committed, and the one receipt in this file's frontmatter closes phase 2 on a
-green gate run. Phase 3 is done and waits for its close. Phase 4 is next, and its first item is a
+Phases 0 to 2 are committed, and the one receipt in this file's frontmatter closes phase 3 on a
+green gate run. Phase 4 is next, and its first item is a
 research file from runs in a real session. What each phase cut is in `plan.md`.
 
 The mod is `.claude/plugins/harness/`; every judgement it draws is made by
