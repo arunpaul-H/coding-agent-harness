@@ -265,6 +265,18 @@ describe('the dialect modules — fixtures built from the research file\'s proto
       assert.ok(d.wiring.entries(rowOf(DEFAULT_TOOL))[0].entry.matcher.split('|').includes('Agent'), 'the matcher does not name the spawn tool, so the entry is never called for one');
     });
 
+    test('parse: a background watch is a shell call and a notebook edit is a write, each opaque without its field', () => {
+      const of = (tool, input) => { const e = d.parse(claudePayload(tool, input)); return [e.action, e.opaque, e.command, e.path, e.content]; };
+      assert.deepStrictEqual(of('Monitor', { command: 'tail -f a.log' }), ['shell', false, 'tail -f a.log', null, null]);
+      assert.deepStrictEqual(of('Monitor', { description: 'no command' }), ['shell', true, null, null, null]);
+      assert.deepStrictEqual(of('NotebookEdit', { notebook_path: 'a.ipynb', new_source: 'x = 1' }), ['write', false, null, 'a.ipynb', 'x = 1']);
+      assert.deepStrictEqual(of('NotebookEdit', { notebook_path: 'a.ipynb', edit_mode: 'delete' }), ['write', true, null, 'a.ipynb', null], 'a cell delete carries no text, so nothing vouches for it');
+      // The notebook spelling is that tool's alone: another write is not read through it.
+      assert.deepStrictEqual(of('Write', { notebook_path: 'a.ipynb', new_source: 'x' }), ['write', true, null, null, null]);
+      const matcher = d.wiring.entries(rowOf(DEFAULT_TOOL))[0].entry.matcher.split('|');
+      assert.ok(matcher.includes('Monitor') && matcher.includes('NotebookEdit'), 'the matcher does not name them, so the entry is never called for one');
+    });
+
     test('parse: a stop that follows a forced turn is marked, and only the boolean marks it', () => {
       const stop = (extra) => d.parse(JSON.stringify(Object.assign({ hook_event_name: 'Stop', session_id: 's' }, extra)));
       assert.deepStrictEqual([stop({ stop_hook_active: false }).forced, stop({ stop_hook_active: true }).forced, stop({}).forced, stop({ stop_hook_active: 'true' }).forced], [false, true, false, false]);
@@ -924,7 +936,12 @@ describe('guard hardening — what a shell opens, where a shell stands, and what
     refused(call(root, 'Write', { file_path: path.join(root, DOTENV), content: 'A=1\n' }), 'a write TO the guarded file');
     refused(call(root, 'Edit', { file_path: DOTENV + '.local', old_string: 'A=1', new_string: 'A=2' }), 'an edit OF one');
     // A tool the dialect has no row for is opaque: nothing says which field is a body.
-    refused(call(root, 'NotebookEdit', { notebook_path: 'a.ipynb', new_source: 'open("' + DOTENV + '")' }), 'an opaque write naming it in a body');
+    refused(call(root, 'SomeLaterTool', { target: 'a.txt', text: 'open("' + DOTENV + '")' }), 'an opaque write naming it in a body');
+    // The notebook editor has a row, so its cell text is a body like any other write's.
+    passed(call(root, 'NotebookEdit', { notebook_path: path.join(root, 'a.ipynb'), new_source: 'open("' + DOTENV + '")' }), 'a notebook cell that mentions the name');
+    refused(call(root, 'NotebookEdit', { notebook_path: path.join(root, DOTENV), new_source: 'A=1' }), 'a notebook write TO the guarded file');
+    refused(call(root, 'Monitor', { command: 'tail -f ' + DOTENV, description: 'watch' }), 'a background watch of the guarded file');
+    passed(call(root, 'Monitor', { command: 'tail -f build.log', description: 'watch' }), 'a background watch of an ordinary file');
   });
 
   test('a move into the archive is refused wherever the shell is standing', () => {

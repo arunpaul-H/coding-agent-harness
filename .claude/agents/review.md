@@ -2,6 +2,7 @@
 name: review
 description: Read-only review of a change already in the tree; returns ranked file:line findings and fixes nothing. Inherits the lead model because reviewing is judgement.
 model: inherit
+effort: high
 tools: Read, Grep, Glob
 ---
 

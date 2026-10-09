@@ -38,7 +38,7 @@
  *   - the session-start output shape. It is the one this repo's reporters have always printed.
  */
 
-const { json, isObj, event, needsField, QUIET, say, sessionText } = require('./_wire.js');
+const { json, isObj, fields, event, needsField, QUIET, say, sessionText } = require('./_wire.js');
 
 const EVENT_OF = {
   PreToolUse: 'pre-tool', SessionStart: 'session-start', UserPromptSubmit: 'prompt-submit', Stop: 'stop',
@@ -53,10 +53,29 @@ const ACTION_OF = {
   Read: 'read',
   Grep: 'search', Glob: 'search',
   Edit: 'write', Write: 'write',
+  // A background watch. The vendor's permission-modes page says its command runs through the
+  // shell; the payload was NOT observed here, so one with no string `command` is opaque.
+  Monitor: 'shell',
+  // A notebook cell write. Its two fields are spelled its own way: see NOTEBOOK below.
+  NotebookEdit: 'write',
   // A subagent spawn. Measured for Claude Code (the guard-hardening track's research file on
   // the spawn payload): the agent is `subagent_type`, the text is `prompt`.
   Agent: 'spawn',
 };
+
+/* THE ONE TOOL WHOSE WRITE IS SPELLED DIFFERENTLY: the notebook editor names its file
+   `notebook_path` and the cell text `new_source` (the tool's own schema, read 2026-10-09; no
+   payload was observed here). Read the plain way it has neither field, so every notebook edit
+   would be opaque and an ask. A cell delete carries no text: content stays null and that call IS
+   opaque, which is right, because nothing says what it removes. */
+const NOTEBOOK = (input) => {
+  const f = fields(input);
+  if (!isObj(input)) return f;
+  if (f.path == null && typeof input.notebook_path === 'string') f.path = input.notebook_path;
+  if (f.content == null && typeof input.new_source === 'string') f.content = input.new_source;
+  return f;
+};
+const READER_OF = { NotebookEdit: NOTEBOOK };
 
 /* Every field the three cells name that is about the session and not the call. `tool_input` is
    NOT here on purpose: one that arrived as a string or a list stays in the input, as text. */
@@ -73,7 +92,7 @@ function parse(stdin) {
     input = {};
     for (const k of Object.keys(p)) if (!ENVELOPE.includes(k)) input[k] = p[k];
   }
-  const e = event(EVENT_OF[p.hook_event_name], action, tool, input, !known || !shaped);
+  const e = event(EVENT_OF[p.hook_event_name], action, tool, input, !known || !shaped, known ? READER_OF[tool] : undefined);
   // Where the tool's shell is standing, when the envelope says. All three cells name `cwd`. The
   // phase guard resolves a relative path against it; absent, a path is read from the repo root.
   e.cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : null;
@@ -179,7 +198,11 @@ const wiring = {
   gaps: [],
   entries(row) {
     const one = (ev) => ({ type: 'command', command: HOOK(row.id, ev), timeout: 30 });
-    const out = [{ at: ['hooks', 'PreToolUse'], event: 'pre-tool', entry: { matcher: Object.keys(ACTION_OF).concat('mcp__.*').join('|'), hooks: [one('pre-tool')] } }];
+    // THE PRE-TOOL ENTRY ALONE FAILS CLOSED. Without `onFailure` a hook that times out or cannot
+    // start lets the call through. Measured 2026-10-09 in a throwaway repo (tool version 2.1.296),
+    // one hook that outlives its timeout: the call ran without the key and was refused with it.
+    // The other events must never refuse, so they do not carry it.
+    const out = [{ at: ['hooks', 'PreToolUse'], event: 'pre-tool', entry: { matcher: Object.keys(ACTION_OF).concat('mcp__.*').join('|'), hooks: [Object.assign(one('pre-tool'), { onFailure: 'block' })] } }];
     if (row.sessionStart === true) out.push({ at: ['hooks', 'SessionStart'], event: 'session-start', entry: { hooks: [one('session-start')] } });
     out.push({ at: ['hooks', 'Stop'], event: 'stop', entry: { hooks: [one('stop')] } });
     if (row.worktreeCreate === true) out.push({ at: ['hooks', 'WorktreeCreate'], event: 'worktree-create', entry: { hooks: [Object.assign(one('worktree-create'), { timeout: 600 })] } });

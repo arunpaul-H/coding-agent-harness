@@ -2,6 +2,7 @@
 name: explore
 description: Read-only search across many files or naming conventions when only the conclusion is wanted, not the file dumps. Locates code; does not judge it.
 model: haiku
+effort: low
 tools: Read, Grep, Glob
 ---
 

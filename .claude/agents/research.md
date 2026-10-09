@@ -2,6 +2,7 @@
 name: research
 description: Answers ONE question from the repo and the web and leaves a dated frozen research file behind. Writes that one file and nothing else.
 model: opus
+effort: high
 tools: Read, Grep, Glob, WebFetch, WebSearch, Write
 ---
 

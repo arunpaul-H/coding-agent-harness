@@ -2,6 +2,7 @@
 name: implement
 description: Does ONE task from a handoff block inside a named READ-SET and ends by running the gate. Spawns nothing and commits nothing.
 model: opus
+effort: high
 tools: Read, Grep, Glob, Edit, Write, Bash
 ---
 
