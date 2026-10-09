@@ -1,14 +1,12 @@
 {
   "allow-skip": {
-    "total": 40,
-    "undescribed": 38,
+    "total": 37,
+    "undescribed": 35,
     "files": {
       "AGENTS.md": 4,
       "CONTRIBUTING.md": 2,
       "README.md": 7,
       "bin/harness.js": 2,
-      "docs/archive/founder-guide/handoff.md": 1,
-      "docs/tracks/project-reference/research/2026-10-08-one-task-with-and-without-a-reference-doc.md": 2,
       "harness.config.json": 1,
       "package.json": 1,
       "schema/harness.config.schema.json": 1,

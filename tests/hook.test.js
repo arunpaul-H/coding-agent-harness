@@ -5,7 +5,8 @@
    Two halves, and they prove different things.
 
    THE DIALECTS, from fixtures. Each fixture payload is built from the PROTOCOL CELL of that
-   tool's row in docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md: the
+   tool's row in docs/archive/multi-tool/research/2026-10-05-tool-instruction-surfaces.md (in
+   git history at 5661b73; the archive is no longer in the tree): the
    event names, the stdin field names and the deny spelling written there, and nothing that is
    not. Those cells were read off vendor pages and no tool but one was ever run, so what these
    fixtures pin is that the module does what the CELL says. They do not pin that the tool does.

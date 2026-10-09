@@ -30,7 +30,7 @@
  *     no JSON for that event.
  *   - the stop spelling, for any row but the first. It was MEASURED for Claude Code alone, in a
  *     headless session (the guard-hardening track's research file `2026-10-08-stop-hook.md`,
- *     under the docs root): a line for the person is `systemMessage` at exit 0, and
+ *     in git history at 5661b73 under docs/archive/guard-hardening/research/): a line for the person is `systemMessage` at exit 0, and
  *     a forced turn is `decision: "block"` with the reason. Exit 2 with stderr alone forced
  *     NOTHING there, so the JSON is what forces; the exit code stays 2 because the entry's rule
  *     is that a deny leaves with it, and the JSON was read at exit 2. The stop that follows a
