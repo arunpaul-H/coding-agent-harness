@@ -1,0 +1,6 @@
+{
+  "name": "harness",
+  "version": "0.1.0",
+  "description": "Draws the recorded gate verdict, the open track and the context in use above the prompt, and adds /gates. It draws and relays; every judgement is made by a script under scripts/harness/.",
+  "author": { "name": "arunpaul-H" }
+}

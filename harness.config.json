@@ -134,6 +134,17 @@
       "name": "peers",
       "command": "node scripts/harness/peers.js --self-test",
       "adapter": "exit-code"
+    },
+    {
+      "_readme": [
+        "THE MOD in .claude/plugins/harness/ runs inside the agent's program, so only that program",
+        "can grade it. It grades the mod's FILES, not that a session loads it. `optional` because",
+        "the harness depends on no agent: where `claude` is absent this is a declared skip."
+      ],
+      "optional": true,
+      "name": "mods",
+      "command": "claude plugin validate .claude/plugins/harness --strict && claude plugin test .claude/plugins/harness",
+      "adapter": "exit-code"
     }
   ],
 
