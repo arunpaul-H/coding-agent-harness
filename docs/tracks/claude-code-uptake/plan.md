@@ -94,7 +94,7 @@ track's handoff in the line under the answer. Tests for each.
 **First commit:** `mods: /track, /handoff and /close-phase without a model turn`
 **Exit:** as Phase 2
 
-**Delivered.** not started
+**Delivered.** As written; the compaction line is drawn by the `turn.complete` after it (CU-06). No session loaded it.
 
 ## Phase 4: the `harness-guard` mod
 

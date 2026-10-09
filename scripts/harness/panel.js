@@ -12,7 +12,9 @@
    WHAT IT PRINTS
      gates     the recorded run in gates.json, judged: `green`, `red`, `stale` or `not-run`,
                with the reasons, and the command that re-records it as an argv list
-     tracks    every open track, its handoff's `phase_next` and the first line of its block
+     tracks    every open track, its handoff's `phase_next` and the first line of its block,
+               the handoff's path, the phase a close would close, and the two commands
+               (lint the handoff, close the phase) as argv lists
      findings  one line per session-start reporter that has something to say
      problems  what this file could not read. Not read is not clean, so it is said.
 
@@ -102,7 +104,8 @@ function verdictOf(run, baseline, stop, deps) {
 
 /* ---------- the open tracks ----------
    `io` is `{ list(dir) -> names, read(rel) -> text or null }`. A folder with no README, or a
-   README that is not an open track, is not a track to draw. */
+   README that is not an open track, is not a track to draw. `closes` is the phase close-phase.js
+   closes when it is given no --phase: the handoff's next phase, minus one. */
 function tracksOf(tracksDir, io, deps) {
   const out = [];
   for (const id of io.list(tracksDir).slice().sort()) {
@@ -113,7 +116,16 @@ function tracksOf(tracksDir, io, deps) {
     const handoff = io.read(tracksDir + '/' + id + '/handoff.md');
     const note = handoff === null ? { phaseNext: null, doing: null } : deps.noteSummary(handoff);
     const next = note.phaseNext === null ? NaN : Number(note.phaseNext);
-    out.push({ id, phaseNext: Number.isInteger(next) && next >= 0 ? next : null, doing: note.doing || null, handoff: handoff !== null });
+    const phaseNext = Number.isInteger(next) && next >= 0 ? next : null;
+    out.push({
+      id,
+      phaseNext,
+      doing: note.doing || null,
+      handoff: handoff === null ? null : tracksDir + '/' + id + '/handoff.md',
+      closes: phaseNext !== null && phaseNext >= 1 ? phaseNext - 1 : null,
+      lint: ['node', 'scripts/harness/handoff-lint.js', id],
+      close: ['node', 'scripts/harness/close-phase.js', id],
+    });
   }
   return out;
 }
@@ -238,13 +250,17 @@ function selfTest() {
   });
   eq('an open track is listed with its next phase and the first line of its block',
     tracksOf('docs/tracks', disk({ 'docs/tracks/b/README.md': README('open'), 'docs/tracks/b/handoff.md': HANDOFF(3) }), tdeps),
-    [{ id: 'b', phaseNext: 3, doing: 'PHASE 3: do the thing', handoff: true }]);
+    [{ id: 'b', phaseNext: 3, doing: 'PHASE 3: do the thing', handoff: 'docs/tracks/b/handoff.md', closes: 2,
+      lint: ['node', 'scripts/harness/handoff-lint.js', 'b'], close: ['node', 'scripts/harness/close-phase.js', 'b'] }]);
   eq('tracks come out in name order, closed ones left out',
     tracksOf('docs/tracks', disk({
       'docs/tracks/z/README.md': README('open'), 'docs/tracks/a/README.md': README('open'), 'docs/tracks/m/README.md': README('closed'),
     }), tdeps).map((t) => t.id), ['a', 'z']);
-  eq('an open track with no handoff says so', tracksOf('docs/tracks', disk({ 'docs/tracks/a/README.md': README('open') }), tdeps),
-    [{ id: 'a', phaseNext: null, doing: null, handoff: false }]);
+  eq('an open track with no handoff says so, and has no phase to close',
+    (({ phaseNext, doing, handoff, closes }) => [phaseNext, doing, handoff, closes])(tracksOf('docs/tracks', disk({ 'docs/tracks/a/README.md': README('open') }), tdeps)[0]),
+    [null, null, null, null]);
+  eq('a handoff whose next phase is 0 has nothing before it to close',
+    tracksOf('docs/tracks', disk({ 'docs/tracks/a/README.md': README('open'), 'docs/tracks/a/handoff.md': HANDOFF(0) }), tdeps)[0].closes, null);
   eq('a folder with no README is not a track', tracksOf('docs/tracks', disk({ 'docs/tracks/a/handoff.md': HANDOFF(1) }), tdeps), []);
   eq('a README that is not a track is not a track', tracksOf('docs/tracks', disk({ 'docs/tracks/a/README.md': README('open', 'plan') }), tdeps), []);
   eq('a README with no frontmatter is not a track', tracksOf('docs/tracks', disk({ 'docs/tracks/a/README.md': '# T\n' }), tdeps), []);

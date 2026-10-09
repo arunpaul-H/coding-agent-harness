@@ -58,7 +58,7 @@ describe('panel.js prints the facts as one JSON object', () => {
 
   test('tracks, findings and problems are lists of the documented shape', () => {
     for (const k of ['tracks', 'findings', 'problems']) assert.ok(Array.isArray(facts[k]), k + ' is not a list');
-    for (const t of facts.tracks) assert.deepStrictEqual(Object.keys(t), ['id', 'phaseNext', 'doing', 'handoff']);
+    for (const t of facts.tracks) assert.deepStrictEqual(Object.keys(t), ['id', 'phaseNext', 'doing', 'handoff', 'closes', 'lint', 'close']);
     for (const f of facts.findings) assert.deepStrictEqual(Object.keys(f), ['name', 'line']);
     assert.deepStrictEqual(facts.problems, [], 'this repo has a readable config and a claude-code row');
   });
@@ -76,11 +76,11 @@ describe('the harness mod draws and relays, and nothing else', () => {
   const called = Array.from(new Set(Array.from(source.matchAll(/\$\.([a-z]+\.[a-zA-Z]+)\(/g)).map((m) => m[1]))).sort();
 
   test('it hooks no event that can refuse a call or rewrite a prompt', () => {
-    assert.deepStrictEqual(hooked, ['session.start', 'turn.complete', 'session.measure', 'command.run', 'ui.render']);
+    assert.deepStrictEqual(Array.from(new Set(hooked)).sort(), ['command.run', 'session.compact', 'session.measure', 'session.start', 'turn.complete', 'ui.render']);
   });
 
   test('it writes no file, opens no connection and calls no model', () => {
-    assert.deepStrictEqual(called, ['clock.after', 'command.register', 'process.run', 'session.usage', 'ui.invalidate', 'ui.log', 'ui.resolve', 'ui.toast']);
+    assert.deepStrictEqual(called, ['clock.after', 'command.register', 'fs.read', 'process.run', 'session.usage', 'ui.ask', 'ui.invalidate', 'ui.log', 'ui.open', 'ui.resolve', 'ui.toast']);
   });
 
   test('the only script it names is panel.js, and that script exists', () => {

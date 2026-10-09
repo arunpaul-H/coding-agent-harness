@@ -80,17 +80,19 @@ spawn. It does NOT change a guard's decision, the gate protocol, or any other to
 | 0 | The dated evidence | done |
 | 1 | Leverage: hook entry, matcher, agent and skill files brought up to the tool as it is | done |
 | 2 | Build: the `harness` mod, a panel and `/gates` | closed, receipt above |
-| 3 | Build: the track lifecycle as commands | open |
+| 3 | Build: the track lifecycle as commands | done |
 | 4 | Build: the `harness-guard` mod | open |
 | 5 | Leverage: the skill gate vets mods | open |
 | 6 | Build: the harness ships as a plugin | open |
 
 Phases 0 to 2 are committed, and the one receipt in this file's frontmatter closes phase 2 on a
-green gate run. Phase 3 is next. What each phase cut is in `plan.md`.
+green gate run. Phase 3 is done and waits for its close. Phase 4 is next, and its first item is a
+research file from runs in a real session. What each phase cut is in `plan.md`.
 
 The mod is `.claude/plugins/harness/`; every judgement it draws is made by
 `scripts/harness/panel.js`. No settings file enables it: load it for one session with
-`claude --plugin-dir .claude/plugins/harness`. No session has loaded it yet.
+`claude --plugin-dir .claude/plugins/harness`. No session has loaded it yet: the band, the
+pane and the four commands (`/gates`, `/track`, `/handoff`, `/close-phase`) are held by tests.
 
 ## How to work
 
