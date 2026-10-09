@@ -4,26 +4,26 @@
     "which refuses unless the suite is green. A re-baseline is a deliberate act, so its",
     "commit subject must start `gates:` — enforced at commit time, not here."
   ],
-  "generatedAt": "2026-10-08T23:44:05.204Z",
-  "commit": "073132ca8f0217dc9191fdeaed5f77390460098f",
+  "generatedAt": "2026-10-09T21:39:33.214Z",
+  "commit": "40f41e47549af39e2d9f41f98d0050ec273cf71b",
   "dirty": false,
   "node": "v24.19.0",
   "gates": {
     "test": {
-      "pass": 724,
+      "pass": 735,
       "fail": 0,
       "skipped": 0,
-      "total": 724,
+      "total": 735,
       "exit": 0,
-      "ms": 579634
+      "ms": 454339
     },
     "docs": {
-      "pass": 438,
+      "pass": 488,
       "fail": 0,
       "skipped": 1,
-      "total": 439,
+      "total": 489,
       "exit": 0,
-      "ms": 1501
+      "ms": 3233
     },
     "context": {
       "pass": 6,
@@ -31,7 +31,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 349
+      "ms": 431
     },
     "hygiene": {
       "pass": 7,
@@ -39,7 +39,7 @@
       "skipped": 0,
       "total": 7,
       "exit": 0,
-      "ms": 234
+      "ms": 491
     },
     "skills": {
       "pass": 6,
@@ -47,7 +47,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 167
+      "ms": 341
     },
     "tools": {
       "pass": 15,
@@ -55,7 +55,7 @@
       "skipped": 0,
       "total": 15,
       "exit": 0,
-      "ms": 158
+      "ms": 260
     },
     "mode": {
       "pass": 1,
@@ -63,7 +63,7 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 162
+      "ms": 230
     },
     "effects": {
       "pass": 1,
@@ -71,7 +71,7 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 3695
+      "ms": 6533
     },
     "carveouts": {
       "pass": 6,
@@ -79,7 +79,7 @@
       "skipped": 0,
       "total": 6,
       "exit": 0,
-      "ms": 252
+      "ms": 460
     },
     "peers": {
       "pass": 1,
@@ -87,7 +87,15 @@
       "skipped": 0,
       "total": 1,
       "exit": 0,
-      "ms": 874
+      "ms": 1056
+    },
+    "mods": {
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "total": 1,
+      "exit": 0,
+      "ms": 5616
     },
     "reproducible-build": {
       "pass": 0,
@@ -96,7 +104,7 @@
       "note": "not applicable — 0 artifacts configured, 0 graded. Declare it: --allow-skip reproducible-build=1",
       "total": 1,
       "exit": 0,
-      "ms": 0
+      "ms": 1
     }
   }
 }
