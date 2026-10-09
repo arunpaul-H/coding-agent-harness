@@ -139,7 +139,8 @@ test('a suite that does not finish is NOT RUN, with the command to run in a shel
 
   const answer = await $.command.run({ command: 'gates', args: '' })
 
-  expect(answer.text).toMatch(/^GATES NOT RUN: `node scripts\/harness\/gates\.js --check --allow-skip docs=1` did not finish/)
+  expect(answer.text).toMatch(/^GATES NOT RUN: `.*` did not finish/)
+  expect(answer.text).toContain('`' + GATE.join(' ') + '`')
   expect(seen.toasts.length).toBe(1)
 })
 
