@@ -1,13 +1,68 @@
 # Agent Harness
 
-Scripts and hooks you copy into a repo so the rules you give a coding agent are checked by code,
-not left to the agent's memory.
+[![CI](https://github.com/arunpaul-H/coding-agent-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/arunpaul-H/coding-agent-harness/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)
 
-An agent follows a written rule until it doesn't, and nothing tells you when it stopped. Here,
-every rule that matters is a check that fails loudly with an exit code. Anything that is still
-just a written rule is labelled as one.
+**Your coding agent's rules, enforced by code instead of by the agent's memory.**
 
-Node 20 or newer, built-ins only, zero dependencies. This repo is checked by the harness it ships.
+You wrote the rules down. The agent followed them, until the session it didn't: it deleted a
+failing test, quoted last week's test count, read a credential file into the transcript, or
+called half-finished work done. Nothing told you, because a rule in a prompt cannot fail.
+
+Agent Harness is scripts and hooks you copy into your repo. Every rule that matters becomes a
+check that fails loudly with an exit code. Anything that is still just a written rule is labelled
+as one.
+
+Delete a test and an ordinary suite stays green. Here the run is red, and says why:
+
+```
+GATES RED — 2 violation(s) against scripts\harness\gates.baseline.json:
+  x test: pass 1 < baseline 2
+  x test: 1 checks in the total, baseline had 2 — a check DISAPPEARED (pass-by-absence)
+```
+
+Node 20 or newer, built-ins only, zero dependencies, no service, no model calls. This repo is
+checked by the harness it ships.
+
+## What you rely on today, and what replaces it
+
+| Today | How it fails | Here |
+|---|---|---|
+| A rule in `CLAUDE.md` or `AGENTS.md` | Followed until it isn't, and nothing reports the lapse | A hook denies the action before it runs, or a gate fails the run |
+| "All tests pass" in the agent's summary | The count is stale, or a test was deleted or skipped | Each total is compared with a committed baseline; a missing check is red |
+| "Done" typed into a status file | Nobody checked it against the tree as it stands | A phase closes only through a script that sees current evidence |
+| `.gitignore` for secrets | It stops the commit, not the read into the transcript | The read itself is denied |
+| A long recap pasted into the next session | Every session re-learns what the last one knew | One handoff file per track, and the session starts there |
+| An instructions file that keeps growing | It loads on every turn and nobody sees the size | A byte ceiling on always-loaded files, failed in CI |
+
+The hooks deny only under a coding agent they are wired for; everywhere else the same rules run
+as gates in CI. [Your stack](#your-stack) says which is which, and
+[What it does not do](#what-it-does-not-do) is the honest list of limits.
+
+## Why this is different
+
+Most agent harness repos give you prompts, agent definitions or an orchestration framework. This
+one gives you none of those as its main product. It gives you the checks around them:
+
+- **A missing check is a failure.** Each gate's total is compared with a committed baseline, so a
+  test that was deleted or silently skipped turns the run red.
+- **Bad actions are blocked before they run**, by hooks, not asked for politely in a prompt.
+- **"Done" is a script.** A phase closes only when the script sees current evidence.
+- **It says what it cannot do.** See [What it does not do](#what-it-does-not-do).
+- **Nothing to install.** No dependencies, no build, no service, no model calls.
+
+## Try it before you copy anything
+
+```bash
+git clone https://github.com/arunpaul-H/coding-agent-harness.git
+cd coding-agent-harness
+node bin/harness.js selftest    # every guard's decisions, driven with literals
+node bin/harness.js doctor      # every piece: OK / MISSING / DRIFTED, each with its fix
+```
+
+No `npm install`: there is nothing to install. When you want it in your own repo, go to
+[Install](#install).
 
 ## Who this is for
 
@@ -51,18 +106,6 @@ flowchart LR
 
 Everything below this line is written for developers.
 
-## Why this is different
-
-Most agent harness repos give you prompts, agent definitions or an orchestration framework. This
-one gives you none of those as its main product. It gives you the checks around them:
-
-- **A missing check is a failure.** Each gate's total is compared with a committed baseline, so a
-  test that was deleted or silently skipped turns the run red.
-- **Bad actions are blocked before they run**, by hooks, not asked for politely in a prompt.
-- **"Done" is a script.** A phase closes only when the script sees current evidence.
-- **It says what it cannot do.** See [What it does not do](#what-it-does-not-do).
-- **Nothing to install.** No dependencies, no build, no service, no model calls.
-
 ## Who it is for
 
 **People on a flat-rate subscription seat of an agentic coding tool:** a plan with a usage limit,
@@ -96,7 +139,7 @@ There is no published package. Installing is copying. You need Node >= 20, git a
 (on Windows, the one Git provides).
 
 ```bash
-git clone <this-repository> agent-harness
+git clone https://github.com/arunpaul-H/coding-agent-harness.git agent-harness
 
 node agent-harness/bin/harness.js init --into <your-repo> --dry-run   # the plan; writes nothing
 node agent-harness/bin/harness.js init --into <your-repo>

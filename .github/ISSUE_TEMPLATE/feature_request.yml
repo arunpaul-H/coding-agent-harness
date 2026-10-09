@@ -1,0 +1,32 @@
+name: Proposal
+description: A new gate, guard or tool wiring, or a change to an existing one.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: failure
+    attributes:
+      label: The failure this would stop
+      description: What an agent did, or could do, that nothing catches today. A real instance beats a hypothetical one.
+    validations:
+      required: true
+  - type: textarea
+    id: mechanism
+    attributes:
+      label: The mechanism
+      description: What would check it, and when it runs (a hook at the tool call, a gate, a report). A rule with no mechanism is prose.
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: Its cost and its limits
+      description: What it adds to every turn or every run, and what it would still miss.
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: It needs no dependency and runs on Node 20 with built-ins only.
+          required: true
+        - label: It works on Windows (Git Bash), macOS and Linux.
+          required: true

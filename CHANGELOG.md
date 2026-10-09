@@ -101,5 +101,5 @@ behind one config file.
 - Zero runtime dependencies and zero development dependencies. The property is asserted by
   `node bin/harness.js --self-test` and by CI.
 
-[Unreleased]: https://github.com/arunpaul-H/Agent-Harness/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/arunpaul-H/Agent-Harness/releases/tag/v0.1.0
+[Unreleased]: https://github.com/arunpaul-H/coding-agent-harness/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/arunpaul-H/coding-agent-harness/releases/tag/v0.1.0

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/arunpaul-H/coding-agent-harness/security/advisories/new
+    about: Privately, never as a public issue.
+  - name: Adopting the harness in your repo
+    url: https://github.com/arunpaul-H/coding-agent-harness/blob/main/docs/methods/11-adopting-this-in-your-repo.md
+    about: The full walk-through, including how to confirm the hooks fire.
