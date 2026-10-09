@@ -97,6 +97,6 @@ describe('the harness mod draws and relays, and nothing else', () => {
     assert.ok(gate, 'no `mods` gate in harness.config.json');
     assert.strictEqual(gate.optional, true);
     assert.strictEqual(gate.adapter, 'exit-code');
-    assert.match(gate.command, /^claude plugin validate \.claude\/plugins\/harness --strict && claude plugin test \.claude\/plugins\/harness$/);
+    assert.match(gate.command, /^claude plugin validate \.claude\/plugins\/harness --strict && claude plugin test \.claude\/plugins\/harness( && |$)/);
   });
 });

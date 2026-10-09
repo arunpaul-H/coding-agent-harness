@@ -81,18 +81,23 @@ spawn. It does NOT change a guard's decision, the gate protocol, or any other to
 | 1 | Leverage: hook entry, matcher, agent and skill files brought up to the tool as it is | done |
 | 2 | Build: the `harness` mod, a panel and `/gates` | done |
 | 3 | Build: the track lifecycle as commands | closed, receipt above |
-| 4 | Build: the `harness-guard` mod | open |
+| 4 | Build: the `harness-guard` mod | done |
 | 5 | Leverage: the skill gate vets mods | open |
 | 6 | Build: the harness ships as a plugin | open |
 
-Phases 0 to 2 are committed, and the one receipt in this file's frontmatter closes phase 3 on a
-green gate run. Phase 4 is next, and its first item is a
-research file from runs in a real session. What each phase cut is in `plan.md`.
+Phases 0 to 3 are committed. Phase 5 is next. What each phase cut is in `plan.md`.
 
 The mod is `.claude/plugins/harness/`; every judgement it draws is made by
 `scripts/harness/panel.js`. No settings file enables it: load it for one session with
 `claude --plugin-dir .claude/plugins/harness`. No session has loaded it yet: the band, the
 pane and the four commands (`/gates`, `/track`, `/handoff`, `/close-phase`) are held by tests.
+
+The guard mod is `.claude/plugins/harness-guard/`; every verdict it relays is given by
+`scripts/harness/hook.js`. It hears a tool call a second time (the settings hook hears it too),
+and alone reaches a spawn no `Agent` call made and a file attached by a mention. Headless
+sessions have loaded it; no interactive one has, so the questions it asks are held by tests.
+It is not final (decision 5), and `sec-default` is not loaded on this machine: the runs are in
+`research/2026-10-09-mod-order-and-guard-runs.md`.
 
 ## How to work
 

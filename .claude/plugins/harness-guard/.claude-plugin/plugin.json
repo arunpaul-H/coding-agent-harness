@@ -1,0 +1,6 @@
+{
+  "name": "harness-guard",
+  "version": "0.1.0",
+  "description": "Hands each tool call, agent spawn and file mention to scripts/harness/hook.js and relays the verdict. It decides nothing and draws nothing, and it is not final: only managed settings make a guard final.",
+  "author": { "name": "arunpaul-H" }
+}

@@ -114,7 +114,7 @@ contract misses them. A deny is a wall of text where a mod could hold the call a
 **First commit:** `mods: the guards in-process, each with a catch that denies`
 **Exit:** `claude plugin validate .claude/plugins/harness-guard --strict && claude plugin test .claude/plugins/harness-guard` then GATE
 
-**Delivered.** not started
+**Delivered.** Both items, item 1 headless with probe mods; a workflow agent passes the contract (not a repo agent). No interactive load.
 
 ## Phase 5: the skill gate vets mods
 

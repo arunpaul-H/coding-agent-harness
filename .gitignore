@@ -114,3 +114,8 @@ scripts/harness/gates.red.*.log
 # Written by `harness run --track <id>` into a track folder: which phase one person approved, in
 # which mode, on this machine. It approves nothing for anyone else, so it is never versioned.
 .phase
+
+# ── Mods ──────────────────────────────────────────────────────────
+# The agent's program writes type files into a mod's folder when a session loads it from a
+# directory. They are generated, and they change with the program's version.
+.claude/plugins/*/.claude-plugin/types/
