@@ -235,6 +235,8 @@ Full walk-through, including how to confirm the hooks fire:
 | Skill lock | A skill changing with no diff anyone read: a third-party one, or one the harness shipped | `scripts/harness/guards/skill-verify.cjs` |
 | Branch sync | A long-lived branch running an old copy of the harness | `scripts/harness/branch-sync.js` |
 | Installer and doctor | An install nobody verified | `bin/harness.js` |
+| Panel mod (Claude Code) | A gate verdict that scrolled away; a model turn spent to run the gate or close a phase | `.claude/plugins/harness/` |
+| Guard mod (Claude Code) | A spawn no `Agent` call made, or a file attached with `@`, that no settings hook sees | `.claude/plugins/harness-guard/` |
 
 Each piece has a page under [docs/methods/](docs/methods/README.md): the failure, the mechanism,
 its cost and its limits.
@@ -312,6 +314,42 @@ git history: `git show b2183f0:docs/tracks/project-reference/research/2026-10-08
   `harness init --git-hooks` writes a pre-commit that runs `commit-hygiene.cjs --report` and a
   pre-push that runs the gate suite. A backstop after the work, not a deny.
 
+## Claude Code mods
+
+A mod is a plugin whose code runs inside Claude Code (terminal, v2.1.287 and later). This repo
+carries two, and neither holds a decision: each runs a script under `scripts/harness/` and draws
+or relays what it printed.
+
+- **`harness`** draws a band above the prompt (the recorded gate verdict, the open track, the
+  context in use) and adds `/gates`, `/track`, `/handoff` and `/close-phase`, none of which
+  takes a model turn. It never refuses a call.
+- **`harness-guard`** hands each tool call the settings hook also sees, each agent spawn and
+  each `@` file mention to `scripts/harness/hook.js` and relays the verdict. A commit the hygiene
+  guard refuses is held and shown with its findings: you have it checked again, or cancel. Each
+  of its hooks refuses when it fails. It draws nothing.
+
+No settings file enables either. Load them for one session, from the repo root:
+
+```
+claude --plugin-dir .claude/plugins/harness --plugin-dir .claude/plugins/harness-guard
+```
+
+What is and is not established:
+
+- **Graded without a session.** `claude plugin validate --strict` and `claude plugin test` run as
+  the optional `mods` gate. Where the `claude` program is absent, that gate is a declared skip:
+  the harness depends on no agent.
+- **Run headless only.** `harness-guard` was loaded in `claude -p` sessions, where it passed a
+  harmless call and refused a read of a guarded secret file. No interactive session has loaded
+  either mod, so the band, the commands and every dialog are held by tests alone.
+- **Not final.** A mod loaded ahead of `harness-guard` can answer a call before it is asked, and
+  another mod can approve a call a settings hook refused. Only a hook in managed settings is
+  final. The settings hooks stay; the mods are an addition for Claude Code.
+- **Not installed by `init` yet.** They live in this repo; copy the two folders to use them elsewhere.
+
+The measurements are in
+[docs/tracks/claude-code-uptake/research/](docs/tracks/claude-code-uptake/research/).
+
 ## What it does not do
 
 - **A green gate does not prove the code is correct.** It proves the declared checks ran, none
@@ -320,6 +358,8 @@ git history: `git show b2183f0:docs/tracks/project-reference/research/2026-10-08
   compare against.
 - **The guards match patterns.** A different spelling of the same action can get through. They
   stop accidents, not a determined agent or an attacker.
+- **A mod does not make a guard final.** A user-installed mod can approve a call a project hook
+  refused; see [Claude Code mods](#claude-code-mods).
 - **The skill lock cannot cover what lives outside the repo:** plugin caches, user-level skills
   and MCP servers. It reports them as uncovered; it does not secure them.
 - **The context budget counts bytes of the files you declare.** Tool schemas and the system
@@ -334,6 +374,7 @@ bin/                     harness.js: the installer and CLI (init, doctor, gates,
 scripts/harness/         the gate runner, config loader, lifecycle and doc scripts, baselines
 scripts/harness/guards/  the guards, the doc linter, the skill verifier
 .claude/                 hook wiring, four agent briefs, four skills, the status line
+.claude/plugins/         two Claude Code mods: harness (panel and commands), harness-guard (guards)
 schema/                  the JSON schema for harness.config.json
 templates/               starting files for AGENTS.md, CLAUDE.md, the routing doc and a track
 docs/methods/            one page per mechanism

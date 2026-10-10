@@ -1,8 +1,9 @@
 {
   "allow-skip": {
-    "total": 37,
-    "undescribed": 35,
+    "total": 39,
+    "undescribed": 37,
     "files": {
+      ".claude/plugins/harness/tests/harness.test.ts": 1,
       "AGENTS.md": 4,
       "CONTRIBUTING.md": 2,
       "README.md": 7,
@@ -15,6 +16,7 @@
       "scripts/harness/common.json": 1,
       "scripts/harness/gates.baseline.json": 1,
       "scripts/harness/gates.js": 4,
+      "scripts/harness/panel.js": 1,
       "tests/cli.test.js": 2,
       "tests/gates.test.js": 5,
       "tests/lifecycle.test.js": 3
@@ -30,6 +32,13 @@
       "scripts/harness/hook.js": 1,
       "scripts/harness/peers.js": 25,
       "tests/guards.test.js": 9
+    }
+  },
+  "optional-gate": {
+    "total": 1,
+    "undescribed": 0,
+    "files": {
+      "harness.config.json": 1
     }
   }
 }

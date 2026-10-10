@@ -1,0 +1,4 @@
+{
+  "description": "The harness panel: a band above the prompt and /gates. No hook here gates a call.",
+  "modules": ["./register.js"]
+}

@@ -7,6 +7,17 @@
 > Gate figures are not here and are not in any doc: `node scripts/harness/gates.js --check`.
 > Closed work is in `docs/archive/` and is deliberately absent: nothing there is an instruction.
 
+## Tracks: open work
+
+| id | read when | status |
+|---|---|---|
+| [claude-code-uptake-handoff](tracks/claude-code-uptake/handoff.md) | starting or resuming claude-code-uptake | open |
+| [claude-code-uptake-plan](tracks/claude-code-uptake/plan.md) | claude-code-uptake: the phases, each with its exit command and first commit | open |
+| [claude-code-uptake](tracks/claude-code-uptake/README.md) | adopting a recent Claude Code feature in the harness, or building, testing or shipping a harness mod | open |
+| [claude-code-uptake-mods-and-releases-2026-10](tracks/claude-code-uptake/research/2026-10-09-claude-code-releases.md) | Deciding whether any harness mechanism should exist as a Claude Code mod, or checking what an installed mod can do to the settings-hook guards | frozen |
+| [claude-code-uptake-mod-order-and-guard-runs-2026-10](tracks/claude-code-uptake/research/2026-10-09-mod-order-and-guard-runs.md) | Building or debugging the harness-guard mod: where it sits in the chain, what a workflow agent's call reaches, and whether the built-in guard is loaded here | frozen |
+| [claude-code-uptake-traps](tracks/claude-code-uptake/traps.md) | something behaves oddly while working on claude-code-uptake | open |
+
 ## Methods
 
 | id | read when | status |
@@ -33,9 +44,10 @@
 | [doc-standard](reference/DOC-STANDARD.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [routing](reference/routing/README.md) | `node scripts/harness/docs-index.js --check` | 2026-10-05 |
 | [skill-safety](reference/skill-safety/README.md) | `node scripts/harness/guards/skill-verify.cjs --self-test && node scripts/harness/guards/skill-verify.cjs --check` | 2026-10-05 |
+| [claude-code-uptake](tracks/claude-code-uptake/README.md) | `node scripts/harness/guards/docs-lint.cjs && node scripts/harness/handoff-lint.js claude-code-uptake` | 2026-10-09 |
 
 ## Blocked: waiting on someone outside the code
 
 Nothing is blocked.
 
-<!-- 6 live docs -->
+<!-- 12 live docs -->

@@ -1,0 +1,4 @@
+{
+  "description": "The harness guards in-process: every hook here can refuse, and each has a catch that refuses.",
+  "modules": ["./register.js"]
+}

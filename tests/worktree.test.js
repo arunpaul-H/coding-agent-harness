@@ -509,7 +509,10 @@ describe('the registration this repo runs under', () => {
     for (const e of entries) {
       const want = e.entry.hooks[0];
       const have = settings.hooks[e.at[1]].flatMap((x) => x.hooks);
-      assert.ok(have.some((h) => h.command === want.command && h.timeout === want.timeout), e.event + ' is not registered as the dialect renders it: ' + want.command);
+      assert.ok(have.some((h) => h.command === want.command && h.timeout === want.timeout && h.onFailure === want.onFailure), e.event + ' is not registered as the dialect renders it: ' + want.command);
+      // The pre-tool entry alone fails closed: an event that must never refuse does not carry the key.
+      assert.strictEqual(want.onFailure, e.event === 'pre-tool' ? 'block' : undefined, e.event);
+      if (e.entry.matcher) assert.ok(settings.hooks[e.at[1]].some((x) => x.matcher === e.entry.matcher), e.event + ' is registered under another matcher than ' + e.entry.matcher);
     }
     assert.deepStrictEqual(wiring.entries(Object.assign({}, row, { worktreeCreate: undefined })).map((e) => e.event), ['pre-tool', 'session-start', 'stop'],
       'a row without the cell still got the workspace entry');

@@ -121,7 +121,8 @@ jobs:
       # a gate that skips: one that skips more checks than it declares is red here too.
       - name: Gates
         env:
-          RUNNER_SKIPS: docs=1
+          # mods=1: the `mods` gate grades a mod with the `claude` program, which no runner has.
+          RUNNER_SKIPS: docs=1,mods=1
         run: |
           SKIPS=$(node bin/harness.js gates --print-allow-skip --with "$RUNNER_SKIPS")
           echo "declared by harness.config.json, gates.baseline.json and this runner ($RUNNER_SKIPS): --allow-skip ${SKIPS:-<none>}"
